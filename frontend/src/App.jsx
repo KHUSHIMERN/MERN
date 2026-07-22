@@ -1,6 +1,8 @@
 import React from 'react';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { TimezoneProvider } from './context/TimezoneContext';
+import { AuthProvider } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import Header from './components/Header';
 import EventList from './components/EventList';
 
@@ -25,14 +27,18 @@ export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <TimezoneProvider>
-        <div className="app-container">
-          <Header />
-          <main>
-            <EventList />
-          </main>
-        </div>
-      </TimezoneProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <TimezoneProvider>
+            <div className="app-container">
+              <Header />
+              <main>
+                <EventList />
+              </main>
+            </div>
+          </TimezoneProvider>
+        </AuthProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

@@ -15,8 +15,10 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PublicIcon from '@mui/icons-material/Public';
 import PeopleIcon from '@mui/icons-material/People';
 import { formatEventDateTime, getTimezoneOffsetLabel } from '../utils/dateUtils';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function EventDetail({ event, activeTimezone, userLocale, open, onClose, onRSVP }) {
+  const { t, lang } = useLanguage();
   if (!event) return null;
 
   const startFormatted = formatEventDateTime(event.startDate, event.timezone, activeTimezone, userLocale);
@@ -26,14 +28,17 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
 
   const originTzLabel = getTimezoneOffsetLabel(event.timezone, new Date(event.startDate));
 
+  const displayTitle = lang === 'hi' && event.title_hi ? event.title_hi : event.title;
+  const displayDescription = lang === 'hi' && event.description_hi ? event.description_hi : event.description;
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth paperProps={{ sx: { borderRadius: 3 } }}>
       <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
-        {event.title}
+        {displayTitle}
         <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-          <Chip label={event.category?.toUpperCase()} color="primary" size="small" sx={{ fontWeight: 700 }} />
+          <Chip label={t(event.category || 'general')} color="primary" size="small" sx={{ fontWeight: 700 }} />
           {startFormatted.isCrossTimezone && (
-            <Chip label="Converted to Your Timezone" color="info" size="small" variant="outlined" />
+            <Chip label={t('convertedTimeLabel')} color="info" size="small" variant="outlined" />
           )}
         </Box>
       </DialogTitle>
@@ -41,7 +46,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
       <DialogContent dividers>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Typography variant="body1" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>
-            {event.description}
+            {displayDescription}
           </Typography>
 
           <Divider />
@@ -50,7 +55,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
             <LocationOnIcon color="primary" />
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Location
+                {t('locationLabel')}
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 {event.location}
@@ -62,7 +67,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
             <AccessTimeIcon color="primary" />
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Date & Time (Your Active Timezone)
+                Date & Time
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a' }}>
                 {startFormatted.fullDateTime}
@@ -78,7 +83,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
             <PublicIcon color="action" />
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Originating Timezone (Event Location)
+                {t('originTzLabel')}
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 {event.timezone} ({originTzLabel})
@@ -90,10 +95,10 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
             <PeopleIcon color="action" />
             <Box>
               <Typography variant="caption" color="text.secondary">
-                Organizer & Capacity
+                {t('organizerLabel')} & {t('capacity')}
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {event.organizer} • {event.attendeesCount} / {event.capacity} registered
+                {event.organizer} • {event.attendeesCount} / {event.capacity} {t('registeredCount')}
               </Typography>
             </Box>
           </Box>
@@ -102,7 +107,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
 
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={onClose} color="inherit">
-          Close
+          {t('close')}
         </Button>
         <Button
           variant="contained"
@@ -112,7 +117,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
           }}
           sx={{ borderRadius: 2 }}
         >
-          RSVP Now
+          {t('rsvpBtn')}
         </Button>
       </DialogActions>
     </Dialog>

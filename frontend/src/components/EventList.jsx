@@ -5,6 +5,8 @@ import EventCard from './EventCard';
 import EventDetail from './EventDetail';
 import RSVPModal from './RSVPModal';
 import { useTimezone } from '../context/TimezoneContext';
+import { useLanguage } from '../context/LanguageContext';
+import AIRecommendationSection from './AIRecommendationSection';
 
 const mockFallbackEvents = [
   {
@@ -76,6 +78,7 @@ const mockFallbackEvents = [
 
 export default function EventList() {
   const { activeTimezone, userLocale, isOverridden } = useTimezone();
+  const { t } = useLanguage();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState('all');
@@ -123,10 +126,10 @@ export default function EventList() {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box sx={{ mb: 4, textAlign: 'center' }}>
         <Typography variant="h4" component="h1" sx={{ fontWeight: 800, color: '#0f172a', mb: 1 }}>
-          Upcoming Community Events & Workshops
+          {t('appTitle')}
         </Typography>
         <Typography variant="subtitle1" color="text.secondary">
-          Discover local career fairs, health drives, workshops, and cultural events tailored to Tier 2, 3 & 4 cities.
+          {t('appSubtitle')}
         </Typography>
 
         {isOverridden && (
@@ -135,6 +138,12 @@ export default function EventList() {
           </Alert>
         )}
       </Box>
+
+      {/* AI Personalized Recommendation Section */}
+      <AIRecommendationSection
+        onSelectEvent={(evt) => setSelectedEvent(evt)}
+        onRSVP={(evt) => setRsvpEvent(evt)}
+      />
 
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2 }}>
         <Tabs
@@ -145,15 +154,15 @@ export default function EventList() {
           variant="scrollable"
           scrollButtons="auto"
         >
-          <Tab label="All Categories" value="all" sx={{ fontWeight: 700 }} />
-          <Tab label="Career" value="career" sx={{ fontWeight: 700 }} />
-          <Tab label="Health" value="health" sx={{ fontWeight: 700 }} />
-          <Tab label="Culture" value="culture" sx={{ fontWeight: 700 }} />
-          <Tab label="Workshops" value="workshop" sx={{ fontWeight: 700 }} />
+          <Tab label={t('allCategories')} value="all" sx={{ fontWeight: 700 }} />
+          <Tab label={t('career')} value="career" sx={{ fontWeight: 700 }} />
+          <Tab label={t('health')} value="health" sx={{ fontWeight: 700 }} />
+          <Tab label={t('culture')} value="culture" sx={{ fontWeight: 700 }} />
+          <Tab label={t('workshop')} value="workshop" sx={{ fontWeight: 700 }} />
         </Tabs>
 
         <TextField
-          placeholder="Search events..."
+          placeholder={t('searchPlaceholder')}
           size="small"
           value={search}
           onChange={(e) => setSearch(e.target.value)}

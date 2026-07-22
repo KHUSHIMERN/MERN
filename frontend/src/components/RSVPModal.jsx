@@ -13,8 +13,10 @@ import {
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { formatEventDateTime } from '../utils/dateUtils';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function RSVPModal({ event, activeTimezone, userLocale, open, onClose }) {
+  const { t, lang } = useLanguage();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [confirmed, setConfirmed] = useState(false);
@@ -27,6 +29,8 @@ export default function RSVPModal({ event, activeTimezone, userLocale, open, onC
     activeTimezone,
     userLocale
   );
+
+  const displayTitle = lang === 'hi' && event.title_hi ? event.title_hi : event.title;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -44,17 +48,17 @@ export default function RSVPModal({ event, activeTimezone, userLocale, open, onC
 
   return (
     <Dialog open={open} onClose={handleCloseAll} maxWidth="xs" fullWidth paperProps={{ sx: { borderRadius: 3 } }}>
-      <DialogTitle sx={{ fontWeight: 800 }}>Event RSVP Confirmation</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 800 }}>{t('rsvpConfirmation')}</DialogTitle>
       
       <DialogContent dividers>
         {confirmed ? (
           <Box sx={{ textAlign: 'center', py: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
             <CheckCircleOutlineIcon color="success" sx={{ fontSize: 60 }} />
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              You're Registered!
+              {t('rsvpSuccessTitle')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              A confirmation email has been sent for <strong>{event.title}</strong>.
+              {t('confirmationEmailSent')} (<strong>{displayTitle}</strong>).
             </Typography>
             <Box sx={{ p: 1.5, bgcolor: '#f0fdf4', borderRadius: 2, border: '1px solid #bbf7d0', width: '100%', mt: 1 }}>
               <Typography variant="caption" sx={{ fontWeight: 700, color: '#166534' }}>
@@ -69,7 +73,7 @@ export default function RSVPModal({ event, activeTimezone, userLocale, open, onC
           <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                {event.title}
+                {displayTitle}
               </Typography>
               <Typography variant="caption" color="primary" sx={{ fontWeight: 700, display: 'block' }}>
                 {fullDateTime} ({timezoneLabel})
@@ -77,7 +81,7 @@ export default function RSVPModal({ event, activeTimezone, userLocale, open, onC
             </Box>
 
             <TextField
-              label="Full Name"
+              label={t('fullName')}
               required
               fullWidth
               size="small"
@@ -85,7 +89,7 @@ export default function RSVPModal({ event, activeTimezone, userLocale, open, onC
               onChange={(e) => setName(e.target.value)}
             />
             <TextField
-              label="Email Address"
+              label={t('emailAddress')}
               type="email"
               required
               fullWidth
@@ -100,15 +104,15 @@ export default function RSVPModal({ event, activeTimezone, userLocale, open, onC
       <DialogActions sx={{ p: 2 }}>
         {confirmed ? (
           <Button onClick={handleCloseAll} variant="contained" fullWidth>
-            Done
+            {t('done')}
           </Button>
         ) : (
           <>
             <Button onClick={handleCloseAll} color="inherit">
-              Cancel
+              {t('cancel')}
             </Button>
             <Button variant="contained" onClick={handleSubmit} disabled={!name || !email}>
-              Confirm RSVP
+              {t('confirmRsvp')}
             </Button>
           </>
         )}

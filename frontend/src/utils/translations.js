@@ -40,9 +40,23 @@ export const translations = {
     createTimezoneLabel: 'Event Timezone (IANA)',
     createCapacityLabel: 'Total Capacity',
     cancel: 'Cancel',
+    close: 'Close',
     submit: 'Post Event',
     rsvpSuccessTitle: "You're Registered!",
-    rsvpSuccessDesc: 'Your spot has been confirmed for this local event.'
+    rsvpSuccessDesc: 'Your spot has been confirmed for this local event.',
+    rsvpConfirmation: 'RSVP Confirmation',
+    fullName: 'Full Name',
+    emailAddress: 'Email Address',
+    confirmRsvp: 'Confirm RSVP',
+    done: 'Done',
+    confirmationEmailSent: 'A confirmation email has been sent.',
+    selectTzTitle: 'Select Display Timezone',
+    selectTzSubtitle: 'Event start and end times across the platform will automatically convert to your selected timezone.',
+    effectiveTzSource: 'Effective Timezone Source',
+    manualOverride: 'Manual Override',
+    detectedFromBrowser: 'Detected from Browser',
+    searchTzPlaceholder: 'Search timezone by city, code, or country...',
+    resetToBrowser: 'Reset to Browser'
   },
   hi: {
     appTitle: 'टियर २-४ लोकल इवेन्ट्स',
@@ -85,8 +99,22 @@ export const translations = {
     createTimezoneLabel: 'समयक्षेत्र (IANA Timezone)',
     createCapacityLabel: 'कुल क्षमता',
     cancel: 'रद्द करें',
+    close: 'बंद करें',
     submit: 'कार्यक्रम प्रकाशित करें',
     rsvpSuccessTitle: 'आपका पंजीकरण सफल रहा!',
-    rsvpSuccessDesc: 'इस स्थानीय कार्यक्रम के लिए आपका स्थान सुनिश्चित हो गया है।'
+    rsvpSuccessDesc: 'इस स्थानीय कार्यक्रम के लिए आपका स्थान सुनिश्चित हो गया है।',
+    rsvpConfirmation: 'पंजीकरण पुष्टि',
+    fullName: 'पूरा नाम',
+    emailAddress: 'ईमेल पता',
+    confirmRsvp: 'पंजीकरण की पुष्टि करें',
+    done: 'पूर्ण',
+    confirmationEmailSent: 'एक पुष्टि ईमेल भेजा गया है।',
+    selectTzTitle: 'प्रदर्शन समयक्षेत्र चुनें',
+    selectTzSubtitle: 'प्लेटफॉर्म पर कार्यक्रमों का प्रारंभ और समाप्ति समय आपके द्वारा चुने गए समयक्षेत्र में स्वचालित रूप से बदल जाएगा।',
+    effectiveTzSource: 'प्रभावी समयक्षेत्र स्रोत',
+    manualOverride: 'मैन्युअल सेट (संशोधित)',
+    detectedFromBrowser: 'ब्राउज़र से पहचाना गया',
+    searchTzPlaceholder: 'शहर, कोड या देश द्वारा समयक्षेत्र खोजें...',
+    resetToBrowser: 'ब्राउज़र पर रीसेट करें'
   }
 };

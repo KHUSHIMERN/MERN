@@ -4,6 +4,7 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LanguageIcon from '@mui/icons-material/Language';
 import { formatEventDateTime } from '../utils/dateUtils';
+import { useLanguage } from '../context/LanguageContext';
 
 const categoryColors = {
   career: '#1976d2',
@@ -14,6 +15,7 @@ const categoryColors = {
 };
 
 export default function EventCard({ event, activeTimezone, userLocale, onSelectEvent, onRSVP }) {
+  const { t, lang } = useLanguage();
   const {
     formattedDate,
     formattedTime,
@@ -22,6 +24,8 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
   } = formatEventDateTime(event.startDate, event.timezone, activeTimezone, userLocale);
 
   const categoryColor = categoryColors[event.category] || categoryColors.general;
+  const displayTitle = lang === 'hi' && event.title_hi ? event.title_hi : event.title;
+  const displayDescription = lang === 'hi' && event.description_hi ? event.description_hi : event.description;
 
   return (
     <Card
@@ -41,7 +45,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
       <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Chip
-            label={event.category?.toUpperCase()}
+            label={t(event.category || 'general')}
             size="small"
             sx={{
               backgroundColor: categoryColor,
@@ -53,7 +57,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
           {isCrossTimezone && (
             <Chip
               icon={<LanguageIcon style={{ fontSize: 14, color: '#0288d1' }} />}
-              label="Converted Time"
+              label={t('convertedTimeLabel')}
               size="small"
               variant="outlined"
               color="info"
@@ -63,7 +67,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
         </Box>
 
         <Typography variant="h6" component="h2" sx={{ fontWeight: 700, lineHeight: 1.3 }}>
-          {event.title}
+          {displayTitle}
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
@@ -105,7 +109,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
             overflow: 'hidden'
           }}
         >
-          {event.description}
+          {displayDescription}
         </Typography>
       </CardContent>
 
@@ -117,7 +121,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
           onClick={() => onSelectEvent(event)}
           sx={{ borderRadius: 2 }}
         >
-          Details
+          {t('detailsBtn')}
         </Button>
         <Button
           variant="contained"
@@ -126,7 +130,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
           onClick={() => onRSVP(event)}
           sx={{ borderRadius: 2, background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)' }}
         >
-          RSVP
+          {t('rsvpBtn')}
         </Button>
       </Box>
     </Card>

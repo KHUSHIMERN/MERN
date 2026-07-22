@@ -22,6 +22,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import LanguageIcon from '@mui/icons-material/Language';
 import { useTimezone } from '../context/TimezoneContext';
+import { useLanguage } from '../context/LanguageContext';
 import { getTimezoneOffsetLabel } from '../utils/dateUtils';
 
 const COMMON_IANA_TIMEZONES = [
@@ -39,6 +40,7 @@ const COMMON_IANA_TIMEZONES = [
 ];
 
 export default function TimezoneSelectorModal({ open, onClose }) {
+  const { t } = useLanguage();
   const {
     detectedTimezone,
     activeTimezone,
@@ -69,16 +71,16 @@ export default function TimezoneSelectorModal({ open, onClose }) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth paperProps={{ sx: { borderRadius: 3 } }}>
       <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
-        Select Display Timezone
+        {t('selectTzTitle')}
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          Event start and end times across the platform will automatically convert to your selected timezone.
+          {t('selectTzSubtitle')}
         </Typography>
       </DialogTitle>
 
       <DialogContent dividers>
         <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: isOverridden ? '#fff7ed' : '#eff6ff', border: `1px solid ${isOverridden ? '#ffedd5' : '#dbeafe'}` }}>
           <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', color: isOverridden ? '#c2410c' : '#1d4ed8' }}>
-            Effective Timezone Source
+            {t('effectiveTzSource')}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -88,7 +90,7 @@ export default function TimezoneSelectorModal({ open, onClose }) {
               </Typography>
             </Box>
             <Chip
-              label={isOverridden ? 'Manual Override' : 'Detected from Browser'}
+              label={isOverridden ? t('manualOverride') : t('detectedFromBrowser')}
               color={isOverridden ? 'warning' : 'primary'}
               size="small"
               sx={{ fontWeight: 700 }}
@@ -97,7 +99,7 @@ export default function TimezoneSelectorModal({ open, onClose }) {
         </Box>
 
         <TextField
-          placeholder="Search timezone by city, code, or country..."
+          placeholder={t('searchTzPlaceholder')}
           fullWidth
           size="small"
           value={search}
@@ -153,10 +155,10 @@ export default function TimezoneSelectorModal({ open, onClose }) {
           disabled={!isOverridden}
           color="secondary"
         >
-          Reset to Browser ({detectedTimezone})
+          {t('resetToBrowser')} ({detectedTimezone})
         </Button>
         <Button onClick={onClose} color="inherit">
-          Close
+          {t('close')}
         </Button>
       </DialogActions>
     </Dialog>

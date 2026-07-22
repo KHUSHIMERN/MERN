@@ -45,7 +45,7 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
             <h2 className="modal-title">{t('form.title', 'Register for Event')}</h2>
             {selectedEvent && (
               <p className="modal-subtitle">
-                {selectedEvent.titleKey} ({selectedEvent.location})
+                {selectedEvent.title} ({selectedEvent.location})
               </p>
             )}
           </div>

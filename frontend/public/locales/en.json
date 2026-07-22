@@ -44,6 +44,28 @@
       "registerBtn": "Register Now",
       "viewDetails": "View Details"
     },
+    "items": {
+      "evt1": {
+        "title": "Tech Summit Bengaluru 2026",
+        "location": "Electronic City, Bengaluru",
+        "description": "An annual tech summit gathering AI developers, startup founders, and cloud engineers."
+      },
+      "evt2": {
+        "title": "Karnataka Cultural & Folk Festival",
+        "location": "Palace Grounds, Mysuru",
+        "description": "Celebrate rich heritage with Yakshagana, Dollu Kunitha, music, and local cuisine stalls."
+      },
+      "evt3": {
+        "title": "Fullstack React & Node Workshop",
+        "location": "Koramangala, Bengaluru",
+        "description": "Hands-on practical workshop covering React 19, i18n, Express, and MongoDB integration."
+      },
+      "evt4": {
+        "title": "Green City Cleanliness Drive",
+        "location": "Cubbon Park, Bengaluru",
+        "description": "Join environmental volunteers for tree planting and park restoration initiative."
+      }
+    },
     "noResults": "No events found matching your search or category filter."
   },
   "form": {

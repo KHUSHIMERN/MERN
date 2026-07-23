@@ -43,6 +43,33 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
         }
       }}
     >
+      {event.imageUrl ? (
+        <Box
+          component="img"
+          src={event.imageUrl}
+          alt={event.imageUrlAlt || `${displayTitle} event banner`}
+          sx={{
+            width: '100%',
+            height: 160,
+            objectFit: 'cover',
+            borderTopLeftRadius: 12,
+            borderTopRightRadius: 12
+          }}
+        />
+      ) : (
+        <Box
+          sx={{
+            height: 80,
+            background: `linear-gradient(135deg, ${categoryColor} 0%, #0f172a 100%)`,
+            borderTopLeftRadius: 12,
+            borderTopRightRadius: 12,
+            display: 'flex',
+            alignItems: 'center',
+            px: 2
+          }}
+          aria-hidden="true"
+        />
+      )}
       <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Chip
@@ -59,7 +86,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
             /* Lighthouse fix: MUI color="info" outlined = #0288d1 on white (3.85:1 ❌)
                Override to #0369a1 = 4.53:1 on white ✅ */
             <Chip
-              icon={<LanguageIcon style={{ fontSize: '0.875rem', color: '#0369a1' }} />}
+              icon={<LanguageIcon style={{ fontSize: '0.875rem', color: '#0369a1' }} aria-hidden="true" />}
               label={t('convertedTimeLabel')}
               size="small"
               variant="outlined"
@@ -74,7 +101,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
-          <LocationOnIcon fontSize="small" color="action" />
+          <LocationOnIcon fontSize="small" color="action" aria-hidden="true" />
           <Typography variant="body2" noWrap>
             {event.location}
           </Typography>
@@ -92,7 +119,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <AccessTimeIcon fontSize="small" color="primary" />
+            <AccessTimeIcon fontSize="small" color="primary" aria-hidden="true" />
             {/* component="p" prevents h6 in heading hierarchy — only event title is a heading ✅ */}
             <Typography variant="subtitle2" component="p" sx={{ fontWeight: 700, color: '#1e293b' }}>
               {formattedDate} • {formattedTime}

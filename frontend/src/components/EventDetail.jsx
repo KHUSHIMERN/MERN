@@ -45,6 +45,22 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
 
       <DialogContent dividers>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {event.imageUrl && (
+            <Box sx={{ borderRadius: 2, overflow: 'hidden', mb: 1 }}>
+              <Box
+                component="img"
+                src={event.imageUrl}
+                alt={event.imageUrlAlt || `${displayTitle} event banner`}
+                sx={{ width: '100%', maxHeight: 240, objectFit: 'cover', display: 'block' }}
+              />
+              <Box sx={{ p: 1, bgcolor: '#f1f5f9', borderTop: '1px solid #e2e8f0' }}>
+                <Typography variant="caption" sx={{ color: '#475569', fontStyle: 'italic', display: 'block' }}>
+                  <strong>Image Alt Text (Screen Reader Description):</strong> "{event.imageUrlAlt || `${displayTitle} banner`}"
+                </Typography>
+              </Box>
+            </Box>
+          )}
+
           <Typography variant="body1" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>
             {displayDescription}
           </Typography>
@@ -52,7 +68,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
           <Divider />
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <LocationOnIcon color="primary" />
+            <LocationOnIcon color="primary" aria-hidden="true" />
             <Box>
               <Typography variant="caption" color="text.secondary">
                 {t('locationLabel')}
@@ -64,7 +80,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <AccessTimeIcon color="primary" />
+            <AccessTimeIcon color="primary" aria-hidden="true" />
             <Box>
               <Typography variant="caption" color="text.secondary">
                 Date & Time
@@ -81,7 +97,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <PublicIcon color="action" />
+            <PublicIcon color="action" aria-hidden="true" />
             <Box>
               <Typography variant="caption" color="text.secondary">
                 {t('originTzLabel')}
@@ -93,7 +109,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
           </Box>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <PeopleIcon color="action" />
+            <PeopleIcon color="action" aria-hidden="true" />
             <Box>
               <Typography variant="caption" color="text.secondary">
                 {t('organizerLabel')} & {t('capacity')}

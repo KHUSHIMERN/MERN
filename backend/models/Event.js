@@ -83,6 +83,16 @@ const eventSchema = new mongoose.Schema(
     tags: {
       type: [String],
       default: []
+    },
+    imageUrl: {
+      type: String,
+      default: '',
+      trim: true
+    },
+    imageUrlAlt: {
+      type: String,
+      default: '',
+      trim: true
     }
   },
   {

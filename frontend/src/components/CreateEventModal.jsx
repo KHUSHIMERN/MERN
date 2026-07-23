@@ -37,7 +37,9 @@ export default function CreateEventModal({ open, onClose, onEventCreated }) {
     endDate: '',
     timezone: 'Asia/Kolkata',
     organizer: 'Local Skill Mission',
-    capacity: 100
+    capacity: 100,
+    imageUrl: '',
+    imageUrlAlt: ''
   });
 
   const [loading, setLoading] = useState(false);
@@ -259,6 +261,61 @@ export default function CreateEventModal({ open, onClose, onEventCreated }) {
                 onChange={handleChange}
               />
             </Grid>
+
+            {/* Event Image URL & Alt Text (WCAG 1.1.1 Accessibility requirement) */}
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Event Image URL"
+                name="imageUrl"
+                placeholder="https://example.com/banner.jpg"
+                fullWidth
+                size="small"
+                value={formData.imageUrl}
+                onChange={handleChange}
+                helperText="Direct URL for the event banner/poster image"
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Image Alt Text / Description *"
+                name="imageUrlAlt"
+                placeholder="Describe key visual details in 1-2 sentences for screen readers"
+                fullWidth
+                size="small"
+                required={Boolean(formData.imageUrl)}
+                value={formData.imageUrlAlt}
+                onChange={handleChange}
+                helperText="WCAG 1.1.1: Describe what is visible in the image (avoid 'image of')"
+              />
+            </Grid>
+
+            {/* Image & Alt Text Live Preview */}
+            {formData.imageUrl && (
+              <Grid item xs={12}>
+                <Box sx={{ p: 1.5, border: '1px solid #cbd5e1', borderRadius: 2, bgcolor: '#f8fafc' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 1, color: '#334155' }}>
+                    📷 Image Accessibility Preview
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    <Box
+                      component="img"
+                      src={formData.imageUrl}
+                      alt={formData.imageUrlAlt || 'Event image preview'}
+                      sx={{ width: 120, height: 75, objectFit: 'cover', borderRadius: 1.5, border: '1px solid #e2e8f0' }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                    <Box>
+                      <Typography variant="caption" sx={{ color: '#475569', display: 'block' }}>
+                        <strong>Active Alt Text:</strong> {formData.imageUrlAlt || '(No alt text provided yet)'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
 

@@ -63,7 +63,9 @@ exports.createEvent = async (req, res) => {
       timezone,
       organizer,
       capacity,
-      tags
+      tags,
+      imageUrl,
+      imageUrlAlt
     } = req.body;
 
     const eventTimezone = timezone || 'Asia/Kolkata';
@@ -89,7 +91,9 @@ exports.createEvent = async (req, res) => {
       timezone: eventTimezone,
       organizer: organizer || 'Community Organizer',
       capacity: capacity || 100,
-      tags: tags || []
+      tags: tags || [],
+      imageUrl: imageUrl || '',
+      imageUrlAlt: imageUrlAlt || (title ? `Banner image for ${title}` : 'Event banner image')
     });
 
     res.status(201).json({ success: true, data: event });

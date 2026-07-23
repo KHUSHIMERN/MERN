@@ -20,7 +20,9 @@ const mockFallbackEvents = [
     timezone: 'Asia/Kolkata',
     organizer: 'Rajasthan Skill Development Mission',
     capacity: 500,
-    attendeesCount: 142
+    attendeesCount: 142,
+    imageUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600',
+    imageUrlAlt: 'Crowd of young job seekers interacting with recruiters at Rajasthan youth job fair booths'
   },
   {
     _id: '2',
@@ -33,7 +35,9 @@ const mockFallbackEvents = [
     timezone: 'America/New_York',
     organizer: 'OpenSource Community Global',
     capacity: 1000,
-    attendeesCount: 680
+    attendeesCount: 680,
+    imageUrl: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=600',
+    imageUrlAlt: 'Developer presenting AI integration code on a large screen to virtual workshop attendees'
   },
   {
     _id: '3',
@@ -46,7 +50,9 @@ const mockFallbackEvents = [
     timezone: 'Asia/Kolkata',
     organizer: 'Indore Youth Welfare Forum',
     capacity: 300,
-    attendeesCount: 95
+    attendeesCount: 95,
+    imageUrl: 'https://images.unsplash.com/photo-1615461066841-6116e61058f4?w=600',
+    imageUrlAlt: 'Medical volunteers assisting donors at community health and blood donation registration desk'
   },
   {
     _id: '4',
@@ -59,7 +65,9 @@ const mockFallbackEvents = [
     timezone: 'Europe/London',
     organizer: 'Global Small Business Forum',
     capacity: 250,
-    attendeesCount: 110
+    attendeesCount: 110,
+    imageUrl: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=600',
+    imageUrlAlt: 'Keynote speaker addressing an audience at European micro-entrepreneurship conference'
   },
   {
     _id: '5',
@@ -72,7 +80,9 @@ const mockFallbackEvents = [
     timezone: 'Asia/Kolkata',
     organizer: 'Bihar Cultural Academy',
     capacity: 800,
-    attendeesCount: 420
+    attendeesCount: 420,
+    imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+    imageUrlAlt: 'Folk dancers performing in traditional colorful attire on stage at Patna cultural festival'
   }
 ];
 

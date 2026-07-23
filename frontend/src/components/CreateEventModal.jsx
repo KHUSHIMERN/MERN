@@ -9,7 +9,8 @@ import {
   MenuItem,
   Grid,
   Box,
-  Alert
+  Alert,
+  Typography
 } from '@mui/material';
 import { useLanguage } from '../context/LanguageContext';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';

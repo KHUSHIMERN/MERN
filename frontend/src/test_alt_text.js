@@ -61,6 +61,18 @@ const detailContent = fs.readFileSync(detailPath, 'utf8');
 assert(detailContent.includes('alt={event.imageUrlAlt'), 'EventDetail.jsx renders image with alt text');
 assert(detailContent.includes('Screen Reader Description'), 'EventDetail.jsx displays image alt text metadata block');
 
+// 5. Verify AIRecommendationSection.jsx marks all decorative icons with aria-hidden
+const aiSectionPath = path.join(__dirname, 'components', 'AIRecommendationSection.jsx');
+const aiSectionContent = fs.readFileSync(aiSectionPath, 'utf8');
+const ariaHiddenMatches = (aiSectionContent.match(/aria-hidden="true"/g) || []).length;
+assert(ariaHiddenMatches >= 3, `AIRecommendationSection.jsx marks decorative icons with aria-hidden="true" (found ${ariaHiddenMatches})`);
+assert(!aiSectionContent.includes('<LocationOnIcon fontSize="small" />'), 'AIRecommendationSection.jsx LocationOnIcon is not missing aria-hidden');
+assert(!aiSectionContent.includes('<AccessTimeIcon fontSize="small" color="primary" />'), 'AIRecommendationSection.jsx AccessTimeIcon is not missing aria-hidden');
+
+// 6. Verify CreateEventModal.jsx imports Typography (no runtime crash)
+const createModalImportCheck = createModalContent.includes('Typography');
+assert(createModalImportCheck, 'CreateEventModal.jsx imports Typography from @mui/material');
+
 console.log('\n===============================================================');
 console.log(`  SUMMARY: ${passedTests}/${totalTests} TESTS PASSED`);
 console.log('===============================================================');

@@ -88,7 +88,8 @@ export const translations = {
     selectEventBtn: 'View Metrics',
     selectedEventBadge: 'Selected',
     retryBtn: 'Retry Loading Metrics',
-    loadingMetrics: 'Fetching attendance metrics...'
+    loadingMetrics: 'Fetching attendance metrics...',
+    exportCsvBtn: 'Export CSV'
   },
   hi: {
     appTitle: 'टियर २-४ लोकल इवेन्ट्स',
@@ -179,6 +180,7 @@ export const translations = {
     selectEventBtn: 'मेट्रिक्स देखें',
     selectedEventBadge: 'चयनित',
     retryBtn: 'पुनः प्रयास करें',
-    loadingMetrics: 'उपस्थिति मेट्रिक्स लोड हो रहा है...'
+    loadingMetrics: 'उपस्थिति मेट्रिक्स लोड हो रहा है...',
+    exportCsvBtn: 'CSV एक्सपोर्ट करें'
   }
 };

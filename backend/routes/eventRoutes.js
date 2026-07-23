@@ -7,9 +7,11 @@ const {
   updateEvent,
   deleteEvent,
   rsvpEvent,
-  getOrganizerAttendanceMetrics
+  getOrganizerAttendanceMetrics,
+  exportOrganizerAttendanceMetricsCSV
 } = require('../controllers/eventController');
 
+router.get('/organizer/:id/attendance-metrics/export', exportOrganizerAttendanceMetricsCSV);
 router.get('/organizer/:id/attendance-metrics', getOrganizerAttendanceMetrics);
 
 router.route('/')

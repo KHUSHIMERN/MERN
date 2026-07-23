@@ -26,6 +26,7 @@ import GroupIcon from '@mui/icons-material/Group';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import DownloadIcon from '@mui/icons-material/Download';
 import EventIcon from '@mui/icons-material/Event';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import PersonOffIcon from '@mui/icons-material/PersonOff';
@@ -173,6 +174,73 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
     return `${pct.toFixed(1)}%`;
   };
 
+  const handleExportCSV = async () => {
+    try {
+      const exportEndpoints = [
+        `/api/organizer/${organizerId}/attendance-metrics/export?limit=${limit}`,
+        `/organizer/${organizerId}/attendance-metrics/export?limit=${limit}`,
+        `/api/events/organizer/${organizerId}/attendance-metrics/export?limit=${limit}`
+      ];
+
+      let downloaded = false;
+      for (const endpoint of exportEndpoints) {
+        try {
+          const response = await fetch(endpoint);
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `attendance-metrics-${organizerId}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            downloaded = true;
+            break;
+          }
+        } catch (e) {
+          // continue to next endpoint or fallback
+        }
+      }
+
+      if (!downloaded) {
+        // Fallback: Generate CSV client-side from metrics state
+        const headers = ['Event ID', 'Event Title', 'Date', 'Capacity', 'Confirmed', 'Waitlist', 'Checked-In', 'No-Show', 'Attendance Rate (%)'];
+        const rows = [headers.join(',')];
+        const escapeCsv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+        metrics.forEach(m => {
+          const dateStr = m.date || m.startDate ? new Date(m.date || m.startDate).toISOString() : '';
+          const ratePct = m.attendanceRate !== undefined ? (m.attendanceRate <= 1 ? (m.attendanceRate * 100).toFixed(1) : m.attendanceRate.toFixed(1)) : '0.0';
+          rows.push([
+            escapeCsv(m.eventId || m._id),
+            escapeCsv(m.title),
+            escapeCsv(dateStr),
+            escapeCsv(m.capacity ?? 0),
+            escapeCsv(m.confirmed ?? 0),
+            escapeCsv(m.waitlist ?? 0),
+            escapeCsv(m.checkedIn ?? 0),
+            escapeCsv(m.noShow ?? 0),
+            escapeCsv(ratePct)
+          ].join(','));
+        });
+
+        const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `attendance-metrics-${organizerId}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error('Failed to export CSV metrics:', err);
+    }
+  };
+
   return (
     <Box sx={{ py: 3, px: { xs: 2, md: 3 }, backgroundColor: '#f8fafc', borderRadius: 3, border: '1px solid #e2e8f0', my: 3 }}>
       {/* Header */}
@@ -213,6 +281,18 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
             sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
           >
             {t('retryBtn') || 'Refresh'}
+          </Button>
+
+          <Button
+            variant="contained"
+            color="primary"
+            size="medium"
+            onClick={handleExportCSV}
+            startIcon={<DownloadIcon />}
+            disabled={loading || metrics.length === 0}
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700, backgroundColor: '#1d4ed8' }}
+          >
+            {t('exportCsvBtn') || 'Export CSV'}
           </Button>
         </Box>
       </Box>

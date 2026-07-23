@@ -297,3 +297,158 @@ exports.getOrganizerAttendanceMetrics = async (req, res) => {
   }
 };
 
+// @desc    Export attendance metrics as CSV for an organizer (Task 3 of Story 3)
+// @route   GET /organizer/:id/attendance-metrics/export
+exports.exportOrganizerAttendanceMetricsCSV = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const limitVal = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 0;
+
+    const { startDate, endDate, from, to } = req.query;
+    const dateFrom = startDate || from;
+    const dateTo = endDate || to;
+
+    const matchQuery = {};
+
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      const objId = new mongoose.Types.ObjectId(id);
+      matchQuery.$or = [
+        { organizerId: objId },
+        { organizerId: id }
+      ];
+    } else {
+      matchQuery.organizerId = id;
+    }
+
+    if (dateFrom || dateTo) {
+      matchQuery.startDate = {};
+      if (dateFrom) matchQuery.startDate.$gte = new Date(dateFrom);
+      if (dateTo) matchQuery.startDate.$lte = new Date(dateTo);
+    }
+
+    const now = new Date();
+
+    const pipeline = [
+      { $match: matchQuery },
+      { $sort: { startDate: -1 } }
+    ];
+
+    if (!isNaN(limitVal) && limitVal > 0) {
+      pipeline.push({ $limit: limitVal });
+    }
+
+    pipeline.push(
+      {
+        $project: {
+          eventId: '$_id',
+          title: 1,
+          date: '$startDate',
+          startDate: 1,
+          endDate: 1,
+          capacity: { $ifNull: ['$capacity', 100] },
+          confirmed: {
+            $max: [
+              {
+                $cond: {
+                  if: { $isArray: '$rsvpedUsers' },
+                  then: { $size: '$rsvpedUsers' },
+                  else: 0
+                }
+              },
+              { $ifNull: ['$attendeesCount', 0] }
+            ]
+          },
+          waitlist: {
+            $cond: {
+              if: { $gt: [{ $size: { $ifNull: ['$waitlistUsers', []] } }, 0] },
+              then: { $size: '$waitlistUsers' },
+              else: { $ifNull: ['$waitlistCount', 0] }
+            }
+          },
+          checkedIn: {
+            $cond: {
+              if: { $gt: [{ $size: { $ifNull: ['$checkedInUsers', []] } }, 0] },
+              then: { $size: '$checkedInUsers' },
+              else: { $ifNull: ['$checkedInCount', 0] }
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          eventId: 1,
+          title: 1,
+          date: 1,
+          startDate: 1,
+          endDate: 1,
+          capacity: 1,
+          confirmed: 1,
+          waitlist: {
+            $max: [
+              '$waitlist',
+              { $max: [0, { $subtract: ['$confirmed', '$capacity'] }] }
+            ]
+          },
+          checkedIn: 1,
+          noShow: {
+            $cond: {
+              if: { $lt: [{ $ifNull: ['$endDate', '$startDate'] }, now] },
+              then: { $max: [0, { $subtract: ['$confirmed', '$checkedIn'] }] },
+              else: 0
+            }
+          },
+          attendanceRate: {
+            $cond: {
+              if: { $gt: ['$confirmed', 0] },
+              then: { $round: [{ $divide: ['$checkedIn', '$confirmed'] }, 4] },
+              else: 0
+            }
+          }
+        }
+      }
+    );
+
+    let metrics = [];
+    try {
+      metrics = await Event.aggregate(pipeline);
+    } catch (e) {
+      metrics = [];
+    }
+
+    const headers = ['Event ID', 'Event Title', 'Date', 'Capacity', 'Confirmed', 'Waitlist', 'Checked-In', 'No-Show', 'Attendance Rate (%)'];
+    const csvRows = [headers.join(',')];
+
+    const escapeCsvField = (val) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    metrics.forEach(m => {
+      const formattedDate = m.date || m.startDate ? new Date(m.date || m.startDate).toISOString() : '';
+      const ratePct = m.attendanceRate !== undefined ? (m.attendanceRate * 100).toFixed(1) : '0.0';
+      const row = [
+        escapeCsvField(m.eventId || m._id),
+        escapeCsvField(m.title),
+        escapeCsvField(formattedDate),
+        escapeCsvField(m.capacity ?? 0),
+        escapeCsvField(m.confirmed ?? 0),
+        escapeCsvField(m.waitlist ?? 0),
+        escapeCsvField(m.checkedIn ?? 0),
+        escapeCsvField(m.noShow ?? 0),
+        escapeCsvField(ratePct)
+      ];
+      csvRows.push(row.join(','));
+    });
+
+    const csvContent = csvRows.join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="attendance-metrics-${id}.csv"`);
+    return res.status(200).send(csvContent);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+

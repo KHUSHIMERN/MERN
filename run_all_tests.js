@@ -34,6 +34,9 @@ try {
   console.log('\n>>> RUNNING TASK 2 (STORY 3) TESTS (Attendance Metric Cards & Trend Table UI)...');
   execSync('node --experimental-vm-modules src/test_task2_story3.js', { cwd: path.join(__dirname, 'frontend'), stdio: 'inherit' });
 
+  console.log('\n>>> RUNNING TASK 3 (STORY 3) TESTS (CSV Export for Attendance Metrics)...');
+  execSync('node test_task3_story3.js', { cwd: path.join(__dirname, 'backend'), stdio: 'inherit' });
+
   console.log('\n===============================================================');
   console.log('  ALL TASKS VERIFIED & PASSED WITH 100% SUCCESS!');
   console.log('===============================================================');

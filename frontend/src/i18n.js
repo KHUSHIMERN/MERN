@@ -14,6 +14,7 @@ i18n
   .init({
     supportedLngs: ['en', 'hi', 'kn'],
     fallbackLng: 'en',
+    load: 'languageOnly',
     debug: false,
     
     // Detection options: persistent setting in localStorage under 'app_language'
@@ -38,9 +39,13 @@ i18n
   });
 
 // Keep html lang attribute in sync with active language
+if (typeof document !== 'undefined' && i18n.language) {
+  document.documentElement.lang = i18n.language.slice(0, 2);
+}
+
 i18n.on('languageChanged', (lng) => {
   if (typeof document !== 'undefined') {
-    document.documentElement.lang = lng;
+    document.documentElement.lang = lng ? lng.slice(0, 2) : 'en';
   }
 });
 

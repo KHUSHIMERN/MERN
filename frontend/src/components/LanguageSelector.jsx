@@ -5,7 +5,7 @@ import LANGUAGES from '../constants/languages';
 export function LanguageSelector({ variant = 'both' }) {
   const { i18n, t } = useTranslation();
 
-  const currentLanguage = i18n.language || 'en';
+  const currentLanguage = (i18n.language || 'en').slice(0, 2);
 
   const handleLanguageChange = (newLangCode) => {
     // Emit language change event to i18n provider
@@ -22,10 +22,10 @@ export function LanguageSelector({ variant = 'both' }) {
   useEffect(() => {
     // Ensure localStorage stays synced with initial detected language
     const saved = localStorage.getItem('app_language');
-    if (saved && saved !== i18n.language && LANGUAGES.some(l => l.code === saved)) {
+    if (saved && saved !== currentLanguage && LANGUAGES.some(l => l.code === saved)) {
       i18n.changeLanguage(saved);
     }
-  }, [i18n]);
+  }, [i18n, currentLanguage]);
 
   return (
     <div className="language-selector-wrapper" data-testid="language-selector">

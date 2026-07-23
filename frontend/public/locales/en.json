@@ -88,7 +88,10 @@
     "agreeTerms": "I agree to the event terms and community code of conduct",
     "submitBtn": "Confirm Registration",
     "cancelBtn": "Cancel",
-    "successMsg": "🎉 Registration successful! Confirmation details have been sent to your email."
+    "successMsg": "🎉 Registration successful! Confirmation details have been sent to your email.",
+    "requiredFieldsError": "Please fill in all required fields.",
+    "agreeTermsError": "You must agree to the terms to proceed.",
+    "okBtn": "OK"
   },
   "footer": {
     "aboutTitle": "About EventPulse",
@@ -102,6 +105,7 @@
     "copyright": "© 2026 EventPulse. All rights reserved."
   },
   "fallbackDemo": {
+    "badge": "⚙️ i18n Architecture Inspector",
     "title": "i18n Lazy Loading & Fallback Test Matrix",
     "description": "This component verifies lazy loading of language bundles via i18next-http-backend and demonstrates missing key fallback handling.",
     "activeLanguage": "Active Language:",
@@ -110,6 +114,9 @@
     "bundleLoaded": "Loaded via HTTP Backend (/locales/{{lng}}.json)",
     "fallbackSectionTitle": "Missing Key Fallback Verification",
     "fallbackNotice": "The key below 'fallbackDemo.keyMissingMessage' is intentionally defined ONLY in en.json and omitted from hi.json and kn.json.",
+    "keyLabel": "Key:",
+    "fallbackActive": "⚠️ Fallback Active: Evaluated to English default!",
+    "nativeString": "✓ Native Locale String",
     "untranslatedLabel": "Key Output in Current Language:",
     "keyMissingMessage": "This fallback text string is defined strictly in the English (en.json) bundle."
   }

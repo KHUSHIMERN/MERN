@@ -14,6 +14,13 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const eventTitle = selectedEvent?.itemKey
+    ? t(`events.items.${selectedEvent.itemKey}.title`)
+    : selectedEvent?.title;
+  const eventLocation = selectedEvent?.itemKey
+    ? t(`events.items.${selectedEvent.itemKey}.location`)
+    : selectedEvent?.location;
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -25,11 +32,11 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.fullName.trim() || !formData.email.trim()) {
-      setErrorMsg('Please fill in all required fields.');
+      setErrorMsg(t('form.requiredFieldsError', 'Please fill in all required fields.'));
       return;
     }
     if (!formData.agreeTerms) {
-      setErrorMsg('You must agree to the terms to proceed.');
+      setErrorMsg(t('form.agreeTermsError', 'You must agree to the terms to proceed.'));
       return;
     }
 
@@ -45,7 +52,7 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
             <h2 className="modal-title">{t('form.title', 'Register for Event')}</h2>
             {selectedEvent && (
               <p className="modal-subtitle">
-                {selectedEvent.title} ({selectedEvent.location})
+                {eventTitle} ({eventLocation})
               </p>
             )}
           </div>
@@ -59,7 +66,7 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
             <div className="success-icon">🎉</div>
             <p className="success-text">{t('form.successMsg', 'Registration successful! Confirmation details sent to your email.')}</p>
             <button type="button" className="btn-primary" onClick={onClose}>
-              OK
+              {t('form.okBtn', 'OK')}
             </button>
           </div>
         ) : (

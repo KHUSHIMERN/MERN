@@ -5,7 +5,7 @@ import LANGUAGES from '../constants/languages';
 export function FallbackTestDemo() {
   const { t, i18n } = useTranslation();
 
-  const currentLang = i18n.language || 'en';
+  const currentLang = (i18n.language || 'en').slice(0, 2);
   const savedLocalStorage = typeof localStorage !== 'undefined' ? localStorage.getItem('app_language') : 'N/A';
 
   // Test missing key: fallbackDemo.keyMissingMessage exists in en.json, omitted in hi.json and kn.json
@@ -16,7 +16,7 @@ export function FallbackTestDemo() {
     <section className="fallback-demo-section" id="fallbackDemo">
       <div className="demo-card">
         <div className="demo-card-header">
-          <span className="demo-badge">⚙️ i18n Architecture Inspector</span>
+          <span className="demo-badge">{t('fallbackDemo.badge', '⚙️ i18n Architecture Inspector')}</span>
           <h2 className="demo-title">{t('fallbackDemo.title', 'i18n Lazy Loading & Missing Key Fallback Test')}</h2>
           <p className="demo-description">
             {t('fallbackDemo.description', 'This test demonstrates how missing translation keys in non-English locales automatically fall back to English.')}
@@ -29,7 +29,7 @@ export function FallbackTestDemo() {
             <div className="status-pill active-pill">
               <span className="pill-code">{currentLang.toUpperCase()}</span>
               <span className="pill-name">
-                {LANGUAGES.find((l) => l.code === currentLang.slice(0, 2))?.nativeName || currentLang}
+                {LANGUAGES.find((l) => l.code === currentLang)?.nativeName || currentLang}
               </span>
             </div>
           </div>
@@ -59,14 +59,14 @@ export function FallbackTestDemo() {
 
           <div className="key-inspection-card">
             <div className="inspection-header">
-              <span className="key-name">Key: <code>fallbackDemo.keyMissingMessage</code></span>
+              <span className="key-name">{t('fallbackDemo.keyLabel', 'Key:')} <code>fallbackDemo.keyMissingMessage</code></span>
               {isFallbackUsed ? (
                 <span className="fallback-tag warning">
-                  ⚠️ Fallback Active: Evaluated to English default!
+                  {t('fallbackDemo.fallbackActive', '⚠️ Fallback Active: Evaluated to English default!')}
                 </span>
               ) : (
                 <span className="fallback-tag success">
-                  ✓ Native Locale String
+                  {t('fallbackDemo.nativeString', '✓ Native Locale String')}
                 </span>
               )}
             </div>

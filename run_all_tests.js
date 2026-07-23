@@ -28,6 +28,12 @@ try {
   console.log('\n>>> RUNNING TASK 4 (STORY 2) TESTS (WCAG 1.4.1 — Color Not Sole Indicator)...');
   execSync('node --experimental-vm-modules src/test_task4_story2.js', { cwd: path.join(__dirname, 'frontend'), stdio: 'inherit' });
 
+  console.log('\n>>> RUNNING TASK 1 (STORY 3) TESTS (Attendance Metrics Backend Pipeline)...');
+  execSync('node test_task1_story3.js', { cwd: path.join(__dirname, 'backend'), stdio: 'inherit' });
+
+  console.log('\n>>> RUNNING TASK 2 (STORY 3) TESTS (Attendance Metric Cards & Trend Table UI)...');
+  execSync('node --experimental-vm-modules src/test_task2_story3.js', { cwd: path.join(__dirname, 'frontend'), stdio: 'inherit' });
+
   console.log('\n===============================================================');
   console.log('  ALL TASKS VERIFIED & PASSED WITH 100% SUCCESS!');
   console.log('===============================================================');

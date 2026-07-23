@@ -4,8 +4,10 @@ import SearchIcon from '@mui/icons-material/Search';
 import EventCard from './EventCard';
 import EventDetail from './EventDetail';
 import RSVPModal from './RSVPModal';
+import AttendanceMetrics from './AttendanceMetrics';
 import { useTimezone } from '../context/TimezoneContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import AIRecommendationSection from './AIRecommendationSection';
 
 const mockFallbackEvents = [
@@ -89,6 +91,7 @@ const mockFallbackEvents = [
 export default function EventList() {
   const { activeTimezone, userLocale, isOverridden } = useTimezone();
   const { t } = useLanguage();
+  const { role, user } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState('all');
@@ -149,6 +152,11 @@ export default function EventList() {
           </Alert>
         )}
       </Box>
+
+      {/* Attendance Metrics & Trend Table for Event Organizers */}
+      {role === 'organizer' && (
+        <AttendanceMetrics organizerId={user?._id || 'organizer_1'} initialLimit={5} />
+      )}
 
       {/* AI Personalized Recommendation Section */}
       <AIRecommendationSection

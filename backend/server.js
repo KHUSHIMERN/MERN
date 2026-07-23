@@ -18,6 +18,8 @@ app.use(express.json());
 app.use('/api/events', eventRoutes);
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
+app.use('/organizer', require('./routes/organizerRoutes'));
+app.use('/api/organizer', require('./routes/organizerRoutes'));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'MERN Local Events Backend', timestamp: new Date().toISOString() });

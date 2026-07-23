@@ -6,8 +6,11 @@ const {
   createEvent,
   updateEvent,
   deleteEvent,
-  rsvpEvent
+  rsvpEvent,
+  getOrganizerAttendanceMetrics
 } = require('../controllers/eventController');
+
+router.get('/organizer/:id/attendance-metrics', getOrganizerAttendanceMetrics);
 
 router.route('/')
   .get(getEvents)

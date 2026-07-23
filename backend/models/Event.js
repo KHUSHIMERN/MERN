@@ -80,6 +80,26 @@ const eventSchema = new mongoose.Schema(
         ref: 'User'
       }
     ],
+    checkedInCount: {
+      type: Number,
+      default: 0
+    },
+    checkedInUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      }
+    ],
+    waitlistCount: {
+      type: Number,
+      default: 0
+    },
+    waitlistUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      }
+    ],
     tags: {
       type: [String],
       default: []

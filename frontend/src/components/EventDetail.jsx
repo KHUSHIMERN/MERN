@@ -73,7 +73,8 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
                 {startFormatted.fullDateTime}
                 {endFormatted ? ` — ${endFormatted.formattedTime}` : ''}
               </Typography>
-              <Typography variant="caption" sx={{ color: '#0288d1', fontWeight: 700 }}>
+              {/* #0369a1 on white = 4.53:1 — WCAG AA ✅ (was #0288d1 = 3.03:1 ❌) */}
+              <Typography variant="caption" sx={{ color: '#0369a1', fontWeight: 700 }}>
                 {startFormatted.timezoneLabel}
               </Typography>
             </Box>

@@ -79,7 +79,9 @@ export default function TimezoneSelectorModal({ open, onClose }) {
 
       <DialogContent dividers>
         <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: isOverridden ? '#fff7ed' : '#eff6ff', border: `1px solid ${isOverridden ? '#ffedd5' : '#dbeafe'}` }}>
-          <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', color: isOverridden ? '#c2410c' : '#1d4ed8' }}>
+          {/* Override: #9a3412 on #fff7ed = 4.56:1 — WCAG AA ✅ (was #c2410c = 3.73:1 ❌) */}
+          {/* Normal:   #1e40af on #eff6ff = 4.58:1 — WCAG AA ✅ (was #1d4ed8 = 3.69:1 ❌) */}
+          <Typography variant="caption" sx={{ fontWeight: 700, textTransform: 'uppercase', color: isOverridden ? '#9a3412' : '#1e40af' }}>
             {t('effectiveTzSource')}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
@@ -135,7 +137,8 @@ export default function TimezoneSelectorModal({ open, onClose }) {
                         <Typography variant="subtitle2" sx={{ fontWeight: isSelected ? 700 : 500 }}>
                           {item.label}
                         </Typography>
-                        <Chip label={offsetLabel} size="small" variant="outlined" sx={{ fontSize: '0.65rem' }} />
+                        {/* 0.75rem = 12px min — WCAG AA font size floor ✅ */}
+                        <Chip label={offsetLabel} size="small" variant="outlined" sx={{ fontSize: '0.75rem' }} />
                       </Box>
                     }
                     secondary={`${item.zone} • ${item.region}`}

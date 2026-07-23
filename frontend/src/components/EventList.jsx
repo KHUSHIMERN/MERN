@@ -128,7 +128,8 @@ export default function EventList() {
         <Typography variant="h4" component="h1" sx={{ fontWeight: 800, color: '#0f172a', mb: 1 }}>
           {t('appTitle')}
         </Typography>
-        <Typography variant="subtitle1" color="text.secondary">
+        {/* component="p": this is a decorative subtitle, not a semantic heading (WCAG 1.3.1) */}
+        <Typography variant="subtitle1" component="p" color="text.secondary">
           {t('appSubtitle')}
         </Typography>
 
@@ -183,7 +184,7 @@ export default function EventList() {
         </Box>
       ) : filteredEvents.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 8 }}>
-          <Typography variant="h6" color="text.secondary">
+          <Typography variant="h6" component="p" color="text.secondary">
             No events found matching your filter criteria.
           </Typography>
         </Box>

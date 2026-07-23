@@ -12,6 +12,7 @@ import {
   Alert
 } from '@mui/material';
 import { useLanguage } from '../context/LanguageContext';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 const IANA_TIMEZONES = [
   'Asia/Kolkata',
@@ -89,6 +90,14 @@ export default function CreateEventModal({ open, onClose, onEventCreated }) {
         <DialogContent dividers>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
+          {/* WCAG 1.4.1: Color is not the sole indicator — text + icon identify required fields */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5, color: '#374151' }}>
+            <InfoOutlinedIcon fontSize="small" aria-hidden="true" />
+            <Typography variant="caption" sx={{ color: '#374151', fontWeight: 600 }}>
+              Fields marked with * are required
+            </Typography>
+          </Box>
+
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
               <TextField
@@ -99,6 +108,7 @@ export default function CreateEventModal({ open, onClose, onEventCreated }) {
                 size="small"
                 value={formData.title}
                 onChange={handleChange}
+                inputProps={{ 'aria-required': 'true' }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -123,6 +133,7 @@ export default function CreateEventModal({ open, onClose, onEventCreated }) {
                 size="small"
                 value={formData.description}
                 onChange={handleChange}
+                inputProps={{ 'aria-required': 'true' }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>

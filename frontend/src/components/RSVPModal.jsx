@@ -53,7 +53,7 @@ export default function RSVPModal({ event, activeTimezone, userLocale, open, onC
       <DialogContent dividers>
         {confirmed ? (
           <Box sx={{ textAlign: 'center', py: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
-            <CheckCircleOutlineIcon color="success" sx={{ fontSize: 60 }} />
+            <CheckCircleOutlineIcon color="success" sx={{ fontSize: '3.75rem' }} />
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
               {t('rsvpSuccessTitle')}
             </Typography>

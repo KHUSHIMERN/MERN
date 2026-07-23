@@ -19,8 +19,11 @@ try {
   console.log('\n>>> RUNNING TASK 4 TESTS (DST Transitions & Cross-Midnight Shift)...');
   execSync('node src/utils/dateUtils.test.js', { cwd: path.join(__dirname, 'frontend'), stdio: 'inherit' });
 
+  console.log('\n>>> RUNNING TASK 5 TESTS (Rem Units & Zoom Scaling Verification)...');
+  execSync('node src/test_zoom_rem.js', { cwd: path.join(__dirname, 'frontend'), stdio: 'inherit' });
+
   console.log('\n===============================================================');
-  console.log('  ALL 4 TASKS VERIFIED & PASSED WITH 100% SUCCESS!');
+  console.log('  ALL TASKS VERIFIED & PASSED WITH 100% SUCCESS!');
   console.log('===============================================================');
   process.exit(0);
 } catch (error) {

@@ -41,7 +41,7 @@ export default function Header() {
       <AppBar position="sticky" elevation={1} sx={{ backgroundColor: '#0f172a' }}>
         <Toolbar sx={{ justifyContent: 'space-between', flexWrap: { xs: 'wrap', md: 'nowrap' }, py: { xs: 1, md: 0 }, gap: 1.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <EventIcon sx={{ color: '#38bdf8', fontSize: 32 }} />
+            <EventIcon sx={{ color: '#38bdf8', fontSize: '2rem' }} />
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 800, color: '#f8fafc', lineHeight: 1.1 }}>
                 {t('appTitle')}

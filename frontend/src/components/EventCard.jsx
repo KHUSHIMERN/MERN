@@ -56,13 +56,13 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
             }}
           />
           {isCrossTimezone && (
+            /* Lighthouse fix: MUI color="info" outlined = #0288d1 on white (3.85:1 ❌)
+               Override to #0369a1 = 4.53:1 on white ✅ */
             <Chip
-              icon={<LanguageIcon style={{ fontSize: 14, color: '#0369a1' }} />}
+              icon={<LanguageIcon style={{ fontSize: '0.875rem', color: '#0369a1' }} />}
               label={t('convertedTimeLabel')}
               size="small"
               variant="outlined"
-              {/* Lighthouse fix: MUI color="info" outlined = #0288d1 on white (3.85:1 ❌)
-                   Override to #0369a1 = 4.53:1 on white ✅ */}
               sx={{ fontSize: '0.75rem', color: '#0369a1', borderColor: '#0369a1' }}
             />
           )}

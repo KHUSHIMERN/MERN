@@ -1,0 +1,31 @@
+/* Global Design System Tokens & Scalable Root Font Size */
+:root {
+  --font-size-xs: 0.75rem;   /* 12px */
+  --font-size-sm: 0.875rem;  /* 14px */
+  --font-size-base: 1rem;    /* 16px */
+  --font-size-lg: 1.125rem;  /* 18px */
+  --font-size-xl: 1.25rem;   /* 20px */
+  --font-size-2xl: 1.5rem;   /* 24px */
+  --font-size-3xl: 1.75rem;  /* 28px */
+  --font-size-4xl: 2.25rem;  /* 36px */
+  --font-size-5xl: 3.75rem;  /* 60px */
+}
+
+/* Ensure root font-size can scale with browser zoom & default font preferences (WCAG 1.4.4) */
+html {
+  font-size: 100%; /* 1rem = 16px by default, scales dynamically when zoomed or base font changed */
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: inherit;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

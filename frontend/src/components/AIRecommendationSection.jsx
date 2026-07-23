@@ -57,7 +57,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-        <AutoAwesomeIcon sx={{ color: '#fbbf24', fontSize: 28 }} />
+        <AutoAwesomeIcon sx={{ color: '#fbbf24', fontSize: '1.75rem' }} />
         <Typography variant="h5" sx={{ fontWeight: 800 }}>
           {t('aiRecommendationsTitle')}
         </Typography>
@@ -84,7 +84,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
                 <CardContent sx={{ flexGrow: 1, p: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                     <Chip
-                      icon={<AutoAwesomeIcon style={{ fontSize: 14, color: '#4f46e5' }} />}
+                      icon={<AutoAwesomeIcon style={{ fontSize: '0.875rem', color: '#4f46e5' }} />}
                       label={`AI Match: ${matchScore}%`}
                       size="small"
                       sx={{ fontWeight: 800, bgcolor: '#e0e7ff', color: '#3730a3' }} // #3730a3 on #e0e7ff = 6.88:1 ✅

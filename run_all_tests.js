@@ -23,7 +23,10 @@ try {
   execSync('node src/test_zoom_rem.js', { cwd: path.join(__dirname, 'frontend'), stdio: 'inherit' });
 
   console.log('\n>>> RUNNING TASK 6 TESTS (Alt Text Guidelines, Schema & UI Form Verification)...');
-  execSync('node src/test_alt_text.js', { cwd: path.join(__dirname, 'frontend'), stdio: 'inherit' });
+  execSync('node --experimental-vm-modules src/test_alt_text.js', { cwd: path.join(__dirname, 'frontend'), stdio: 'inherit' });
+
+  console.log('\n>>> RUNNING TASK 4 (STORY 2) TESTS (WCAG 1.4.1 — Color Not Sole Indicator)...');
+  execSync('node --experimental-vm-modules src/test_task4_story2.js', { cwd: path.join(__dirname, 'frontend'), stdio: 'inherit' });
 
   console.log('\n===============================================================');
   console.log('  ALL TASKS VERIFIED & PASSED WITH 100% SUCCESS!');

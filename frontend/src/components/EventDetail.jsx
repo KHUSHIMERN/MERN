@@ -14,12 +14,52 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PublicIcon from '@mui/icons-material/Public';
 import PeopleIcon from '@mui/icons-material/People';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import LockIcon from '@mui/icons-material/Lock';
 import { formatEventDateTime, getTimezoneOffsetLabel } from '../utils/dateUtils';
 import { useLanguage } from '../context/LanguageContext';
+
+/**
+ * WCAG 1.4.1 — getCapacityStatus (mirrors EventCard implementation)
+ * Icon + text label, never color alone.
+ */
+function getCapacityStatus(attendeesCount, capacity, t) {
+  const spotsLeft = capacity - attendeesCount;
+  const fillRatio = capacity > 0 ? attendeesCount / capacity : 1;
+  if (fillRatio >= 1) {
+    return {
+      level: 'full',
+      icon: <LockIcon sx={{ fontSize: '0.875rem' }} aria-hidden="true" />,
+      label: t('statusFull'),
+      ariaLabel: t('statusFullAriaLabel'),
+      sx: { bgcolor: '#fef2f2', color: '#991b1b', borderColor: '#fecaca', fontWeight: 700 }
+    };
+  }
+  if (fillRatio >= 0.8) {
+    return {
+      level: 'almostFull',
+      icon: <WarningAmberIcon sx={{ fontSize: '0.875rem' }} aria-hidden="true" />,
+      label: `${t('statusAlmostFull')} · ${spotsLeft} ${t('spotsLeft')}`,
+      ariaLabel: t('statusAlmostFullAriaLabel'),
+      sx: { bgcolor: '#fffbeb', color: '#92400e', borderColor: '#fde68a', fontWeight: 700 }
+    };
+  }
+  return {
+    level: 'open',
+    icon: <CheckCircleIcon sx={{ fontSize: '0.875rem' }} aria-hidden="true" />,
+    label: `${t('statusOpen')} · ${spotsLeft} ${t('spotsLeft')}`,
+    ariaLabel: t('statusOpenAriaLabel'),
+    sx: { bgcolor: '#f0fdf4', color: '#166534', borderColor: '#bbf7d0', fontWeight: 700 }
+  };
+}
 
 export default function EventDetail({ event, activeTimezone, userLocale, open, onClose, onRSVP }) {
   const { t, lang } = useLanguage();
   if (!event) return null;
+
+  const capacityStatus = getCapacityStatus(event.attendeesCount ?? 0, event.capacity ?? 100, t);
+  const isFull = capacityStatus.level === 'full';
 
   const startFormatted = formatEventDateTime(event.startDate, event.timezone, activeTimezone, userLocale);
   const endFormatted = event.endDate
@@ -35,8 +75,17 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth paperProps={{ sx: { borderRadius: 3 } }}>
       <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
         {displayTitle}
-        <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+        <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Chip label={t(event.category || 'general')} color="primary" size="small" sx={{ fontWeight: 700 }} />
+          {/* WCAG 1.4.1: Capacity status — icon + text, not color alone */}
+          <Chip
+            icon={capacityStatus.icon}
+            label={capacityStatus.label}
+            size="small"
+            variant="outlined"
+            aria-label={capacityStatus.ariaLabel}
+            sx={{ fontSize: '0.75rem', ...capacityStatus.sx }}
+          />
           {startFormatted.isCrossTimezone && (
             <Chip label={t('convertedTimeLabel')} color="info" size="small" variant="outlined" />
           )}
@@ -126,15 +175,21 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
         <Button onClick={onClose} color="inherit">
           {t('close')}
         </Button>
+        {/* WCAG 1.4.1: Fully Booked text label — not just a greyed-out button */}
         <Button
           variant="contained"
+          disabled={isFull}
+          aria-disabled={isFull}
+          aria-label={isFull ? t('statusFullAriaLabel') : t('rsvpBtn')}
           onClick={() => {
-            onClose();
-            onRSVP(event);
+            if (!isFull) {
+              onClose();
+              onRSVP(event);
+            }
           }}
           sx={{ borderRadius: 2 }}
         >
-          {t('rsvpBtn')}
+          {isFull ? t('rsvpDisabledFull') : t('rsvpBtn')}
         </Button>
       </DialogActions>
     </Dialog>

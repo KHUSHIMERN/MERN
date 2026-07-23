@@ -56,7 +56,19 @@ export const translations = {
     manualOverride: 'Manual Override',
     detectedFromBrowser: 'Detected from Browser',
     searchTzPlaceholder: 'Search timezone by city, code, or country...',
-    resetToBrowser: 'Reset to Browser'
+    resetToBrowser: 'Reset to Browser',
+    // Task 4 — WCAG 1.4.1: status labels must carry icon + text, not color alone
+    statusOpen: 'Open',
+    statusAlmostFull: 'Almost Full',
+    statusFull: 'Fully Booked',
+    statusOpenAriaLabel: 'Registration open',
+    statusAlmostFullAriaLabel: 'Almost full — few spots remaining',
+    statusFullAriaLabel: 'Fully booked — no spots remaining',
+    spotsLeft: 'spots left',
+    rsvpDisabledFull: 'Fully Booked',
+    requiredFieldsNote: 'Fields marked with * are required',
+    validationErrorSummary: 'Please fix the errors below before submitting.',
+    fieldRequired: 'This field is required'
   },
   hi: {
     appTitle: 'टियर २-४ लोकल इवेन्ट्स',
@@ -115,6 +127,18 @@ export const translations = {
     manualOverride: 'मैन्युअल सेट (संशोधित)',
     detectedFromBrowser: 'ब्राउज़र से पहचाना गया',
     searchTzPlaceholder: 'शहर, कोड या देश द्वारा समयक्षेत्र खोजें...',
-    resetToBrowser: 'ब्राउज़र पर रीसेट करें'
+    resetToBrowser: 'ब्राउज़र पर रीसेट करें',
+    // Task 4 — WCAG 1.4.1: status labels (Hindi)
+    statusOpen: 'उपलब्ध',
+    statusAlmostFull: 'लगभग भरा',
+    statusFull: 'पूर्ण बुक',
+    statusOpenAriaLabel: 'पंजीकरण खुला है',
+    statusAlmostFullAriaLabel: 'लगभग भरा — कुछ ही स्थान शेष हैं',
+    statusFullAriaLabel: 'पूर्ण बुक — कोई स्थान शेष नहीं',
+    spotsLeft: 'स्थान शेष',
+    rsvpDisabledFull: 'पूर्ण बुक',
+    requiredFieldsNote: '* से चिह्नित फ़ील्ड आवश्यक हैं',
+    validationErrorSummary: 'सबमिट करने से पहले नीचे दी गई त्रुटियों को ठीक करें।',
+    fieldRequired: 'यह फ़ील्ड आवश्यक है'
   }
 };

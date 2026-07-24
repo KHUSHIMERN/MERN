@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('/api/auth/me');
+      const res = await axios.get('/api/users/me');
       if (res.data.user) {
         setUser(res.data.user);
       }
@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateProfile = async (profileData) => {
     try {
-      const res = await axios.put('/api/auth/profile', profileData);
+      const res = await axios.put('/api/users/me', profileData);
       if (res.data.user) {
         setUser(res.data.user);
       }
@@ -81,9 +81,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const requestOrganizerRole = async (description) => {
+  const requestOrganizerRole = async (message) => {
     try {
-      const res = await axios.post('/api/auth/request-organizer', { description });
+      const res = await axios.post('/api/roles/requests', { message });
       if (res.data.user) {
         setUser(res.data.user);
       }

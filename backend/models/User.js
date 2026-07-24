@@ -49,6 +49,35 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: 'en',
     },
+    contact: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    organizerRoleRequest: {
+      status: {
+        type: String,
+        enum: ['none', 'pending', 'approved', 'rejected'],
+        default: 'none',
+      },
+      description: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      requestedAt: {
+        type: Date,
+        default: null,
+      },
+      reviewedAt: {
+        type: Date,
+        default: null,
+      },
+      adminNote: {
+        type: String,
+        default: '',
+      },
+    },
     rsvpedEvents: [
       {
         type: mongoose.Schema.Types.ObjectId,

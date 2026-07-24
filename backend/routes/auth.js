@@ -292,17 +292,35 @@ router.get('/me', auth, async (req, res) => {
 });
 
 // @route   PUT /api/auth/profile
-// @desc    Update user preferences (interests, city, language)
+// @desc    Update user preferences & profile (name, contact, language, city, interests)
 // @access  Private
 router.put('/profile', auth, async (req, res) => {
   try {
-    const { interests, city, language, name } = req.body;
+    const { name, contact, language, city, interests } = req.body;
     const user = req.user;
 
-    if (name) user.name = name.trim();
-    if (interests && Array.isArray(interests)) user.interests = interests;
-    if (city) user.city = city;
-    if (language) user.language = language;
+    if (name !== undefined) {
+      if (!name || !name.trim()) {
+        return res.status(400).json({ message: 'Name cannot be empty.' });
+      }
+      user.name = name.trim();
+    }
+
+    if (contact !== undefined) {
+      user.contact = contact.trim();
+    }
+
+    if (language !== undefined) {
+      user.language = language;
+    }
+
+    if (city !== undefined) {
+      user.city = city;
+    }
+
+    if (interests && Array.isArray(interests)) {
+      user.interests = interests;
+    }
 
     await user.save();
 
@@ -311,7 +329,46 @@ router.put('/profile', auth, async (req, res) => {
       user: user.toSafeObject(),
     });
   } catch (error) {
-    return res.status(500).json({ message: 'Failed to update profile.' });
+    console.error('Profile Update Error:', error);
+    return res.status(500).json({ message: 'Failed to update profile.', error: error.message });
+  }
+});
+
+// @route   POST /api/auth/request-organizer
+// @desc    Submit request for organizer role (Resident only)
+// @access  Private
+router.post('/request-organizer', auth, async (req, res) => {
+  try {
+    const user = req.user;
+    const { description } = req.body;
+
+    if (user.role === 'organizer' || user.role === 'admin') {
+      return res.status(400).json({
+        message: 'You are already an event organizer or administrator.',
+      });
+    }
+
+    if (user.organizerRoleRequest && user.organizerRoleRequest.status === 'pending') {
+      return res.status(400).json({
+        message: 'You already have a pending organizer role request under admin review.',
+      });
+    }
+
+    user.organizerRoleRequest = {
+      status: 'pending',
+      description: description ? description.trim() : '',
+      requestedAt: new Date(),
+    };
+
+    await user.save();
+
+    return res.status(200).json({
+      message: 'Organizer role request submitted successfully! Pending admin approval.',
+      user: user.toSafeObject(),
+    });
+  } catch (error) {
+    console.error('Organizer Request Error:', error);
+    return res.status(500).json({ message: 'Failed to submit organizer role request.', error: error.message });
   }
 });
 

@@ -3,10 +3,11 @@ import { useAuth } from './context/AuthContext';
 import RegisterForm from './components/RegisterForm';
 import LoginForm from './components/LoginForm';
 import ProfilePage from './components/ProfilePage';
+import AdminRoleRequests from './components/AdminRoleRequests';
 
 export default function App() {
   const { user, logout } = useAuth();
-  const [view, setView] = useState('register'); // 'register' | 'login' | 'profile'
+  const [view, setView] = useState('register'); // 'register' | 'login' | 'profile' | 'admin-requests'
 
   return (
     <main style={{ minHeight: '100vh', background: 'var(--bg-main, #0f172a)', color: 'var(--text-main, #f8fafc)' }}>
@@ -31,6 +32,17 @@ export default function App() {
               <span style={{ fontSize: '14px', color: '#94a3b8' }}>
                 Signed in as <strong>{user.name}</strong> ({user.role})
               </span>
+
+              {user.role === 'admin' && (
+                <button
+                  className="btn-primary"
+                  onClick={() => setView('admin-requests')}
+                  style={{ padding: '8px 16px', fontSize: '13px', background: 'linear-gradient(135deg, #818cf8, #6366f1)' }}
+                >
+                  Admin Role Requests
+                </button>
+              )}
+
               <button
                 className="btn-secondary"
                 onClick={() => setView('profile')}
@@ -73,6 +85,7 @@ export default function App() {
       {/* Main Body View */}
       <div style={{ padding: '20px' }}>
         {view === 'profile' && <ProfilePage onNavigateHome={() => setView(user ? 'profile' : 'login')} />}
+        {view === 'admin-requests' && <AdminRoleRequests onNavigateHome={() => setView('profile')} />}
         {view === 'register' && <RegisterForm onSwitchToLogin={() => setView('login')} />}
         {view === 'login' && <LoginForm onSwitchToRegister={() => setView('register')} />}
       </div>

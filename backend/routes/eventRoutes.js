@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Event = require('../models/Event');
+const RSVP = require('../models/RSVP');
 const { requireAuth, requireRole } = require('../middleware/auth');
 
 // Create event - Restricted to Organizers and Admins
@@ -33,7 +34,38 @@ router.post('/', requireAuth, requireRole(['organizer', 'admin']), async (req, r
 router.get('/', requireAuth, async (req, res) => {
   try {
     const events = await Event.find().populate('organizer', 'name email').sort({ date: 1 });
-    return res.status(200).json(events);
+    
+    // Dynamically fetch RSVP details for each event
+    const enrichedEvents = await Promise.all(events.map(async (event) => {
+      const rsvps = await RSVP.find({ eventId: event._id }).sort({ createdAt: 1 });
+      const confirmedCount = rsvps.filter(r => r.status === 'confirmed').length;
+      const waitlistCount = rsvps.filter(r => r.status === 'waitlist').length;
+      
+      let userRegistrationStatus = 'none';
+      let userWaitlistPosition = 0;
+      
+      if (req.user) {
+        const userRSVP = rsvps.find(r => r.userId.toString() === req.user._id.toString());
+        if (userRSVP) {
+          userRegistrationStatus = userRSVP.status;
+          if (userRegistrationStatus === 'waitlist') {
+            const waitlistList = rsvps.filter(r => r.status === 'waitlist');
+            userWaitlistPosition = waitlistList.findIndex(r => r.userId.toString() === req.user._id.toString()) + 1;
+          }
+        }
+      }
+      
+      const eventObj = event.toJSON();
+      return {
+        ...eventObj,
+        rsvpCount: confirmedCount,
+        waitlistCount,
+        userRegistrationStatus,
+        userWaitlistPosition
+      };
+    }));
+
+    return res.status(200).json(enrichedEvents);
   } catch (error) {
     console.error('List Events Error:', error);
     return res.status(500).json({ message: 'Failed to list events', error: error.message });
@@ -47,7 +79,35 @@ router.get('/:id', requireAuth, async (req, res) => {
     if (!event) {
       return res.status(404).json({ message: 'Event not found' });
     }
-    return res.status(200).json(event);
+    
+    const rsvps = await RSVP.find({ eventId: event._id }).sort({ createdAt: 1 });
+    const confirmedCount = rsvps.filter(r => r.status === 'confirmed').length;
+    const waitlistCount = rsvps.filter(r => r.status === 'waitlist').length;
+    
+    let userRegistrationStatus = 'none';
+    let userWaitlistPosition = 0;
+    
+    if (req.user) {
+      const userRSVP = rsvps.find(r => r.userId.toString() === req.user._id.toString());
+      if (userRSVP) {
+        userRegistrationStatus = userRSVP.status;
+        if (userRegistrationStatus === 'waitlist') {
+          const waitlistList = rsvps.filter(r => r.status === 'waitlist');
+          userWaitlistPosition = waitlistList.findIndex(r => r.userId.toString() === req.user._id.toString()) + 1;
+        }
+      }
+    }
+    
+    const eventObj = event.toJSON();
+    const enrichedEvent = {
+      ...eventObj,
+      rsvpCount: confirmedCount,
+      waitlistCount,
+      userRegistrationStatus,
+      userWaitlistPosition
+    };
+    
+    return res.status(200).json(enrichedEvent);
   } catch (error) {
     console.error('Get Event Error:', error);
     return res.status(500).json({ message: 'Failed to fetch event details', error: error.message });

@@ -179,4 +179,52 @@ describe('Role-Based Authorization & RSVP System Integration Tests', () => {
     expect(res2RSVP.status).toBe('confirmed');
   });
 
+  test('8. [Events API Enrichment] GET /api/events and GET /api/events/:id include rsvpCount, waitlistCount, and user-specific registration details', async () => {
+    const organizer = await User.create({ name: 'Organizer', email: 'org@test.com', role: 'organizer', password: 'password' });
+    const res1 = await User.create({ name: 'Resident 1', email: 'res1@test.com', role: 'resident', password: 'password' });
+    const res2 = await User.create({ name: 'Resident 2', email: 'res2@test.com', role: 'resident', password: 'password' });
+    const res3 = await User.create({ name: 'Resident 3', email: 'res3@test.com', role: 'resident', password: 'password' });
+
+    const event = await Event.create({
+      title: 'Dynamic Stats Event',
+      location: 'Main Auditorium',
+      date: new Date(),
+      capacity: 2,
+      organizer: organizer._id
+    });
+
+    // Resident 1 RSVPs -> confirmed
+    await RSVP.create({ userId: res1._id, eventId: event._id, status: 'confirmed' });
+    // Resident 2 RSVPs -> confirmed
+    await RSVP.create({ userId: res2._id, eventId: event._id, status: 'confirmed' });
+    // Resident 3 RSVPs -> waitlist (position 1)
+    await RSVP.create({ userId: res3._id, eventId: event._id, status: 'waitlist' });
+
+    const tokenRes3 = generateToken(res3);
+
+    // Test List Endpoint for Resident 3
+    const listResponse = await request(app)
+      .get('/api/events')
+      .set('Authorization', `Bearer ${tokenRes3}`);
+
+    expect(listResponse.status).toBe(200);
+    const eventInList = listResponse.body.find(e => e._id.toString() === event._id.toString());
+    expect(eventInList).toBeDefined();
+    expect(eventInList.rsvpCount).toBe(2);
+    expect(eventInList.waitlistCount).toBe(1);
+    expect(eventInList.userRegistrationStatus).toBe('waitlist');
+    expect(eventInList.userWaitlistPosition).toBe(1);
+
+    // Test Detail Endpoint for Resident 3
+    const detailResponse = await request(app)
+      .get(`/api/events/${event._id}`)
+      .set('Authorization', `Bearer ${tokenRes3}`);
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.rsvpCount).toBe(2);
+    expect(detailResponse.body.waitlistCount).toBe(1);
+    expect(detailResponse.body.userRegistrationStatus).toBe('waitlist');
+    expect(detailResponse.body.userWaitlistPosition).toBe(1);
+  });
+
 });

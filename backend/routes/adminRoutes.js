@@ -6,73 +6,13 @@ const { auth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// @route   POST /api/roles/requests
-// @desc    Submit organizer role request (saved in DB with userId, message, status='pending', createdAt)
-// @access  Private (Resident)
-router.post('/requests', auth, async (req, res) => {
-  try {
-    const user = req.user;
-    const { message, description } = req.body;
-    const requestMessage = (message || description || '').trim();
+// Middleware: All routes under /api/admin require authentication and 'admin' role
+router.use(auth, requireRole('admin'));
 
-    // Check 1: Prevent role request if user is already organizer or admin
-    if (user.role === 'organizer' || user.role === 'admin') {
-      return res.status(400).json({
-        message: 'You are already an event organizer or administrator.',
-      });
-    }
-
-    // Check 2: Prevent duplicate pending role request
-    const existingPending = await RoleRequest.findOne({
-      userId: user._id,
-      status: 'pending',
-    });
-
-    if (existingPending) {
-      return res.status(400).json({
-        message: 'You already have a pending organizer role request under admin review.',
-        request: existingPending,
-      });
-    }
-
-    // Create RoleRequest document in MongoDB
-    const roleRequest = new RoleRequest({
-      userId: user._id,
-      message: requestMessage,
-      status: 'pending',
-    });
-
-    await roleRequest.save();
-
-    // Sync on User model for fast profile rendering
-    user.organizerRoleRequest = {
-      status: 'pending',
-      description: requestMessage,
-      requestedAt: roleRequest.createdAt,
-    };
-    await user.save();
-
-    return res.status(201).json({
-      message: 'Organizer role request submitted successfully! Pending admin approval.',
-      roleRequest: {
-        id: roleRequest._id,
-        userId: roleRequest.userId,
-        message: roleRequest.message,
-        status: roleRequest.status,
-        createdAt: roleRequest.createdAt,
-      },
-      user: user.toSafeObject(),
-    });
-  } catch (error) {
-    console.error('POST /api/roles/requests Error:', error);
-    return res.status(500).json({ message: 'Server error submitting role request.', error: error.message });
-  }
-});
-
-// @route   GET /api/roles/requests
-// @desc    Get paginated pending role requests (Admin route)
-// @access  Private (Admin)
-router.get('/requests', auth, requireRole('admin'), async (req, res) => {
+// @route   GET /api/admin/roles/requests
+// @desc    View paginated list of organizer role requests (Filter by status: pending, approved, rejected, all)
+// @access  Private (Admin only)
+router.get('/roles/requests', async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.max(1, parseInt(req.query.limit, 10) || 10);
@@ -98,15 +38,15 @@ router.get('/requests', auth, requireRole('admin'), async (req, res) => {
       requests,
     });
   } catch (error) {
-    console.error('GET /api/roles/requests Error:', error);
+    console.error('GET /api/admin/roles/requests Error:', error);
     return res.status(500).json({ message: 'Server error fetching role requests.', error: error.message });
   }
 });
 
-// @route   PATCH /api/roles/requests/:id
-// @desc    Approve or reject organizer role request (Admin only)
+// @route   PATCH /api/admin/roles/requests/:id
+// @desc    Approve or reject organizer role request
 // @access  Private (Admin only)
-router.patch('/requests/:id', auth, requireRole('admin'), async (req, res) => {
+router.patch('/roles/requests/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { status, adminNote } = req.body;
@@ -117,6 +57,7 @@ router.patch('/requests/:id', auth, requireRole('admin'), async (req, res) => {
       });
     }
 
+    // 1. Find role request by ID (or by userId if ID matches userId)
     let roleRequest = await RoleRequest.findById(id);
     if (!roleRequest) {
       roleRequest = await RoleRequest.findOne({ userId: id, status: 'pending' });
@@ -126,11 +67,13 @@ router.patch('/requests/:id', auth, requireRole('admin'), async (req, res) => {
       return res.status(404).json({ message: 'Role request not found.' });
     }
 
+    // 2. Find target user
     const targetUser = await User.findById(roleRequest.userId);
     if (!targetUser) {
       return res.status(404).json({ message: 'Target user associated with request not found.' });
     }
 
+    // 3. Perform Status Update & Role Change
     roleRequest.status = status;
     roleRequest.reviewedAt = new Date();
     roleRequest.reviewedBy = req.user._id;
@@ -148,6 +91,7 @@ router.patch('/requests/:id', auth, requireRole('admin'), async (req, res) => {
       };
       await targetUser.save();
 
+      // Create Audit Log entry for approval
       const auditLog = new AuditLog({
         action: 'ROLE_REQUEST_APPROVED',
         adminId: req.user._id,
@@ -169,6 +113,7 @@ router.patch('/requests/:id', auth, requireRole('admin'), async (req, res) => {
         auditLog,
       });
     } else {
+      // Rejection logic
       targetUser.organizerRoleRequest = {
         status: 'rejected',
         description: roleRequest.message,
@@ -178,6 +123,7 @@ router.patch('/requests/:id', auth, requireRole('admin'), async (req, res) => {
       };
       await targetUser.save();
 
+      // Create Audit Log entry for rejection
       const auditLog = new AuditLog({
         action: 'ROLE_REQUEST_REJECTED',
         adminId: req.user._id,
@@ -200,8 +146,25 @@ router.patch('/requests/:id', auth, requireRole('admin'), async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('PATCH /api/roles/requests/:id Error:', error);
-    return res.status(500).json({ message: 'Server error updating role request status.', error: error.message });
+    console.error('PATCH /api/admin/roles/requests/:id Error:', error);
+    return res.status(500).json({ message: 'Server error processing role request status update.', error: error.message });
+  }
+});
+
+// @route   GET /api/admin/audit-logs
+// @desc    View administrative audit logs
+// @access  Private (Admin only)
+router.get('/audit-logs', async (req, res) => {
+  try {
+    const logs = await AuditLog.find()
+      .populate('adminId', 'name email')
+      .populate('targetUserId', 'name email role')
+      .sort({ timestamp: -1 })
+      .limit(50);
+
+    return res.status(200).json({ success: true, count: logs.length, logs });
+  } catch (error) {
+    return res.status(500).json({ message: 'Server error fetching audit logs.' });
   }
 });
 

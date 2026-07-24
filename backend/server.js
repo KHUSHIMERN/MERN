@@ -17,6 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/roles', require('./routes/roleRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/recommendations', require('./routes/recommendations'));
 

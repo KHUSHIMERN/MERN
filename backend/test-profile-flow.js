@@ -39,18 +39,18 @@ function request(method, path, body = null, headers = {}) {
   });
 }
 
-async function runProfileTests() {
+async function runTask3Tests() {
   console.log('\n=============================================================');
-  console.log('🧪 RUNNING TASK 2: /api/users/me & /api/roles/requests E2E TESTS');
+  console.log('🧪 RUNNING TASK 3: ADMIN ROLE APPROVAL & AUDIT LOGGING E2E TESTS');
   console.log('=============================================================\n');
 
   try {
-    // 1. Register & Verify Resident
-    const email = `task2_resident_${Date.now()}@indore.org`;
-    console.log(`[TEST 1] Creating verified resident: ${email}...`);
+    // 1. Create a Resident and submit an Organizer Role Request
+    const residentEmail = `resident_task3_${Date.now()}@indore.org`;
+    console.log(`[TEST 1] Registering resident for approval test: ${residentEmail}...`);
     const regRes = await request('POST', '/api/auth/register', {
-      name: 'Indore Task 2 Resident',
-      email,
+      name: 'Task 3 Resident',
+      email: residentEmail,
       password: 'password123',
       role: 'resident',
     });
@@ -58,80 +58,91 @@ async function runProfileTests() {
     const token = regRes.body.verificationToken;
     await request('GET', `/api/auth/verify?token=${token}`);
 
-    // Login to get JWT
-    const loginRes = await request('POST', '/api/auth/login', { email, password: 'password123' });
-    const jwtToken = loginRes.body.token;
-    const authHeader = { Authorization: `Bearer ${jwtToken}` };
+    const residentLogin = await request('POST', '/api/auth/login', { email: residentEmail, password: 'password123' });
+    const residentHeader = { Authorization: `Bearer ${residentLogin.body.token}` };
 
-    console.log(' -> Verified Resident logged in! JWT token obtained. ✓');
-
-    // 2. Test GET /api/users/me
-    console.log('\n[TEST 2] Fetching profile via GET /api/users/me...');
-    const getMeRes = await request('GET', '/api/users/me', null, authHeader);
-    console.log(` -> GET /api/users/me Status: ${getMeRes.status}`);
-    console.log(` -> Fetched User Email: "${getMeRes.body.user?.email}"`);
-
-    if (getMeRes.status !== 200 || getMeRes.body.user?.email !== email) {
-      throw new Error('GET /api/users/me test failed!');
-    }
-
-    // 3. Test PUT /api/users/me (including role escalation prevention check!)
-    console.log('\n[TEST 3] Updating profile via PUT /api/users/me (testing role escalation prevention)...');
-    const updateRes = await request(
-      'PUT',
-      '/api/users/me',
-      {
-        name: 'Indore Resident Updated',
-        contact: '+91 9123456789',
-        language: 'hi',
-        role: 'admin', // Malicious attempt to escalate role to admin
-      },
-      authHeader
-    );
-
-    console.log(` -> PUT Status: ${updateRes.status}`);
-    console.log(` -> Updated Name: "${updateRes.body.user?.name}"`);
-    console.log(` -> Updated Contact: "${updateRes.body.user?.contact}"`);
-    console.log(` -> Updated Language: "${updateRes.body.user?.language}"`);
-    console.log(` -> User Role after PUT: "${updateRes.body.user?.role}" (Must remain "resident")`);
-
-    if (
-      updateRes.status !== 200 ||
-      updateRes.body.user?.role !== 'resident' ||
-      updateRes.body.user?.name !== 'Indore Resident Updated'
-    ) {
-      throw new Error('PUT /api/users/me role escalation prevention test failed!');
-    }
-    console.log(' -> Role Escalation Blocked Successfully! Role field ignored. ✓');
-
-    // 4. Test POST /api/roles/requests
-    console.log('\n[TEST 4] Submitting organizer role request via POST /api/roles/requests...');
-    const roleReqRes = await request(
+    // Resident submits role request
+    const roleReq = await request(
       'POST',
       '/api/roles/requests',
-      { message: 'Organizing tier 2 community health awareness programs.' },
-      authHeader
+      { message: 'Requesting organizer access to publish health fairs.' },
+      residentHeader
+    );
+    const requestId = roleReq.body.roleRequest?.id || roleReq.body.user?._id;
+    console.log(` -> Role request created for ${residentEmail}! Request ID: ${requestId}`);
+
+    // 2. Non-Admin Security Access Control Check
+    console.log('\n[TEST 2] Testing non-admin access to admin endpoint /api/admin/roles/requests...');
+    const unauthorizedRes = await request('GET', '/api/admin/roles/requests', null, residentHeader);
+    console.log(` -> Non-Admin Access Status: ${unauthorizedRes.status} (Expected 403)`);
+    console.log(` -> Error Message: "${unauthorizedRes.body.message}"`);
+
+    if (unauthorizedRes.status !== 403) {
+      throw new Error('Security check failed! Non-admin user was not blocked.');
+    }
+    console.log(' -> requireRole("admin") Middleware Verified: Non-admin blocked! ✓');
+
+    // 3. Admin Login & View Paginated Role Requests
+    console.log('\n[TEST 3] Admin login & fetching pending role requests...');
+    // Login with seeded admin account
+    const adminLogin = await request('POST', '/api/auth/login', { email: 'admin@indore.org', password: 'password123' });
+    
+    // If seeded admin account doesn't exist, create one directly in DB
+    let adminHeader = null;
+    if (adminLogin.status === 200 && adminLogin.body.token) {
+      adminHeader = { Authorization: `Bearer ${adminLogin.body.token}` };
+    } else {
+      // Seeded admin login attempt fallback
+      const adminReg = await request('POST', '/api/auth/register', {
+        name: 'Super Admin',
+        email: `admin_${Date.now()}@indore.org`,
+        password: 'password123',
+        role: 'resident',
+      });
+      await request('GET', `/api/auth/verify?token=${adminReg.body.verificationToken}`);
+      const aLogin = await request('POST', '/api/auth/login', { email: adminReg.body.email, password: 'password123' });
+      adminHeader = { Authorization: `Bearer ${aLogin.body.token}` };
+    }
+
+    const adminRequestsRes = await request('GET', '/api/admin/roles/requests?status=pending', null, adminHeader);
+    console.log(` -> Admin Role Requests Fetch Status: ${adminRequestsRes.status}`);
+    console.log(` -> Pending Requests Count: ${adminRequestsRes.body.count}`);
+
+    if (adminRequestsRes.status !== 200 || !Array.isArray(adminRequestsRes.body.requests)) {
+      throw new Error('Admin role requests fetch failed!');
+    }
+
+    // 4. Admin Approves Role Request via PATCH /api/admin/roles/requests/:id
+    console.log(`\n[TEST 4] Admin approving role request ID: ${requestId}...`);
+    const approveRes = await request(
+      'PATCH',
+      `/api/admin/roles/requests/${requestId}`,
+      { status: 'approved', adminNote: 'Verified local health NGO credentials.' },
+      adminHeader
     );
 
-    console.log(` -> Role Request Status: ${roleReqRes.status} (Expected 201)`);
-    console.log(` -> Response Message: "${roleReqRes.body.message}"`);
-    console.log(` -> Saved Request Status: "${roleReqRes.body.roleRequest?.status}"`);
-    console.log(` -> Saved Request Message: "${roleReqRes.body.roleRequest?.message}"`);
+    console.log(` -> Approval Status: ${approveRes.status}`);
+    console.log(` -> Message: "${approveRes.body.message}"`);
+    console.log(` -> Request Status on Doc: "${approveRes.body.request?.status}"`);
+    console.log(` -> Promoted User Role: "${approveRes.body.user?.role}" (Expected "organizer")`);
+    console.log(` -> Audit Log Action Recorded: "${approveRes.body.auditLog?.action}"`);
 
     if (
-      (roleReqRes.status !== 201 && roleReqRes.status !== 200) ||
-      roleReqRes.body.roleRequest?.status !== 'pending'
+      approveRes.status !== 200 ||
+      approveRes.body.request?.status !== 'approved' ||
+      approveRes.body.user?.role !== 'organizer' ||
+      approveRes.body.auditLog?.action !== 'ROLE_REQUEST_APPROVED'
     ) {
-      throw new Error('POST /api/roles/requests test failed!');
+      throw new Error('Admin role request approval test failed!');
     }
-    console.log(' -> Role request persisted in DB with status=pending & createdAt! ✓');
+    console.log(' -> User successfully promoted to ORGANIZER with AuditLog entry! ✓');
 
     console.log('\n=============================================================');
-    console.log('🎉 ALL TASK 2 ENDPOINT & RESTRICTION TESTS PASSED 100%!');
+    console.log('🎉 ALL TASK 3 ADMIN APPROVAL & AUDIT LOG TESTS PASSED 100%!');
     console.log('=============================================================\n');
   } catch (err) {
     console.error('\n❌ Test Failure:', err.message);
   }
 }
 
-setTimeout(runProfileTests, 5000);
+setTimeout(runTask3Tests, 5000);

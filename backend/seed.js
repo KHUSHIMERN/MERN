@@ -53,6 +53,18 @@ const seedData = async () => {
       language: 'en',
     });
 
+    // 4. Create Verified Admin User
+    await User.create({
+      name: 'Community System Admin',
+      email: 'admin@indore.org',
+      password: defaultPassword,
+      role: 'admin',
+      isVerified: true,
+      interests: ['All'],
+      city: 'Indore',
+      language: 'en',
+    });
+
     // 4. Create Initial Events
     const events = [
       {

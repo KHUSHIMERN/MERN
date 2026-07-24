@@ -121,7 +121,7 @@ function App() {
       setCurrentUser(user);
       setAuthToken(userToken);
       addToast(`Logged in as ${user.name} (${user.role})`, 'success');
-    } catch (err) {
+    } catch {
       setAuthError('Authentication failed. Ensure backend server is running.');
       addToast('Auth error: Connection refused', 'danger');
     } finally {

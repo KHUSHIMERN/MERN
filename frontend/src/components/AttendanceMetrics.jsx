@@ -167,9 +167,25 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
   const handleSelectEvent = (id) => {
     setSelectedEventId(id);
   };
+  const getNumericRate = (rate) => {
+    if (rate === undefined || rate === null) return 0;
+    if (rate === '0%') return 0;
+    if (typeof rate === 'string') {
+      if (rate.endsWith('%')) {
+        return parseFloat(rate) / 100;
+      }
+      return parseFloat(rate) || 0;
+    }
+    return rate;
+  };
 
   const formatRate = (rate) => {
-    if (rate === undefined || rate === null || isNaN(rate)) return '0.0%';
+    if (rate === '0%') return '0%';
+    if (rate === undefined || rate === null) return '0%';
+    if (typeof rate === 'string') {
+      return rate;
+    }
+    if (isNaN(rate)) return '0%';
     const pct = rate <= 1 ? rate * 100 : rate;
     return `${pct.toFixed(1)}%`;
   };
@@ -212,7 +228,13 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
 
         metrics.forEach(m => {
           const dateStr = m.date || m.startDate ? new Date(m.date || m.startDate).toISOString() : '';
-          const ratePct = m.attendanceRate !== undefined ? (m.attendanceRate <= 1 ? (m.attendanceRate * 100).toFixed(1) : m.attendanceRate.toFixed(1)) : '0.0';
+          let ratePct = '0.0';
+          if (m.attendanceRate === '0%') {
+            ratePct = '0%';
+          } else if (m.attendanceRate !== undefined) {
+            const numericRate = getNumericRate(m.attendanceRate);
+            ratePct = numericRate <= 1 ? (numericRate * 100).toFixed(1) : numericRate.toFixed(1);
+          }
           rows.push([
             escapeCsv(m.eventId || m._id),
             escapeCsv(m.title),
@@ -418,7 +440,7 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
                   <Box sx={{ width: '100%', mt: 1 }}>
                     <LinearProgress
                       variant="determinate"
-                      value={Math.min(100, (selectedMetrics.attendanceRate || 0) * (selectedMetrics.attendanceRate <= 1 ? 100 : 1))}
+                      value={Math.min(100, getNumericRate(selectedMetrics.attendanceRate) * (getNumericRate(selectedMetrics.attendanceRate) <= 1 ? 100 : 1))}
                       sx={{ height: 8, borderRadius: 4, backgroundColor: '#e9d5ff', '& .MuiLinearProgress-bar': { backgroundColor: '#9333ea' } }}
                     />
                   </Box>

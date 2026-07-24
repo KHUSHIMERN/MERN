@@ -58,6 +58,7 @@ async function runTests() {
     const mockId = new mongoose.Types.ObjectId();
     const pastDate = new Date(Date.now() - 3600000);
 
+    // Event 1: Valid RSVPs
     await Event.create({
       title: 'Db Event Test',
       description: 'Testing live DB pipeline',
@@ -69,16 +70,35 @@ async function runTests() {
       checkedInCount: 30
     });
 
+    // Event 2: Zero RSVPs (avoid division by zero)
+    await Event.create({
+      title: 'Db Event Zero RSVPs Test',
+      description: 'Testing live DB pipeline with zero RSVPs',
+      startDate: pastDate,
+      endDate: pastDate,
+      organizerId: mockId,
+      capacity: 50,
+      attendeesCount: 0,
+      checkedInCount: 0
+    });
+
     const req = { params: { id: mockId.toString() }, query: { limit: '6' } };
     let resData = null;
     const res = { json: (d) => { resData = d; }, status: () => res };
 
     await getOrganizerAttendanceMetrics(req, res);
-    if (resData && resData.success && resData.data.length === 1 && resData.data[0].noShow === 10 && resData.data[0].attendanceRate === 0.75) {
+    
+    const eventWithAttendees = resData && resData.success && resData.data.find(e => e.title === 'Db Event Test');
+    const eventWithZeroRSVPs = resData && resData.success && resData.data.find(e => e.title === 'Db Event Zero RSVPs Test');
+
+    const passAttendees = eventWithAttendees && eventWithAttendees.noShow === 10 && eventWithAttendees.attendanceRate === 0.75;
+    const passZeroRSVPs = eventWithZeroRSVPs && eventWithZeroRSVPs.noShow === 0 && (eventWithZeroRSVPs.attendanceRate === 0 || eventWithZeroRSVPs.attendanceRate === '0%');
+
+    if (passAttendees && passZeroRSVPs) {
       passedTests++;
-      console.log('[PASS] MongoDB aggregation pipeline executed and returned calculated metrics accurately.');
+      console.log('[PASS] MongoDB aggregation pipeline executed and returned calculated metrics accurately, including handling of zero RSVPs without division by zero.');
     } else {
-      console.error('[FAIL] Aggregation result mismatch:', resData);
+      console.error('[FAIL] Aggregation result mismatch:', JSON.stringify(resData, null, 2));
     }
     await Event.deleteMany({});
     await mongoose.disconnect();

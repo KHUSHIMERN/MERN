@@ -278,7 +278,7 @@ exports.getOrganizerAttendanceMetrics = async (req, res) => {
             $cond: {
               if: { $gt: ['$confirmed', 0] },
               then: { $round: [{ $divide: ['$checkedIn', '$confirmed'] }, 4] },
-              else: 0
+              else: "0%"
             }
           }
         }
@@ -401,7 +401,7 @@ exports.exportOrganizerAttendanceMetricsCSV = async (req, res) => {
             $cond: {
               if: { $gt: ['$confirmed', 0] },
               then: { $round: [{ $divide: ['$checkedIn', '$confirmed'] }, 4] },
-              else: 0
+              else: "0%"
             }
           }
         }
@@ -426,7 +426,9 @@ exports.exportOrganizerAttendanceMetricsCSV = async (req, res) => {
 
     metrics.forEach(m => {
       const formattedDate = m.date || m.startDate ? new Date(m.date || m.startDate).toISOString() : '';
-      const ratePct = m.attendanceRate !== undefined ? (m.attendanceRate * 100).toFixed(1) : '0.0';
+      const ratePct = m.attendanceRate !== undefined
+        ? (m.attendanceRate === '0%' ? '0%' : (m.attendanceRate * 100).toFixed(1))
+        : '0.0';
       const row = [
         escapeCsvField(m.eventId || m._id),
         escapeCsvField(m.title),

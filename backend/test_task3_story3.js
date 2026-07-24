@@ -69,6 +69,17 @@ async function runTests() {
       checkedInCount: 40
     });
 
+    // Add event with zero RSVPs
+    await Event.create({
+      title: 'CSV Export Zero RSVPs Event',
+      description: 'Testing CSV export pipeline with zero RSVPs',
+      startDate: new Date(),
+      organizerId: mockId,
+      capacity: 100,
+      attendeesCount: 0,
+      checkedInCount: 0
+    });
+
     await exportOrganizerAttendanceMetricsCSV(mockReq, mockRes);
     await Event.deleteMany({});
     await mongoose.disconnect();

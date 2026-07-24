@@ -1,10 +1,9 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const Event = require('./models/Event');
+const connectDB = require('./config/db');
 
 dotenv.config();
-
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/mern_events';
 
 const sampleEvents = [
   {
@@ -81,7 +80,7 @@ const sampleEvents = [
 
 const seedDB = async () => {
   try {
-    await mongoose.connect(MONGO_URI);
+    await connectDB();
     console.log('MongoDB connected for seeding...');
     await Event.deleteMany({});
     console.log('Cleared existing events.');

@@ -80,6 +80,13 @@ const cancelRSVP = async (req, res) => {
     const { id } = req.params;
     const userId = req.user._id;
 
+    // Validate user role - restrict RSVP cancel to 'resident'
+    if (req.user.role !== 'resident') {
+      return res.status(403).json({ 
+        message: 'Only residents can cancel RSVPs.' 
+      });
+    }
+
     // Find the RSVP entry
     const rsvpToDelete = await RSVP.findOne({ eventId: id, userId });
     if (!rsvpToDelete) {

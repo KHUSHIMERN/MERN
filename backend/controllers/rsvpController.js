@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const RSVP = require('../models/RSVP');
 const Event = require('../models/Event');
 const User = require('../models/User');
@@ -6,6 +7,17 @@ const User = require('../models/User');
 const rsvpEvent = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validate if event ID is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Validate user authentication in the controller
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
     const userId = req.user._id;
 
     // Validate user role - restrict RSVP to 'resident' (or allow others for demo, but check role)
@@ -78,6 +90,17 @@ const rsvpEvent = async (req, res) => {
 const cancelRSVP = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validate if event ID is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Validate user authentication in the controller
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
     const userId = req.user._id;
 
     // Validate user role - restrict RSVP cancel to 'resident'
@@ -85,6 +108,12 @@ const cancelRSVP = async (req, res) => {
       return res.status(403).json({ 
         message: 'Only residents can cancel RSVPs.' 
       });
+    }
+
+    // Check if event exists
+    const event = await Event.findById(id);
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found' });
     }
 
     // Find the RSVP entry
@@ -129,6 +158,16 @@ const cancelRSVP = async (req, res) => {
 const getEventRSVPs = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validate if event ID is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(404).json({ message: 'Event not found' });
+    }
+
+    // Validate user authentication in the controller
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
 
     // Find the event to check its capacity
     const event = await Event.findById(id);

@@ -227,4 +227,114 @@ describe('Role-Based Authorization & RSVP System Integration Tests', () => {
     expect(detailResponse.body.userWaitlistPosition).toBe(1);
   });
 
+  test('9. [RSVP Capacity] RSVP creation succeeds (confirmed) when capacity is available', async () => {
+    const organizer = await User.create({ name: 'Organizer', email: 'org@test.com', role: 'organizer', password: 'password' });
+    const resident = await User.create({ name: 'Resident', email: 'res@test.com', role: 'resident', password: 'password' });
+    const event = await Event.create({
+      title: 'Free Capacity Event',
+      location: 'Room B',
+      date: new Date(),
+      capacity: 5,
+      organizer: organizer._id
+    });
+    
+    const token = generateToken(resident);
+    const response = await request(app)
+      .post(`/api/events/${event._id}/rsvp`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(201);
+    expect(response.body.status).toBe('confirmed');
+    expect(response.body.message).toContain('RSVP confirmed successfully');
+
+    // Confirm DB record
+    const rsvpRecord = await RSVP.findOne({ eventId: event._id, userId: resident._id });
+    expect(rsvpRecord).toBeDefined();
+    expect(rsvpRecord.status).toBe('confirmed');
+  });
+
+  test('10. [RSVP Capacity] RSVP creation joins waitlist when capacity is full', async () => {
+    const organizer = await User.create({ name: 'Organizer', email: 'org@test.com', role: 'organizer', password: 'password' });
+    const resident1 = await User.create({ name: 'Resident 1', email: 'res1@test.com', role: 'resident', password: 'password' });
+    const resident2 = await User.create({ name: 'Resident 2', email: 'res2@test.com', role: 'resident', password: 'password' });
+    
+    const event = await Event.create({
+      title: 'Full Event',
+      location: 'Room B',
+      date: new Date(),
+      capacity: 1,
+      organizer: organizer._id
+    });
+
+    // Populate the only slot
+    await RSVP.create({ userId: resident1._id, eventId: event._id, status: 'confirmed' });
+
+    const token = generateToken(resident2);
+    const response = await request(app)
+      .post(`/api/events/${event._id}/rsvp`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(201);
+    expect(response.body.status).toBe('waitlist');
+    expect(response.body.waitlistPosition).toBe(1);
+
+    // Confirm DB record
+    const rsvpRecord = await RSVP.findOne({ eventId: event._id, userId: resident2._id });
+    expect(rsvpRecord).toBeDefined();
+    expect(rsvpRecord.status).toBe('waitlist');
+  });
+
+  test('11. [Event Existence] RSVP creation returns 404 for non-existent event', async () => {
+    const resident = await User.create({ name: 'Resident', email: 'res@test.com', role: 'resident', password: 'password' });
+    const nonExistentId = new mongoose.Types.ObjectId();
+    const token = generateToken(resident);
+
+    const response = await request(app)
+      .post(`/api/events/${nonExistentId}/rsvp`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.message).toBe('Event not found');
+  });
+
+  test('12. [Event Existence] RSVP creation returns 404 for invalid ObjectId', async () => {
+    const resident = await User.create({ name: 'Resident', email: 'res@test.com', role: 'resident', password: 'password' });
+    const token = generateToken(resident);
+
+    const response = await request(app)
+      .post('/api/events/invalid-id/rsvp')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.message).toBe('Event not found');
+  });
+
+  test('13. [Controller Unit Validation] Controller function returns 401 when req.user is missing', async () => {
+    const { rsvpEvent, cancelRSVP, getEventRSVPs } = require('../controllers/rsvpController');
+
+    const mReq = { params: { id: new mongoose.Types.ObjectId().toString() }, user: null };
+    const mRes = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+
+    await rsvpEvent(mReq, mRes);
+    expect(mRes.status).toHaveBeenCalledWith(401);
+    expect(mRes.json).toHaveBeenCalledWith(expect.objectContaining({ message: 'Authentication required' }));
+
+    mRes.status.mockClear();
+    mRes.json.mockClear();
+
+    await cancelRSVP(mReq, mRes);
+    expect(mRes.status).toHaveBeenCalledWith(401);
+    expect(mRes.json).toHaveBeenCalledWith(expect.objectContaining({ message: 'Authentication required' }));
+
+    mRes.status.mockClear();
+    mRes.json.mockClear();
+
+    await getEventRSVPs(mReq, mRes);
+    expect(mRes.status).toHaveBeenCalledWith(401);
+    expect(mRes.json).toHaveBeenCalledWith(expect.objectContaining({ message: 'Authentication required' }));
+  });
+
 });

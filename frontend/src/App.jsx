@@ -280,6 +280,9 @@ function App() {
 
   // DELETE RSVP / Leave Waitlist
   const handleCancelRSVP = async (eventId) => {
+    const confirmCancel = window.confirm('Are you sure you want to cancel your RSVP?');
+    if (!confirmCancel) return;
+
     setActionLoadingId(eventId);
     try {
       const response = await axios.delete(`${API_BASE_URL}/events/${eventId}/rsvp`);
@@ -287,7 +290,7 @@ function App() {
 
       if (slotFreed) {
         if (promotedUser) {
-          addToast(`Registration cancelled. Promoted ${promotedUser.name} from the waitlist!`, 'success');
+          addToast('a user from the waitlist was promoted', 'success');
         } else {
           addToast('Registration cancelled. Spot is now open.', 'info');
         }
@@ -307,6 +310,7 @@ function App() {
       setActionLoadingId(null);
     }
   };
+
 
   // Create new event handler
   const handleCreateEvent = async (e) => {
@@ -679,15 +683,30 @@ function App() {
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', italic: 'true', paddingLeft: '4px' }}>No registrations yet.</p>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                          {selectedEventRSVPs.confirmed.map(c => (
-                            <div key={c.id} style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.8rem', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
-                              <div>
-                                <div style={{ fontWeight: 500 }}>{c.name}</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.email}</div>
+                          {selectedEventRSVPs.confirmed.map(c => {
+                            const isCurrentUser = currentUser && c.id === currentUser._id;
+                            return (
+                              <div key={c.id} style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.8rem', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
+                                <div>
+                                  <div style={{ fontWeight: 500 }}>{c.name} {isCurrentUser && <span style={{ color: 'var(--accent-primary)', fontSize: '0.75rem' }}>(You)</span>}</div>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.email}</div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  {isCurrentUser && (
+                                    <button
+                                      onClick={() => handleCancelRSVP(selectedEventId)}
+                                      className="cancel-btn"
+                                      style={{ padding: '2px 8px', fontSize: '0.7rem' }}
+                                      disabled={actionLoadingId === selectedEventId}
+                                    >
+                                      Cancel
+                                    </button>
+                                  )}
+                                  <span className="badge badge-confirmed" style={{ fontSize: '0.6rem', padding: '1px 6px' }}>Confirmed</span>
+                                </div>
                               </div>
-                              <span className="badge badge-confirmed" style={{ fontSize: '0.6rem', padding: '1px 6px' }}>Confirmed</span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -703,17 +722,32 @@ function App() {
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', italic: 'true', paddingLeft: '4px' }}>Waitlist is empty.</p>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                          {selectedEventRSVPs.waitlist.map(w => (
-                            <div key={w.id} style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.8rem', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', borderLeft: '2px solid var(--warning)' }}>
-                              <div>
-                                <div style={{ fontWeight: 500 }}>{w.name}</div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{w.email}</div>
+                          {selectedEventRSVPs.waitlist.map(w => {
+                            const isCurrentUser = currentUser && w.id === currentUser._id;
+                            return (
+                              <div key={w.id} style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.8rem', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', borderLeft: '2px solid var(--warning)' }}>
+                                <div>
+                                  <div style={{ fontWeight: 500 }}>{w.name} {isCurrentUser && <span style={{ color: 'var(--accent-primary)', fontSize: '0.75rem' }}>(You)</span>}</div>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{w.email}</div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  {isCurrentUser && (
+                                    <button
+                                      onClick={() => handleCancelRSVP(selectedEventId)}
+                                      className="cancel-btn"
+                                      style={{ padding: '2px 8px', fontSize: '0.7rem' }}
+                                      disabled={actionLoadingId === selectedEventId}
+                                    >
+                                      Leave
+                                    </button>
+                                  )}
+                                  <span className="badge badge-waitlist" style={{ fontSize: '0.6rem', padding: '1px 6px' }}>
+                                    #{w.position} Wait
+                                  </span>
+                                </div>
                               </div>
-                              <span className="badge badge-waitlist" style={{ fontSize: '0.6rem', padding: '1px 6px' }}>
-                                #{w.position} Wait
-                              </span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>

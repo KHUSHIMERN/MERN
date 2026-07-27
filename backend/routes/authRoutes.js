@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const RefreshToken = require('../models/RefreshToken');
 const { JWT_SECRET, requireAuth } = require('../middleware/auth');
@@ -49,7 +50,7 @@ router.post('/register', async (req, res) => {
 
     // Generate tokens
     const accessToken = jwt.sign({ id: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '15m' });
-    const refreshToken = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '7d' });
+    const refreshToken = jwt.sign({ id: user._id, salt: Math.random().toString(36).substring(2) + Date.now() }, JWT_SECRET, { expiresIn: '7d' });
 
     // Save refresh token to DB
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -89,7 +90,7 @@ router.post('/login', async (req, res) => {
     }
 
     const user = await User.findOne({ email });
-    if (!user || user.password !== password) {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
@@ -100,7 +101,7 @@ router.post('/login', async (req, res) => {
 
     // Generate short-lived access token and long-lived refresh token
     const accessToken = jwt.sign({ id: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '15m' });
-    const refreshToken = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '7d' });
+    const refreshToken = jwt.sign({ id: user._id, salt: Math.random().toString(36).substring(2) + Date.now() }, JWT_SECRET, { expiresIn: '7d' });
 
     // Save refresh token in DB
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -172,7 +173,7 @@ router.post('/refresh', async (req, res) => {
     const newAccessToken = jwt.sign({ id: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '15m' });
 
     // Rotate refresh token: Generate a new refresh token, delete old one from DB, set new cookie
-    const newRefreshToken = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '7d' });
+    const newRefreshToken = jwt.sign({ id: user._id, salt: Math.random().toString(36).substring(2) + Date.now() }, JWT_SECRET, { expiresIn: '7d' });
     const newExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await RefreshToken.deleteOne({ _id: tokenDoc._id });

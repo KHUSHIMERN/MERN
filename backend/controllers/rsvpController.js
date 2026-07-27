@@ -145,8 +145,11 @@ const cancelRSVP = async (req, res) => {
         await Notification.create({
           userId: oldestWaitlisted.userId,
           eventId: id,
-          status: 'confirmed',
-          message: `Congratulations! You have been promoted to confirmed status for the event: ${event.title}.`
+          type: 'promoted_from_waitlist',
+          payload: {
+            status: 'confirmed',
+            message: `Congratulations! You have been promoted to confirmed status for the event: ${event.title}.`
+          }
         });
       }
     }

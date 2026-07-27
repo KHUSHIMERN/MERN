@@ -378,11 +378,12 @@ describe('Role-Based Authorization & RSVP System Integration Tests', () => {
     expect(promotedRSVP.promotedAt).toBeDefined();
     expect(promotedRSVP.promotedAt).toBeInstanceOf(Date);
 
-    // Verify Notification exists for the promoted user containing eventId and status 'confirmed'
+    // Verify Notification exists for the promoted user containing eventId and type 'promoted_from_waitlist'
     const notification = await Notification.findOne({ userId: res2._id, eventId: event._id });
     expect(notification).toBeDefined();
-    expect(notification.status).toBe('confirmed');
-    expect(notification.message).toContain('promoted');
+    expect(notification.type).toBe('promoted_from_waitlist');
+    expect(notification.payload.status).toBe('confirmed');
+    expect(notification.payload.message).toContain('promoted');
   });
 
 });

@@ -11,17 +11,18 @@ const NotificationSchema = new mongoose.Schema({
     ref: 'Event',
     required: true
   },
-  status: {
+  type: {
     type: String,
-    enum: ['confirmed', 'waitlist'],
     required: true
   },
-  message: {
-    type: String,
+  payload: {
+    type: mongoose.Schema.Types.Mixed,
     required: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
   }
-}, {
-  timestamps: true
 });
 
 module.exports = mongoose.model('Notification', NotificationSchema);

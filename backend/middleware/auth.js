@@ -12,6 +12,8 @@ const requireAuth = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
+    
+    // Decode and verify JWT signature and expiry
     const decoded = jwt.verify(token, JWT_SECRET);
 
     // Fetch user from DB to verify they still exist
@@ -20,7 +22,16 @@ const requireAuth = async (req, res, next) => {
       return res.status(401).json({ message: 'Authentication failed: User not found' });
     }
 
-    req.user = user;
+    // Attach minimal user context (id, role, verified) to request object
+    req.user = {
+      _id: user._id,
+      id: user._id.toString(),
+      role: user.role,
+      verified: user.isVerified,
+      isVerified: user.isVerified,
+      name: user.name,
+      email: user.email
+    };
     next();
   } catch (error) {
     console.error('Auth error:', error.message);

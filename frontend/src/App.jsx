@@ -3,13 +3,14 @@ import I18nProvider from './components/I18nProvider';
 import Header from './components/Header';
 import HeroSection from './components/HeroSection';
 import EventList from './components/EventList';
+import OrganizerCheckIn from './components/OrganizerCheckIn';
 import EventRegistrationForm from './components/EventRegistrationForm';
 import FallbackTestDemo from './components/FallbackTestDemo';
 import Footer from './components/Footer';
 import './App.css';
 
 function AppContent() {
-  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'fallbackDemo'
+  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedEventForModal, setSelectedEventForModal] = useState(null);
 
@@ -40,19 +41,27 @@ function AppContent() {
 
       {/* Main View Area */}
       <main className="main-content">
-        <HeroSection
-          onExplore={handleExploreClick}
-          onRegister={() => handleOpenRegisterModal()}
-        />
-
         {activeTab === 'events' && (
-          <EventList
-            onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
-            onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+          <>
+            <HeroSection
+              onExplore={handleExploreClick}
+              onRegister={() => handleOpenRegisterModal()}
+            />
+
+            <EventList
+              onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
+              onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+            />
+          </>
+        )}
+
+        {activeTab === 'checkin' && (
+          <OrganizerCheckIn
+            onSelectEventForRegister={(evt) => handleOpenRegisterModal(evt)}
           />
         )}
 
-        <FallbackTestDemo />
+        {activeTab === 'fallbackDemo' && <FallbackTestDemo />}
       </main>
 
       {/* Event Registration Modal Form */}

@@ -26,6 +26,15 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal }) {
           >
             {t('header.nav.events', 'Events')}
           </button>
+          
+          <button
+            type="button"
+            className={`nav-link nav-link-checkin ${activeTab === 'checkin' ? 'active' : ''}`}
+            onClick={() => setActiveTab('checkin')}
+          >
+            📋 {t('header.nav.checkin', 'Check-in Desk')}
+          </button>
+
           <button
             type="button"
             className="nav-link nav-link-highlight"
@@ -33,6 +42,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal }) {
           >
             + {t('header.nav.register', 'Register Event')}
           </button>
+          
           <button
             type="button"
             className={`nav-link ${activeTab === 'fallbackDemo' ? 'active' : ''}`}

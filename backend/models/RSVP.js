@@ -19,6 +19,10 @@ const RSVPSchema = new mongoose.Schema({
     enum: ['confirmed', 'waitlist'],
     required: true,
     default: 'confirmed'
+  },
+  // Time when user was promoted from waitlist to confirmed
+  promotedAt: {
+    type: Date
   }
 }, {
   // Automatically manages 'createdAt' and 'updatedAt' timestamps

@@ -7,6 +7,7 @@ const app = require('../app');
 const User = require('../models/User');
 const Event = require('../models/Event');
 const RSVP = require('../models/RSVP');
+const Notification = require('../models/Notification');
 const { JWT_SECRET } = require('../middleware/auth');
 
 let mongoServer;
@@ -26,6 +27,7 @@ beforeEach(async () => {
   await User.deleteMany({});
   await Event.deleteMany({});
   await RSVP.deleteMany({});
+  await Notification.deleteMany({});
 });
 
 const generateToken = (user) => {
@@ -337,4 +339,51 @@ describe('Role-Based Authorization & RSVP System Integration Tests', () => {
     expect(mRes.json).toHaveBeenCalledWith(expect.objectContaining({ message: 'Authentication required' }));
   });
 
+  test('14. [RSVP Cancellation & Promotion Details] Promoting a waitlisted user sets promotedAt and creates a Notification placeholder', async () => {
+    const organizer = await User.create({ name: 'Organizer', email: 'org@test.com', role: 'organizer', password: 'password' });
+    const res1 = await User.create({ name: 'Resident 1', email: 'res1@test.com', role: 'resident', password: 'password' });
+    const res2 = await User.create({ name: 'Resident 2', email: 'res2@test.com', role: 'resident', password: 'password' });
+
+    const event = await Event.create({
+      title: 'Limited Capacity Event',
+      location: 'Conference Room 1',
+      date: new Date(),
+      capacity: 1,
+      organizer: organizer._id
+    });
+
+    const tokenRes1 = generateToken(res1);
+    const tokenRes2 = generateToken(res2);
+
+    // Resident 1 RSVPs -> confirmed
+    await request(app)
+      .post(`/api/events/${event._id}/rsvp`)
+      .set('Authorization', `Bearer ${tokenRes1}`);
+
+    // Resident 2 RSVPs -> waitlisted
+    await request(app)
+      .post(`/api/events/${event._id}/rsvp`)
+      .set('Authorization', `Bearer ${tokenRes2}`);
+
+    // Cancel Resident 1 -> promotes Resident 2
+    const cancelResponse = await request(app)
+      .delete(`/api/events/${event._id}/rsvp`)
+      .set('Authorization', `Bearer ${tokenRes1}`);
+
+    expect(cancelResponse.status).toBe(200);
+
+    // Verify promoted RSVP in DB has status 'confirmed' and promotedAt set
+    const promotedRSVP = await RSVP.findOne({ eventId: event._id, userId: res2._id });
+    expect(promotedRSVP.status).toBe('confirmed');
+    expect(promotedRSVP.promotedAt).toBeDefined();
+    expect(promotedRSVP.promotedAt).toBeInstanceOf(Date);
+
+    // Verify Notification exists for the promoted user containing eventId and status 'confirmed'
+    const notification = await Notification.findOne({ userId: res2._id, eventId: event._id });
+    expect(notification).toBeDefined();
+    expect(notification.status).toBe('confirmed');
+    expect(notification.message).toContain('promoted');
+  });
+
 });
+

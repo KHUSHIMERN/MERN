@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const RSVP = require('../models/RSVP');
 const Event = require('../models/Event');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 
 // Create RSVP or join waitlist
 const rsvpEvent = async (req, res) => {
@@ -116,29 +117,37 @@ const cancelRSVP = async (req, res) => {
       return res.status(404).json({ message: 'Event not found' });
     }
 
-    // Find the RSVP entry
-    const rsvpToDelete = await RSVP.findOne({ eventId: id, userId });
-    if (!rsvpToDelete) {
+    // Atomically find and delete the RSVP entry
+    const deletedRSVP = await RSVP.findOneAndDelete({ eventId: id, userId });
+    if (!deletedRSVP) {
       return res.status(404).json({ message: 'No registration record found for this event.' });
     }
 
-    const previousStatus = rsvpToDelete.status;
-    await RSVP.deleteOne({ _id: rsvpToDelete._id });
-
+    const previousStatus = deletedRSVP.status;
     let slotFreed = false;
     let promotedUser = null;
 
     // If a confirmed user cancels, check if we need to promote a waitlisted user
     if (previousStatus === 'confirmed') {
       slotFreed = true;
-      // Get the oldest waitlisted user (FIFO)
-      const oldestWaitlisted = await RSVP.findOne({ eventId: id, status: 'waitlist' }).sort({ createdAt: 1 });
+      // Atomically find, update the oldest waitlisted user, and set promotedAt
+      const oldestWaitlisted = await RSVP.findOneAndUpdate(
+        { eventId: id, status: 'waitlist' },
+        { status: 'confirmed', promotedAt: new Date() },
+        { sort: { createdAt: 1 }, new: true }
+      );
+      
       if (oldestWaitlisted) {
-        oldestWaitlisted.status = 'confirmed';
-        await oldestWaitlisted.save();
-        
         // Fetch user details for the promoted user response
         promotedUser = await User.findById(oldestWaitlisted.userId).select('name email');
+
+        // Create a notification placeholder for the promoted user
+        await Notification.create({
+          userId: oldestWaitlisted.userId,
+          eventId: id,
+          status: 'confirmed',
+          message: `Congratulations! You have been promoted to confirmed status for the event: ${event.title}.`
+        });
       }
     }
 

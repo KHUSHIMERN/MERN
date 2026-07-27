@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 
 export function OrganizerCheckIn({ onSelectEventForRegister }) {
-  const { t } = useTranslation();
-
   // State Management
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState('evt-1');
@@ -458,6 +455,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
             <span className="title-icon">📋</span> Organizer Check-in & Attendance Desk
           </h2>
           <p className="checkin-subtitle">
+            {selectedEvent ? <strong>{selectedEvent.title} — </strong> : null}
             Manage real-time event day attendance, confirm RSVPs, mark check-in timestamps, and export audit records.
           </p>
         </div>
@@ -509,6 +507,16 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
         </div>
 
         <div className="action-buttons-group">
+          {onSelectEventForRegister && (
+            <button
+              type="button"
+              className="btn-action btn-secondary"
+              onClick={() => onSelectEventForRegister(selectedEvent)}
+            >
+              ➕ Register Attendee
+            </button>
+          )}
+
           <button
             type="button"
             className="btn-action btn-export"

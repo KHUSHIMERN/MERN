@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export function EventRegistrationForm({ selectedEvent, onClose }) {
   const { t } = useTranslation();
+  const modalRef = useRef(null);
+  const previouslyFocusedElement = useRef(null);
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -13,6 +16,58 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
   });
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Store previously focused element and restore focus when modal closes
+  useEffect(() => {
+    previouslyFocusedElement.current = document.activeElement;
+
+    const timer = setTimeout(() => {
+      if (modalRef.current) {
+        const firstInput = modalRef.current.querySelector('#fullName') || modalRef.current.querySelector('button, input, select, textarea');
+        if (firstInput) firstInput.focus();
+      }
+    }, 50);
+
+    return () => {
+      clearTimeout(timer);
+      if (previouslyFocusedElement.current && typeof previouslyFocusedElement.current.focus === 'function') {
+        previouslyFocusedElement.current.focus();
+      }
+    };
+  }, []);
+
+  // Trap focus inside modal & handle Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusables = Array.from(
+          modalRef.current.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+        if (focusables.length === 0) return;
+
+        const firstElement = focusables[0];
+        const lastElement = focusables[focusables.length - 1];
+
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const eventTitle = selectedEvent?.itemKey
     ? t(`events.items.${selectedEvent.itemKey}.title`)
@@ -45,18 +100,32 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop" onClick={onClose} role="presentation">
+      <div
+        className="modal-container"
+        onClick={(e) => e.stopPropagation()}
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-heading"
+      >
         <div className="modal-header">
           <div>
-            <h2 className="modal-title">{t('form.title', 'Register for Event')}</h2>
+            <h2 className="modal-title" id="modal-title-heading">
+              {t('form.title', 'Register for Event')}
+            </h2>
             {selectedEvent && (
               <p className="modal-subtitle">
                 {eventTitle} ({eventLocation})
               </p>
             )}
           </div>
-          <button type="button" className="close-modal-btn" onClick={onClose}>
+          <button
+            type="button"
+            className="close-modal-btn"
+            onClick={onClose}
+            aria-label={t('form.closeModal', 'Close modal')}
+          >
             ✕
           </button>
         </div>

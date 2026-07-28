@@ -71,3 +71,39 @@ button {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* Skip-to-content link for keyboard accessibility */
+.skip-to-content-link {
+  position: fixed;
+  top: -120px;
+  left: 20px;
+  z-index: 10000;
+  padding: 12px 24px;
+  background-color: var(--primary);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.6);
+  text-decoration: none;
+  transition: top 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.skip-to-content-link:focus,
+.skip-to-content-link:focus-visible {
+  top: 20px;
+  outline: 3px solid #ffffff;
+  outline-offset: 3px;
+}
+
+/* Global focus-visible indicator for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px var(--primary-light);
+}
+
+main:focus {
+  outline: none;
+}
+

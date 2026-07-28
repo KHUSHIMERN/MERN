@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "Community Events Portal",
-    "tagline": "Discover, Connect & Participate in Local Events"
+    "tagline": "Discover, Connect & Participate in Local Events",
+    "skipToContent": "Skip to main content"
   },
   "header": {
     "brand": "EventPulse",

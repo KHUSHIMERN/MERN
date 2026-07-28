@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import I18nProvider from './components/I18nProvider';
 import Header from './components/Header';
 import HeroSection from './components/HeroSection';
@@ -10,6 +11,7 @@ import Footer from './components/Footer';
 import './App.css';
 
 function AppContent() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedEventForModal, setSelectedEventForModal] = useState(null);
@@ -32,6 +34,11 @@ function AppContent() {
 
   return (
     <div className="app-layout">
+      {/* Skip-to-Content Link for Keyboard Accessibility */}
+      <a href="#main-content" className="skip-to-content-link">
+        {t('app.skipToContent', 'Skip to main content')}
+      </a>
+
       {/* Global Header with Brand & Language Selector */}
       <Header
         activeTab={activeTab}
@@ -40,7 +47,7 @@ function AppContent() {
       />
 
       {/* Main View Area */}
-      <main className="main-content">
+      <main id="main-content" tabIndex={-1} className="main-content">
         {activeTab === 'events' && (
           <>
             <HeroSection

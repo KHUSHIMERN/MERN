@@ -12,15 +12,23 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { getTimezoneOffsetLabel } from '../utils/dateUtils';
 
-export default function Header() {
+/**
+ * Header — sticky global navigation bar.
+ *
+ * Props (from QA App.jsx integration):
+ *   activeTab        {string}   — current active tab ('events' | 'fallbackDemo')
+ *   setActiveTab     {function} — setter to switch tabs
+ *   onOpenRegisterModal {function} — opens the EventRegistrationForm modal
+ */
+export function Header({ activeTab, setActiveTab, onOpenRegisterModal }) {
   const [tzModalOpen, setTzModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const { activeTimezone, isOverridden } = useTimezone();
   const { lang, setLang, t } = useLanguage();
   const { user, role, toggleRole } = useAuth();
-  
+
   const [langAnchorEl, setLangAnchorEl] = useState(null);
-  
+
   const offsetLabel = getTimezoneOffsetLabel(activeTimezone);
 
   const handleLangMenuOpen = (event) => {
@@ -40,7 +48,14 @@ export default function Header() {
     <>
       <AppBar position="sticky" elevation={1} sx={{ backgroundColor: '#0f172a' }}>
         <Toolbar sx={{ justifyContent: 'space-between', flexWrap: { xs: 'wrap', md: 'nowrap' }, py: { xs: 1, md: 0 }, gap: 1.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          {/* Brand — clicking navigates to events tab */}
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'pointer' }}
+            onClick={() => setActiveTab && setActiveTab('events')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && setActiveTab && setActiveTab('events')}
+          >
             <EventIcon sx={{ color: '#38bdf8', fontSize: '2rem' }} />
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 800, color: '#f8fafc', lineHeight: 1.1 }}>
@@ -60,7 +75,7 @@ export default function Header() {
               startIcon={<LanguageIcon />}
               sx={{ color: '#f8fafc', textTransform: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 2 }}
             >
-              {lang === 'en' ? 'English' : 'हिंदी'}
+              {lang === 'en' ? 'English' : lang === 'hi' ? 'हिंदी' : 'ಕನ್ನಡ'}
             </Button>
             <Menu
               anchorEl={langAnchorEl}
@@ -69,6 +84,7 @@ export default function Header() {
             >
               <MenuItem onClick={() => handleLangSelect('en')}>English</MenuItem>
               <MenuItem onClick={() => handleLangSelect('hi')}>हिंदी (Hindi)</MenuItem>
+              <MenuItem onClick={() => handleLangSelect('kn')}>ಕನ್ನಡ (Kannada)</MenuItem>
             </Menu>
 
             {/* Timezone Button */}
@@ -126,6 +142,24 @@ export default function Header() {
               </Box>
             </Button>
 
+            {/* Register Event Button (from QA — visible for all users) */}
+            {onOpenRegisterModal && (
+              <Button
+                variant="outlined"
+                color="inherit"
+                onClick={onOpenRegisterModal}
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: 2,
+                  color: '#f8fafc',
+                  borderColor: 'rgba(255,255,255,0.3)',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.08)' }
+                }}
+              >
+                + Register Event
+              </Button>
+            )}
+
             {/* Post Event Button (Organizer Only) */}
             {role === 'organizer' && (
               <Button
@@ -148,7 +182,7 @@ export default function Header() {
       </AppBar>
 
       <TimezoneSelectorModal open={tzModalOpen} onClose={() => setTzModalOpen(false)} />
-      
+
       {role === 'organizer' && (
         <CreateEventModal
           open={createModalOpen}
@@ -162,3 +196,5 @@ export default function Header() {
     </>
   );
 }
+
+export default Header;

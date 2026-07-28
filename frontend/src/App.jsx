@@ -1,11 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { TimezoneProvider } from './context/TimezoneContext';
 import { AuthProvider } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
+import I18nProvider from './components/I18nProvider';
 import Header from './components/Header';
+import HeroSection from './components/HeroSection';
 import EventList from './components/EventList';
+import EventRegistrationForm from './components/EventRegistrationForm';
+import FallbackTestDemo from './components/FallbackTestDemo';
+import Footer from './components/Footer';
+import './App.css';
 
+// MUI Theme — rem-based typography so all sizes scale with browser zoom (WCAG 1.4.4)
 const theme = createTheme({
   typography: {
     // Base font size set in rem units so all elements scale dynamically with browser zoom (WCAG 1.4.4)
@@ -48,22 +55,90 @@ const theme = createTheme({
   }
 });
 
-export default function App() {
+/**
+ * AppContent — inner layout component with all page sections.
+ * Wrapped by I18nProvider (react-i18next) and MUI ThemeProvider.
+ */
+function AppContent() {
+  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'fallbackDemo'
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [selectedEventForModal, setSelectedEventForModal] = useState(null);
+
+  const handleOpenRegisterModal = (evt = null) => {
+    setSelectedEventForModal(evt);
+    setIsRegisterModalOpen(true);
+  };
+
+  const handleCloseRegisterModal = () => {
+    setIsRegisterModalOpen(false);
+    setSelectedEventForModal(null);
+  };
+
+  const handleExploreClick = () => {
+    setActiveTab('events');
+    const el = document.getElementById('events');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <LanguageProvider>
-        <AuthProvider>
-          <TimezoneProvider>
-            <div className="app-container">
-              <Header />
-              <main>
-                <EventList />
-              </main>
-            </div>
-          </TimezoneProvider>
-        </AuthProvider>
-      </LanguageProvider>
-    </ThemeProvider>
+    <div className="app-layout">
+      {/* Global Header with Brand, Language Selector, Timezone, Role & Create Event */}
+      <Header
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onOpenRegisterModal={() => handleOpenRegisterModal()}
+      />
+
+      {/* Main View Area */}
+      <main className="main-content">
+        <HeroSection
+          onExplore={handleExploreClick}
+          onRegister={() => handleOpenRegisterModal()}
+        />
+
+        {activeTab === 'events' && (
+          <EventList
+            onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
+            onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+          />
+        )}
+
+        <FallbackTestDemo />
+      </main>
+
+      {/* Event Registration Modal Form */}
+      {isRegisterModalOpen && (
+        <EventRegistrationForm
+          selectedEvent={selectedEventForModal}
+          onClose={handleCloseRegisterModal}
+        />
+      )}
+
+      {/* Footer */}
+      <Footer setActiveTab={setActiveTab} />
+    </div>
   );
 }
+
+/**
+ * App — root component.
+ * Provides: I18nProvider (react-i18next) → MUI ThemeProvider → Context providers → AppContent
+ */
+export function App() {
+  return (
+    <I18nProvider>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <LanguageProvider>
+          <AuthProvider>
+            <TimezoneProvider>
+              <AppContent />
+            </TimezoneProvider>
+          </AuthProvider>
+        </LanguageProvider>
+      </ThemeProvider>
+    </I18nProvider>
+  );
+}
+
+export default App;

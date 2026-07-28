@@ -88,7 +88,14 @@ const mockFallbackEvents = [
   }
 ];
 
-export default function EventList() {
+/**
+ * EventList — displays filterable event cards with full API + fallback support.
+ *
+ * Props (QA App.jsx integration):
+ *   onRegisterEvent {function} — opens EventRegistrationForm modal with selected event
+ *   onSelectEvent   {function} — opens EventRegistrationForm modal for event detail view
+ */
+export function EventList({ onRegisterEvent, onSelectEvent }) {
   const { activeTimezone, userLocale, isOverridden } = useTimezone();
   const { t } = useLanguage();
   const { role, user } = useAuth();
@@ -135,10 +142,34 @@ export default function EventList() {
     return true;
   });
 
+  /**
+   * Handle event card selection — delegates to onSelectEvent prop (QA integration)
+   * or falls back to internal EventDetail modal (DEV-KHUSHI behaviour).
+   */
+  const handleSelectEvent = (evt) => {
+    if (onSelectEvent) {
+      onSelectEvent(evt);
+    } else {
+      setSelectedEvent(evt);
+    }
+  };
+
+  /**
+   * Handle RSVP — delegates to onRegisterEvent prop (QA integration)
+   * or falls back to internal RSVPModal (DEV-KHUSHI behaviour).
+   */
+  const handleRSVP = (evt) => {
+    if (onRegisterEvent) {
+      onRegisterEvent(evt);
+    } else {
+      setRsvpEvent(evt);
+    }
+  };
+
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ py: 4 }} id="events">
       <Box sx={{ mb: 4, textAlign: 'center' }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 800, color: '#0f172a', mb: 1 }}>
+        <Typography variant="h4" component="h2" sx={{ fontWeight: 800, color: '#f8fafc', mb: 1 }}>
           {t('appTitle')}
         </Typography>
         {/* component="p": this is a decorative subtitle, not a semantic heading (WCAG 1.3.1) */}
@@ -160,8 +191,8 @@ export default function EventList() {
 
       {/* AI Personalized Recommendation Section */}
       <AIRecommendationSection
-        onSelectEvent={(evt) => setSelectedEvent(evt)}
-        onRSVP={(evt) => setRsvpEvent(evt)}
+        onSelectEvent={handleSelectEvent}
+        onRSVP={handleRSVP}
       />
 
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2 }}>
@@ -214,14 +245,15 @@ export default function EventList() {
                 event={event}
                 activeTimezone={activeTimezone}
                 userLocale={userLocale}
-                onSelectEvent={(evt) => setSelectedEvent(evt)}
-                onRSVP={(evt) => setRsvpEvent(evt)}
+                onSelectEvent={handleSelectEvent}
+                onRSVP={handleRSVP}
               />
             </Grid>
           ))}
         </Grid>
       )}
 
+      {/* Internal EventDetail modal — used when onSelectEvent prop is not provided */}
       {selectedEvent && (
         <EventDetail
           open={Boolean(selectedEvent)}
@@ -229,10 +261,11 @@ export default function EventList() {
           activeTimezone={activeTimezone}
           userLocale={userLocale}
           onClose={() => setSelectedEvent(null)}
-          onRSVP={(evt) => setRsvpEvent(evt)}
+          onRSVP={handleRSVP}
         />
       )}
 
+      {/* Internal RSVPModal — used when onRegisterEvent prop is not provided */}
       {rsvpEvent && (
         <RSVPModal
           open={Boolean(rsvpEvent)}
@@ -245,3 +278,5 @@ export default function EventList() {
     </Container>
   );
 }
+
+export default EventList;

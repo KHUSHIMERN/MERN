@@ -4,7 +4,12 @@
  * Role can be supplied via header 'x-user-role', query param 'role', or request body 'role'.
  */
 export const requireOrganizer = (req, res, next) => {
-  const userRole = req.headers['x-user-role'] || req.query.role || (req.body && req.body.role);
+  const userRole =
+    req.headers['x-user-role'] ||
+    req.headers['user-role'] ||
+    req.query.role ||
+    req.query.userRole ||
+    (req.body && (req.body.role || req.body.userRole));
   
   if (!userRole || userRole.toString().toLowerCase() !== 'organizer') {
     return res.status(403).json({
@@ -14,8 +19,14 @@ export const requireOrganizer = (req, res, next) => {
   }
 
   // Extract organizer identity details for audit logging
-  const performerName = req.headers['x-user-name'] || 'Organizer Admin';
-  const performerEmail = req.headers['x-user-email'] || 'organizer@eventpulse.org';
+  const performerName =
+    req.headers['x-user-name'] ||
+    (req.body && req.body.performerName) ||
+    'Organizer Admin';
+  const performerEmail =
+    req.headers['x-user-email'] ||
+    (req.body && req.body.performerEmail) ||
+    'organizer@eventpulse.org';
 
   req.performer = {
     role: 'organizer',

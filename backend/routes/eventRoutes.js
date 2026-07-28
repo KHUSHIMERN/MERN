@@ -5,7 +5,8 @@ import {
   createEvent,
   updateEvent,
   deleteEvent,
-  publishEvent
+  publishEvent,
+  searchEvents
 } from '../controllers/eventController.js';
 import {
   getEventAttendance,
@@ -19,6 +20,7 @@ const router = express.Router();
 
 // General Event REST API Endpoints
 router.get('/', getEvents);
+router.get('/search', searchEvents);
 router.get('/:id', getEventById);
 router.post('/', createEvent);
 router.put('/:id', updateEvent);

@@ -109,6 +109,57 @@ export const getEvents = async (req, res, next) => {
 };
 
 /**
+ * GET /api/events/search?q=<query>
+ * Dedicated keyword search endpoint matching title, description, or tags (case-insensitive).
+ */
+export const searchEvents = async (req, res, next) => {
+  try {
+    const q = req.query.q || req.query.search || req.query.query || '';
+    const queryTerm = String(q).trim();
+
+    if (!queryTerm) {
+      if (isConnectedToMongoDB) {
+        const allEvents = await Event.find({ published: true }).sort({ startDate: 1 });
+        return res.json({ success: true, query: '', count: allEvents.length, data: allEvents });
+      }
+      const allEvents = INITIAL_EVENTS.filter((e) => Boolean(e.published));
+      return res.json({ success: true, query: '', count: allEvents.length, data: allEvents });
+    }
+
+    if (isConnectedToMongoDB) {
+      const regex = new RegExp(queryTerm, 'i');
+      const mongoQuery = {
+        $or: [
+          { title: regex },
+          { description: regex },
+          { tags: { $in: [regex] } },
+          { 'location.placeName': regex }
+        ]
+      };
+
+      const events = await Event.find(mongoQuery).sort({ startDate: 1, createdAt: -1 });
+      return res.json({ success: true, query: queryTerm, count: events.length, data: events });
+    }
+
+    // In-memory fallback mode
+    const term = queryTerm.toLowerCase();
+    const results = INITIAL_EVENTS.filter((e) => {
+      const titleMatch = e.title && e.title.toLowerCase().includes(term);
+      const descMatch = e.description && e.description.toLowerCase().includes(term);
+      const tagMatch = Array.isArray(e.tags) && e.tags.some((t) => t.toLowerCase().includes(term));
+      const locString = typeof e.location === 'object' ? e.location.placeName : String(e.location);
+      const locMatch = locString && locString.toLowerCase().includes(term);
+
+      return titleMatch || descMatch || tagMatch || locMatch;
+    });
+
+    return res.json({ success: true, query: queryTerm, count: results.length, data: results });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * GET /api/events/:id
  * Fetch single event by ID or itemKey.
  */

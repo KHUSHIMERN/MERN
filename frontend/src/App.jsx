@@ -4,91 +4,113 @@ import RegisterForm from './components/RegisterForm';
 import LoginForm from './components/LoginForm';
 import ProfilePage from './components/ProfilePage';
 import AdminRoleRequests from './components/AdminRoleRequests';
+import I18nProvider from './components/I18nProvider';
+import Header from './components/Header';
+import HeroSection from './components/HeroSection';
+import EventList from './components/EventList';
+import EventRegistrationForm from './components/EventRegistrationForm';
+import FallbackTestDemo from './components/FallbackTestDemo';
+import Footer from './components/Footer';
+import './App.css';
 
-export default function App() {
+function AppContent() {
   const { user, logout } = useAuth();
-  const [view, setView] = useState('register'); // 'register' | 'login' | 'profile' | 'admin-requests'
+  const [view, setView] = useState('events'); // 'events' | 'register' | 'login' | 'profile' | 'admin-requests'
+  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'fallbackDemo'
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [selectedEventForModal, setSelectedEventForModal] = useState(null);
+
+  const handleOpenRegisterModal = (evt = null) => {
+    setSelectedEventForModal(evt);
+    setIsRegisterModalOpen(true);
+  };
+
+  const handleCloseRegisterModal = () => {
+    setIsRegisterModalOpen(false);
+    setSelectedEventForModal(null);
+  };
+
+  const handleExploreClick = () => {
+    setView('events');
+    setActiveTab('events');
+    const el = document.getElementById('events');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  };
 
   return (
-    <main style={{ minHeight: '100vh', background: 'var(--bg-main, #0f172a)', color: 'var(--text-main, #f8fafc)' }}>
-      {/* Top Header Navbar */}
-      <header
-        style={{
-          display: 'flex',
-          justify: 'space-between',
-          alignItems: 'center',
-          padding: '16px 32px',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
-          background: 'rgba(15, 23, 42, 0.8)',
-          backdropFilter: 'blur(8px)',
-        }}
-      >
-        <h2 style={{ fontSize: '20px', fontWeight: '800', cursor: 'pointer', background: 'linear-gradient(135deg, #6366f1, #06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }} onClick={() => setView(user ? 'profile' : 'register')}>
-          CommunityConnect
-        </h2>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          {user ? (
-            <>
-              <span style={{ fontSize: '14px', color: '#94a3b8' }}>
-                Signed in as <strong>{user.name}</strong> ({user.role})
-              </span>
+    <div className="app-layout">
+      {/* Global Header with Brand, Auth & Language Controls */}
+      <Header
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onOpenRegisterModal={() => handleOpenRegisterModal()}
+        user={user}
+        logout={logout}
+        view={view}
+        setView={setView}
+      />
 
-              {user.role === 'admin' && (
-                <button
-                  className="btn-primary"
-                  onClick={() => setView('admin-requests')}
-                  style={{ padding: '8px 16px', fontSize: '13px', background: 'linear-gradient(135deg, #818cf8, #6366f1)' }}
-                >
-                  Admin Role Requests
-                </button>
-              )}
+      {/* Main View Area */}
+      <main className="main-content">
+        {view === 'register' && (
+          <div className="auth-container-wrapper">
+            <RegisterForm onSwitchToLogin={() => setView('login')} />
+          </div>
+        )}
 
-              <button
-                className="btn-secondary"
-                onClick={() => setView('profile')}
-                style={{ padding: '8px 16px', fontSize: '13px' }}
-              >
-                Profile & Settings
-              </button>
-              <button
-                className="btn-secondary"
-                onClick={() => {
-                  logout();
-                  setView('login');
-                }}
-                style={{ padding: '8px 16px', fontSize: '13px', color: '#f87171' }}
-              >
-                Logout
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                className="btn-secondary"
-                onClick={() => setView('login')}
-                style={{ padding: '8px 16px', fontSize: '13px' }}
-              >
-                Log In
-              </button>
-              <button
-                className="btn-primary"
-                onClick={() => setView('register')}
-                style={{ padding: '8px 16px', fontSize: '13px' }}
-              >
-                Register
-              </button>
-            </>
-          )}
-        </div>
-      </header>
+        {view === 'login' && (
+          <div className="auth-container-wrapper">
+            <LoginForm onSwitchToRegister={() => setView('register')} />
+          </div>
+        )}
 
-      {/* Main Body View */}
-      <div style={{ padding: '20px' }}>
-        {view === 'profile' && <ProfilePage onNavigateHome={() => setView(user ? 'profile' : 'login')} />}
-        {view === 'admin-requests' && <AdminRoleRequests onNavigateHome={() => setView('profile')} />}
-        {view === 'register' && <RegisterForm onSwitchToLogin={() => setView('login')} />}
-        {view === 'login' && <LoginForm onSwitchToRegister={() => setView('register')} />}
-      </div>
-    </main>
+        {view === 'profile' && (
+          <ProfilePage onNavigateHome={() => setView(user ? 'profile' : 'login')} />
+        )}
+
+        {view === 'admin-requests' && (
+          <AdminRoleRequests onNavigateHome={() => setView('profile')} />
+        )}
+
+        {view === 'events' && (
+          <>
+            <HeroSection
+              onExplore={handleExploreClick}
+              onRegister={() => handleOpenRegisterModal()}
+            />
+
+            {activeTab === 'events' && (
+              <EventList
+                onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
+                onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+              />
+            )}
+
+            {activeTab === 'fallbackDemo' && <FallbackTestDemo />}
+          </>
+        )}
+      </main>
+
+      {/* Event Registration Modal Form */}
+      {isRegisterModalOpen && (
+        <EventRegistrationForm
+          selectedEvent={selectedEventForModal}
+          onClose={handleCloseRegisterModal}
+        />
+      )}
+
+      {/* Footer */}
+      <Footer setActiveTab={setActiveTab} />
+    </div>
   );
 }
+
+export function App() {
+  return (
+    <I18nProvider>
+      <AppContent />
+    </I18nProvider>
+  );
+}
+
+export default App;

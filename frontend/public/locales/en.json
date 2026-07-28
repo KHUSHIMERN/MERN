@@ -1,0 +1,123 @@
+{
+  "app": {
+    "title": "Community Events Portal",
+    "tagline": "Discover, Connect & Participate in Local Events"
+  },
+  "header": {
+    "brand": "EventPulse",
+    "subtitle": "Community Hub",
+    "nav": {
+      "home": "Home",
+      "events": "Events",
+      "register": "Register Event",
+      "fallbackDemo": "Fallback Demo",
+      "contact": "Contact"
+    },
+    "languageLabel": "Language:"
+  },
+  "hero": {
+    "badge": "✨ Connecting Communities Across Karnataka",
+    "title": "Discover Amazing Community Events Near You",
+    "subtitle": "Join workshops, cultural festivals, tech meetups, and charity drives happening in your city.",
+    "exploreBtn": "Explore Events",
+    "createBtn": "Register Event",
+    "stats": {
+      "activeEvents": "Active Events",
+      "totalAttendees": "Attendees Joined",
+      "citiesCovered": "Cities Covered"
+    }
+  },
+  "events": {
+    "sectionTitle": "Upcoming Community Events",
+    "sectionSubtitle": "Find events tailored to your interests and connect with like-minded people.",
+    "searchPlaceholder": "Search events by title, city, or category...",
+    "filterAll": "All Events",
+    "filterTech": "Technology",
+    "filterCulture": "Cultural",
+    "filterWorkshop": "Workshops",
+    "filterCharity": "Charity",
+    "card": {
+      "dateLabel": "Date:",
+      "locationLabel": "Location:",
+      "seatsLeft": "seats remaining",
+      "category": "Category:",
+      "registerBtn": "Register Now",
+      "viewDetails": "View Details"
+    },
+    "items": {
+      "evt1": {
+        "title": "Tech Summit Bengaluru 2026",
+        "location": "Electronic City, Bengaluru",
+        "description": "An annual tech summit gathering AI developers, startup founders, and cloud engineers."
+      },
+      "evt2": {
+        "title": "Karnataka Cultural & Folk Festival",
+        "location": "Palace Grounds, Mysuru",
+        "description": "Celebrate rich heritage with Yakshagana, Dollu Kunitha, music, and local cuisine stalls."
+      },
+      "evt3": {
+        "title": "Fullstack React & Node Workshop",
+        "location": "Koramangala, Bengaluru",
+        "description": "Hands-on practical workshop covering React 19, i18n, Express, and MongoDB integration."
+      },
+      "evt4": {
+        "title": "Green City Cleanliness Drive",
+        "location": "Cubbon Park, Bengaluru",
+        "description": "Join environmental volunteers for tree planting and park restoration initiative."
+      }
+    },
+    "noResults": "No events found matching your search or category filter."
+  },
+  "form": {
+    "title": "Register for an Event",
+    "subtitle": "Fill in your details below to confirm your seat for the event.",
+    "fullName": "Full Name",
+    "fullNamePlaceholder": "Enter your full name (e.g. Rahul Sharma)",
+    "email": "Email Address",
+    "emailPlaceholder": "name@example.com",
+    "eventSelect": "Select Event",
+    "ticketType": "Ticket Category",
+    "ticketTypes": {
+      "standard": "Standard Pass (Free)",
+      "vip": "VIP Pass ($15)",
+      "student": "Student Pass (Free with Student ID)"
+    },
+    "attendees": "Number of Attendees",
+    "notes": "Special Requests / Notes",
+    "notesPlaceholder": "Dietary requirements, accessibility needs, etc.",
+    "agreeTerms": "I agree to the event terms and community code of conduct",
+    "submitBtn": "Confirm Registration",
+    "cancelBtn": "Cancel",
+    "successMsg": "🎉 Registration successful! Confirmation details have been sent to your email.",
+    "requiredFieldsError": "Please fill in all required fields.",
+    "agreeTermsError": "You must agree to the terms to proceed.",
+    "okBtn": "OK"
+  },
+  "footer": {
+    "aboutTitle": "About EventPulse",
+    "aboutText": "EventPulse is a community-driven platform empowering individuals to host and discover vibrant local events across Karnataka and India.",
+    "quickLinksTitle": "Quick Links",
+    "contactTitle": "Contact Us",
+    "emailLabel": "Support Email:",
+    "phoneLabel": "Helpline:",
+    "addressLabel": "Address:",
+    "addressText": "MG Road, Bengaluru, Karnataka 560001",
+    "copyright": "© 2026 EventPulse. All rights reserved."
+  },
+  "fallbackDemo": {
+    "badge": "⚙️ i18n Architecture Inspector",
+    "title": "i18n Lazy Loading & Fallback Test Matrix",
+    "description": "This component verifies lazy loading of language bundles via i18next-http-backend and demonstrates missing key fallback handling.",
+    "activeLanguage": "Active Language:",
+    "storageKey": "LocalStorage Key (app_language):",
+    "loadedNotice": "Bundle Status:",
+    "bundleLoaded": "Loaded via HTTP Backend (/locales/{{lng}}.json)",
+    "fallbackSectionTitle": "Missing Key Fallback Verification",
+    "fallbackNotice": "The key below 'fallbackDemo.keyMissingMessage' is intentionally defined ONLY in en.json and omitted from hi.json and kn.json.",
+    "keyLabel": "Key:",
+    "fallbackActive": "⚠️ Fallback Active: Evaluated to English default!",
+    "nativeString": "✓ Native Locale String",
+    "untranslatedLabel": "Key Output in Current Language:",
+    "keyMissingMessage": "This fallback text string is defined strictly in the English (en.json) bundle."
+  }
+}

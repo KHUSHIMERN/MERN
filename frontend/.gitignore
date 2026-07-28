@@ -18,6 +18,9 @@ dist-ssr/
 .env
 .env.*
 !.env.example
+node_modules
+dist
+dist-ssr
 *.local
 
 # Editor directories and files

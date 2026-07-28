@@ -6,6 +6,19 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
   const { t } = useTranslation();
   const modalRef = useFocusTrap(true, onClose);
 
+export function EventRegistrationForm({ selectedEvent, onClose }) {
+  const { t } = useTranslation();
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    ticketType: 'standard',
+    attendees: 1,
+    notes: '',
+    agreeTerms: false,
+  });
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
   const eventTitle = selectedEvent?.itemKey
     ? t(`events.items.${selectedEvent.itemKey}.title`)
     : selectedEvent?.title;
@@ -51,6 +64,11 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
             <h2 className="modal-title" id="modal-title-heading">
               {t('form.title', 'Register for Event')}
             </h2>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h2 className="modal-title">{t('form.title', 'Register for Event')}</h2>
             {selectedEvent && (
               <p className="modal-subtitle">
                 {eventTitle} ({eventLocation})
@@ -63,6 +81,7 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
             onClick={onClose}
             aria-label={t('form.closeModal', 'Close modal')}
           >
+          <button type="button" className="close-modal-btn" onClick={onClose}>
             ✕
           </button>
         </div>

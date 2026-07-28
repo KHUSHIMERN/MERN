@@ -127,7 +127,8 @@ export const searchEvents = async (req, res, next) => {
     }
 
     if (isConnectedToMongoDB) {
-      const regex = new RegExp(queryTerm, 'i');
+      const escapedTerm = queryTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escapedTerm, 'i');
       const mongoQuery = {
         $or: [
           { title: regex },

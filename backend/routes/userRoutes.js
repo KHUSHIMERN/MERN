@@ -1,11 +1,19 @@
 const express = require('express');
 const User = require('../models/User');
 const { auth } = require('../middleware/auth');
+const { getUserProfile, updateUserProfile } = require('../controllers/userController');
 
 const router = express.Router();
 
+// @route   GET /api/users/profile
+// @desc    Get user profile via controller (DEV-KHUSHI route)
+// @access  Private
+router.route('/profile')
+  .get(getUserProfile)
+  .patch(updateUserProfile);
+
 // @route   GET /api/users/me
-// @desc    Read profile of currently authenticated user
+// @desc    Read profile of currently authenticated user (QA route)
 // @access  Private
 router.get('/me', auth, async (req, res) => {
   try {

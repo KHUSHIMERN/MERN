@@ -39,9 +39,15 @@ app.get('/', (req, res) => {
 // Error Handling Middleware
 app.use(errorHandler);
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`✨ Server running in ${process.env.NODE_ENV || 'development'} mode on http://localhost:${PORT}`);
-});
+import { fileURLToPath } from 'url';
+
+// Start Server if executed directly as main entry point
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isMain && process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`✨ Server running in ${process.env.NODE_ENV || 'development'} mode on http://localhost:${PORT}`);
+  });
+}
 
 export default app;

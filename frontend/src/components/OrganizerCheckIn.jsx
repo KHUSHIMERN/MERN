@@ -535,6 +535,8 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
             className={`btn-action btn-audit ${showAuditLogs ? 'active' : ''}`}
             onClick={() => setShowAuditLogs(!showAuditLogs)}
             disabled={userRole !== 'organizer'}
+            aria-expanded={showAuditLogs}
+            aria-controls="audit-log-panel"
           >
             📜 {showAuditLogs ? 'Hide Audit Log' : 'View Audit Trail'}
           </button>
@@ -619,7 +621,12 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
                 onChange={handleSearchChange}
               />
               {search && (
-                <button type="button" className="clear-search" onClick={() => setSearch('')}>
+                <button
+                  type="button"
+                  className="clear-search"
+                  onClick={() => setSearch('')}
+                  aria-label="Clear search input"
+                >
                   ✕
                 </button>
               )}
@@ -832,6 +839,8 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
                             type="button"
                             className={`btn-toggle-status ${isPresent ? 'btn-mark-absent' : 'btn-mark-present'}`}
                             onClick={() => handleToggleSingleAttendance(regId, isPresent, record.fullName)}
+                            aria-pressed={isPresent}
+                            aria-label={`Mark ${record.fullName || 'attendee'} as ${isPresent ? 'Absent' : 'Present'}`}
                           >
                             {isPresent ? 'Mark Absent ✕' : 'Mark Present ✓'}
                           </button>
@@ -907,10 +916,15 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
 
       {/* Real-time Audit Trail Panel */}
       {showAuditLogs && userRole === 'organizer' && (
-        <div className="audit-log-panel">
+        <div className="audit-log-panel" id="audit-log-panel" role="region" aria-label="Event Audit Trail">
           <div className="audit-panel-header">
             <h3>📜 Event Check-in Audit Trail Log</h3>
-            <button type="button" className="btn-close-audit" onClick={() => setShowAuditLogs(false)}>
+            <button
+              type="button"
+              className="btn-close-audit"
+              onClick={() => setShowAuditLogs(false)}
+              aria-label="Close audit log panel"
+            >
               ✕ Close
             </button>
           </div>

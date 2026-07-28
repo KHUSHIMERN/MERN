@@ -80,7 +80,12 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
           {searchTerm && (
-            <button type="button" className="clear-search-btn" onClick={() => setSearchTerm('')}>
+            <button
+              type="button"
+              className="clear-search-btn"
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear search input"
+            >
               ✕
             </button>
           )}

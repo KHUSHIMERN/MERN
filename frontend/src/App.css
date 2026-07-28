@@ -40,6 +40,18 @@
   align-items: center;
   gap: 0.75rem;
   cursor: pointer;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+
+.header-brand:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px var(--primary-light);
 }
 
 .brand-logo-icon {
@@ -1872,4 +1884,31 @@
   color: #818cf8;
   white-space: nowrap;
 }
+
+/* Comprehensive Keyboard Navigation & Focus-Visible Styles */
+.nav-link:focus-visible,
+.segmented-btn:focus-visible,
+.category-tab:focus-visible,
+.card-btn:focus-visible,
+.hero-btn:focus-visible,
+.btn-action:focus-visible,
+.btn-bulk:focus-visible,
+.btn-toggle-status:focus-visible,
+.page-btn:focus-visible,
+.page-num-btn:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-export:focus-visible,
+.btn-audit:focus-visible,
+.close-modal-btn:focus-visible,
+.clear-search-btn:focus-visible,
+.clear-search:focus-visible,
+.role-btn:focus-visible,
+.size-select:focus-visible,
+.filter-select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px var(--primary-light);
+}
+
 

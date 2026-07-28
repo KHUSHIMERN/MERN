@@ -371,12 +371,31 @@ export const deleteEvent = async (req, res, next) => {
 
 /**
  * PATCH /api/events/:id/publish
- * Toggle or update publish status of an event.
+ * Change published boolean status and update updatedAt.
+ * Ensures ONLY the published field (and updatedAt timestamp) is mutated.
  */
 export const publishEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { published } = req.body;
+    const { published, isPublished } = req.body || {};
+
+    const rawPublished = published !== undefined ? published : isPublished;
+
+    let targetPublished;
+    if (rawPublished !== undefined) {
+      if (typeof rawPublished === 'boolean') {
+        targetPublished = rawPublished;
+      } else if (String(rawPublished).toLowerCase() === 'true') {
+        targetPublished = true;
+      } else if (String(rawPublished).toLowerCase() === 'false') {
+        targetPublished = false;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation Error: published field must be a boolean value.'
+        });
+      }
+    }
 
     if (isConnectedToMongoDB) {
       let event = null;
@@ -391,27 +410,33 @@ export const publishEvent = async (req, res, next) => {
         return res.status(404).json({ success: false, message: 'Event not found for publish update' });
       }
 
-      const targetPublished = published !== undefined ? Boolean(published) : !event.published;
+      if (targetPublished === undefined) {
+        targetPublished = !event.published;
+      }
+
+      // Ensure ONLY published field is modified
       event.published = targetPublished;
-      await event.save();
+      const updatedEvent = await event.save();
 
       return res.json({
         success: true,
         message: `Event ${targetPublished ? 'published' : 'unpublished'} successfully.`,
         published: targetPublished,
-        data: event
+        data: updatedEvent
       });
     }
 
-    // In-memory fallback
+    // In-memory fallback mode
     const index = INITIAL_EVENTS.findIndex((e) => e.id === id || e.itemKey === id || e._id === id);
     if (index === -1) {
       return res.status(404).json({ success: false, message: 'Event not found for publish update' });
     }
 
-    const currentPublished = Boolean(INITIAL_EVENTS[index].published);
-    const targetPublished = published !== undefined ? Boolean(published) : !currentPublished;
+    if (targetPublished === undefined) {
+      targetPublished = !Boolean(INITIAL_EVENTS[index].published);
+    }
 
+    // Mutate ONLY published and updatedAt
     INITIAL_EVENTS[index].published = targetPublished;
     INITIAL_EVENTS[index].updatedAt = new Date();
 

@@ -1,5 +1,12 @@
 import express from 'express';
-import { getEvents, getEventById, createEvent } from '../controllers/eventController.js';
+import {
+  getEvents,
+  getEventById,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  publishEvent
+} from '../controllers/eventController.js';
 import {
   getEventAttendance,
   updateEventAttendance,
@@ -10,10 +17,13 @@ import { requireOrganizer } from '../middleware/authRole.js';
 
 const router = express.Router();
 
-// General Event Routes
+// General Event REST API Endpoints
 router.get('/', getEvents);
 router.get('/:id', getEventById);
 router.post('/', createEvent);
+router.put('/:id', updateEvent);
+router.delete('/:id', deleteEvent);
+router.patch('/:id/publish', publishEvent);
 
 // Organizer-only Attendance Tracking & Check-in Endpoints
 router.get('/:id/attendance', requireOrganizer, getEventAttendance);

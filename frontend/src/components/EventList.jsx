@@ -118,7 +118,7 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
       const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
-        setEvents(json.data || []);
+        setEvents(json.events || json.data || []);
       } else {
         setEvents(mockFallbackEvents);
       }
@@ -134,18 +134,14 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
     if (search) {
       const q = search.toLowerCase();
       return (
-        e.title.toLowerCase().includes(q) ||
-        e.description.toLowerCase().includes(q) ||
-        e.location.toLowerCase().includes(q)
+        (e.title && e.title.toLowerCase().includes(q)) ||
+        (e.description && e.description.toLowerCase().includes(q)) ||
+        (e.location && e.location.toLowerCase().includes(q))
       );
     }
     return true;
   });
 
-  /**
-   * Handle event card selection — delegates to onSelectEvent prop (QA integration)
-   * or falls back to internal EventDetail modal (DEV-KHUSHI behaviour).
-   */
   const handleSelectEvent = (evt) => {
     if (onSelectEvent) {
       onSelectEvent(evt);
@@ -154,10 +150,6 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
     }
   };
 
-  /**
-   * Handle RSVP — delegates to onRegisterEvent prop (QA integration)
-   * or falls back to internal RSVPModal (DEV-KHUSHI behaviour).
-   */
   const handleRSVP = (evt) => {
     if (onRegisterEvent) {
       onRegisterEvent(evt);
@@ -172,7 +164,6 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
         <Typography variant="h4" component="h2" sx={{ fontWeight: 800, color: '#f8fafc', mb: 1 }}>
           {t('appTitle')}
         </Typography>
-        {/* component="p": this is a decorative subtitle, not a semantic heading (WCAG 1.3.1) */}
         <Typography variant="subtitle1" component="p" color="text.secondary">
           {t('appSubtitle')}
         </Typography>
@@ -240,7 +231,7 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
       ) : (
         <Grid container spacing={3}>
           {filteredEvents.map(event => (
-            <Grid item key={event._id} xs={12} sm={6} md={4}>
+            <Grid item key={event._id || event.title} xs={12} sm={6} md={4}>
               <EventCard
                 event={event}
                 activeTimezone={activeTimezone}

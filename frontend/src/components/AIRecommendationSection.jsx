@@ -16,10 +16,13 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchRecommendations();
-  }, [user.city]);
+    if (user?.city) {
+      fetchRecommendations();
+    }
+  }, [user?.city]);
 
   const fetchRecommendations = async () => {
+    if (!user || !user._id) return;
     setLoading(true);
     try {
       const res = await fetch('/api/ai/recommendations', {
@@ -28,13 +31,13 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
         body: JSON.stringify({
           userId: user._id,
           userCity: user.city,
-          userInterests: user.interests
+          userInterests: user.interests || []
         })
       });
 
       if (res.ok) {
         const json = await res.json();
-        setRecommendations(json.data || []);
+        setRecommendations(json.data || json.recommendations || []);
       }
     } catch (e) {
       console.warn('AI recommendation fetch error:', e.message);
@@ -43,7 +46,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
     }
   };
 
-  if (!recommendations || recommendations.length === 0) return null;
+  if (!user || !recommendations || recommendations.length === 0) return null;
 
   return (
     <Box
@@ -63,16 +66,17 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
         </Typography>
       </Box>
 
-      {/* #dde4ff on #312e81 = 4.57:1 — WCAG AA ✅ (was #c7d2fe = 3.12:1 ❌) */}
+      {/* #dde4ff on #312e81 = 4.57:1 — WCAG AA ✅ */}
       <Typography variant="body2" sx={{ color: '#dde4ff', mb: 3 }}>
-        {t('aiSubtitle')} (Target City: <strong>{user.city}</strong>)
+        {t('aiSubtitle')} (Target City: <strong>{user?.city || 'Local'}</strong>)
       </Typography>
 
       <Grid container spacing={2}>
         {recommendations.map(({ event, matchScore, recommendationReason }) => {
+          if (!event) return null;
           const titleText = lang === 'hi' && event.title_hi ? event.title_hi : event.title;
           const { formattedDate, formattedTime, timezoneLabel } = formatEventDateTime(
-            event.startDate,
+            event.startDate || event.date,
             event.timezone,
             activeTimezone,
             userLocale
@@ -87,13 +91,11 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
                       icon={<AutoAwesomeIcon style={{ fontSize: '0.875rem', color: '#4f46e5' }} aria-hidden="true" />}
                       label={`AI Match: ${matchScore}%`}
                       size="small"
-                      sx={{ fontWeight: 800, bgcolor: '#e0e7ff', color: '#3730a3' }} // #3730a3 on #e0e7ff = 6.88:1 ✅
+                      sx={{ fontWeight: 800, bgcolor: '#e0e7ff', color: '#3730a3' }}
                     />
-                    {/* 0.75rem min size; color label already has text — WCAG 1.4.1 ✅ */}
                     <Chip label={event.category?.toUpperCase()} size="small" color="primary" sx={{ fontSize: '0.75rem' }} />
                   </Box>
 
-                  {/* component="h2": keeps h1→h2 heading order within the page (WCAG 1.3.1) */}
                   <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1.2, mb: 1 }}>
                     {titleText}
                   </Typography>
@@ -113,11 +115,9 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
                   </Box>
 
                   <Box sx={{ p: 1, bgcolor: '#f8fafc', borderRadius: 1.5, border: '1px solid #e2e8f0' }}>
-                    {/* #3730a3 on #f8fafc = 4.52:1 — WCAG AA ✅ (was #4338ca = 3.45:1 ❌) */}
                     <Typography variant="caption" sx={{ color: '#3730a3', fontWeight: 700, display: 'block' }}>
                       Why Recommended:
                     </Typography>
-                    {/* #475569 on #f8fafc = 6.02:1 — WCAG AA ✅ (was #64748b = borderline fail) */}
                     <Typography variant="caption" sx={{ color: '#475569' }}>
                       {recommendationReason}
                     </Typography>
@@ -125,10 +125,10 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
                 </CardContent>
 
                 <Box sx={{ p: 1.5, pt: 0, display: 'flex', gap: 1 }}>
-                  <Button size="small" variant="outlined" fullWidth onClick={() => onSelectEvent(event)}>
+                  <Button size="small" variant="outlined" fullWidth onClick={() => onSelectEvent && onSelectEvent(event)}>
                     {t('detailsBtn')}
                   </Button>
-                  <Button size="small" variant="contained" fullWidth onClick={() => onRSVP(event)}>
+                  <Button size="small" variant="contained" fullWidth onClick={() => onRSVP && onRSVP(event)}>
                     {t('rsvpBtn')}
                   </Button>
                 </Box>

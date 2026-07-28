@@ -1,9 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSelector } from './LanguageSelector';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 export function Header({ activeTab, setActiveTab, onOpenRegisterModal }) {
   const { t } = useTranslation();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const mobileNavRef = useFocusTrap(isMobileMenuOpen, () => setIsMobileMenuOpen(false));
+
+  const handleNavClick = (tab) => {
+    setActiveTab(tab);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleRegisterClick = () => {
+    onOpenRegisterModal();
+    setIsMobileMenuOpen(false);
+  };
 
   return (
     <header className="global-header">
@@ -12,7 +26,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal }) {
         <button
           type="button"
           className="header-brand"
-          onClick={() => setActiveTab('events')}
+          onClick={() => handleNavClick('events')}
         >
           <div className="brand-logo-icon">✨</div>
           <div className="brand-titles">
@@ -21,12 +35,27 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal }) {
           </div>
         </button>
 
-        {/* Navigation Links */}
-        <nav className="header-nav" aria-label="Main Navigation">
+        {/* Mobile Menu Toggle Button */}
+        <button
+          type="button"
+          className="mobile-menu-toggle"
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          aria-expanded={isMobileMenuOpen}
+          aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        >
+          {isMobileMenuOpen ? '✕' : '☰'}
+        </button>
+
+        {/* Navigation Links & Mobile Nav with Focus Trap */}
+        <nav
+          className={`header-nav ${isMobileMenuOpen ? 'mobile-nav-open' : ''}`}
+          aria-label="Main Navigation"
+          ref={mobileNavRef}
+        >
           <button
             type="button"
             className={`nav-link ${activeTab === 'events' ? 'active' : ''}`}
-            onClick={() => setActiveTab('events')}
+            onClick={() => handleNavClick('events')}
           >
             {t('header.nav.events', 'Events')}
           </button>
@@ -34,7 +63,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal }) {
           <button
             type="button"
             className={`nav-link nav-link-checkin ${activeTab === 'checkin' ? 'active' : ''}`}
-            onClick={() => setActiveTab('checkin')}
+            onClick={() => handleNavClick('checkin')}
           >
             📋 {t('header.nav.checkin', 'Check-in Desk')}
           </button>
@@ -42,7 +71,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal }) {
           <button
             type="button"
             className="nav-link nav-link-highlight"
-            onClick={onOpenRegisterModal}
+            onClick={handleRegisterClick}
           >
             + {t('header.nav.register', 'Register Event')}
           </button>
@@ -50,7 +79,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal }) {
           <button
             type="button"
             className={`nav-link ${activeTab === 'fallbackDemo' ? 'active' : ''}`}
-            onClick={() => setActiveTab('fallbackDemo')}
+            onClick={() => handleNavClick('fallbackDemo')}
           >
             🧪 {t('header.nav.fallbackDemo', 'Fallback Demo')}
           </button>

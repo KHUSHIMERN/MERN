@@ -106,6 +106,14 @@ server.listen(0, async () => {
     const json8b = await res8b.json();
     assert(res8b.status === 400 && json8b.message.includes('must be a boolean'), 'PATCH /api/events/:id/publish non-boolean returns 400 Bad Request');
 
+    // 10. GET /api/events/search?q=bengaluru Dedicated Search Endpoint Test
+    const res10 = await fetch(`${baseUrl}/api/events/search?q=bengaluru`);
+    const json10 = await res10.json();
+    assert(
+      res10.status === 200 && json10.success && json10.count > 0 && json10.data.some(e => e.title.toLowerCase().includes('bengaluru') || (typeof e.location === 'object' ? e.location.placeName : String(e.location)).toLowerCase().includes('bengaluru')),
+      'GET /api/events/search?q=bengaluru returns 200 OK with expected matching events and total count'
+    );
+
     console.log(`\n🎉 Integration Test Results: ${passCount}/${testCount} Tests Passed Successfully!`);
   } catch (err) {
     console.error('\n❌ Integration Test Suite Failed:', err);

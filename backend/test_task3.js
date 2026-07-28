@@ -6,7 +6,7 @@ let passedTests = 0;
 const totalTests = 3;
 
 // Test 1: Create user with default null timezone (detected from browser)
-const user1 = new User({ name: 'Guest Resident', email: 'guest@example.com' });
+const user1 = new User({ name: 'Guest Resident', email: 'guest@example.com', password: 'password123' });
 const err1 = user1.validateSync();
 if (!err1 && user1.preferredTimezone === null) {
   passedTests++;
@@ -26,7 +26,7 @@ if (!err2) {
 }
 
 // Test 3: Set invalid timezone override
-const invalidUser = new User({ name: 'Test User', email: 'invalid@example.com', preferredTimezone: 'Invalid_Zone/XYZ' });
+const invalidUser = new User({ name: 'Test User', email: 'invalid@example.com', password: 'password123', preferredTimezone: 'Invalid_Zone/XYZ' });
 const err3 = invalidUser.validateSync();
 if (err3 && err3.errors.preferredTimezone) {
   passedTests++;

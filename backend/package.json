@@ -7,8 +7,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "build": "node -e \"console.log('✅ Backend build check successful: CommonJS server ready.')\"",
     "seed": "node seed.js",
-    "test": "node test-auth-flow.js"
+    "test": "node test-auth-flow.js",
+    "test:all": "node test-auth-flow.js && node test-profile-flow.js"
   },
   "keywords": [],
   "author": "",

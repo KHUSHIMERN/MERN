@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import RegisterForm from './components/RegisterForm';
 import LoginForm from './components/LoginForm';
+import AuthPage from './components/AuthPage';
 import ProfilePage from './components/ProfilePage';
 import AdminRoleRequests from './components/AdminRoleRequests';
 import I18nProvider from './components/I18nProvider';
@@ -19,6 +20,23 @@ import Footer from './components/Footer';
 import './App.css';
 
 const theme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#6366f1'
+    },
+    secondary: {
+      main: '#8b5cf6'
+    },
+    background: {
+      default: '#0b0f19',
+      paper: '#1e293b'
+    },
+    text: {
+      primary: '#f8fafc',
+      secondary: '#94a3b8'
+    }
+  },
   typography: {
     htmlFontSize: 16,
     fontFamily: '"Plus Jakarta Sans", "Roboto", "Helvetica", "Arial", sans-serif',
@@ -40,19 +58,12 @@ const theme = createTheme({
       styleOverrides: {
         html: {
           fontSize: '100%'
+        },
+        body: {
+          backgroundColor: '#0b0f19',
+          color: '#f8fafc'
         }
       }
-    }
-  },
-  palette: {
-    primary: {
-      main: '#1d4ed8'
-    },
-    secondary: {
-      main: '#374151'
-    },
-    background: {
-      default: '#f8fafc'
     }
   }
 });
@@ -60,7 +71,7 @@ const theme = createTheme({
 function AppContent() {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
-  const [view, setView] = useState('events'); // 'events' | 'register' | 'login' | 'profile' | 'admin-requests'
+  const [view, setView] = useState('register'); // 'register' | 'login' | 'events' | 'profile' | 'admin-requests'
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedEventForModal, setSelectedEventForModal] = useState(null);
@@ -102,16 +113,10 @@ function AppContent() {
 
       {/* Main View Area */}
       <main id="main-content" tabIndex={-1} className="main-content">
-        {view === 'register' && (
+        {(view === 'register' || view === 'login') && (
           <div className="auth-container-wrapper">
-            <RegisterForm onSwitchToLogin={() => setView('login')} />
-          </div>
-        )}
-
-        {view === 'login' && (
-          <div className="auth-container-wrapper">
-            <LoginForm
-              onSwitchToRegister={() => setView('register')}
+            <AuthPage
+              initialMode={view === 'register' ? 'register' : 'login'}
               onLoginSuccess={() => setView('events')}
             />
           </div>

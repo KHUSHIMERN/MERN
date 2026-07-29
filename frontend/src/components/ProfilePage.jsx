@@ -366,7 +366,7 @@ export default function ProfilePage({ onNavigateHome }) {
                     </h4>
                     {eventObj && (
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        📅 {eventObj.date} • 📍 {eventObj.location || eventObj.city} • 🏷️ {eventObj.category}
+                        📅 {eventObj.date || (eventObj.startDate ? new Date(eventObj.startDate).toLocaleDateString() : '')} • 📍 {(typeof eventObj.location === 'object' && eventObj.location !== null ? eventObj.location.placeName : eventObj.location) || eventObj.city} • 🏷️ {eventObj.category}
                       </p>
                     )}
                   </div>

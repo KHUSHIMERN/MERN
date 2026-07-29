@@ -460,26 +460,12 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
           </p>
         </div>
 
-        {/* Role Simulation Control */}
+        {/* Role Badge */}
         <div className="role-switcher-card">
-          <span className="role-label">Simulate Access Role:</span>
           <div className="role-buttons">
-            <button
-              type="button"
-              className={`role-btn ${userRole === 'organizer' ? 'active-organizer' : ''}`}
-              onClick={() => setUserRole('organizer')}
-              title="Full access to check-in tools and export"
-            >
+            <span className="role-btn active-organizer" style={{ cursor: 'default' }}>
               👑 Organizer (Authorized)
-            </button>
-            <button
-              type="button"
-              className={`role-btn ${userRole === 'attendee' ? 'active-attendee' : ''}`}
-              onClick={() => setUserRole('attendee')}
-              title="Test 403 Forbidden endpoint authorization"
-            >
-              👤 Attendee (Unauthorized Test)
-            </button>
+            </span>
           </div>
         </div>
       </div>

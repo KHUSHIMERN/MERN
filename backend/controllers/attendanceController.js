@@ -1,7 +1,7 @@
-import { isConnectedToMongoDB } from '../config/db.js';
-import Registration from '../models/Registration.js';
-import AuditLog from '../models/AuditLog.js';
-import { memoryRegistrations, memoryAuditLogs } from '../data/seedEvents.js';
+const { isConnectedToMongoDB } = require('../config/db');
+const Registration = require('../models/Registration');
+const AuditLog = require('../models/AuditLog');
+const { memoryRegistrations, memoryAuditLogs } = require('../data/seedEvents');
 
 /**
  * Helper to sync seed data to MongoDB if collection is empty
@@ -30,7 +30,7 @@ const ensureMongoSeeded = async (eventId) => {
  * GET /api/events/:id/attendance
  * Fetch attendance list with search, filtering (rsvpStatus, attendanceStatus), pagination & summary.
  */
-export const getEventAttendance = async (req, res, next) => {
+const getEventAttendance = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
     const {
@@ -179,7 +179,7 @@ export const getEventAttendance = async (req, res, next) => {
  * Update single or bulk attendance status (statusPresent: true/false).
  * Persists checkInAt timestamp, markedBy, and records audit logs.
  */
-export const updateEventAttendance = async (req, res, next) => {
+const updateEventAttendance = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
     const { registrationId, statusPresent, updates, registrationIds } = req.body;
@@ -319,7 +319,7 @@ export const updateEventAttendance = async (req, res, next) => {
  * GET /api/events/:id/attendance/export
  * Streams CSV file of attendance data for an event.
  */
-export const exportEventAttendance = async (req, res, next) => {
+const exportEventAttendance = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
     const { search = '', rsvpStatus = 'all', attendanceStatus = 'all' } = req.query;
@@ -434,7 +434,7 @@ export const exportEventAttendance = async (req, res, next) => {
  * GET /api/events/:id/attendance/audit-logs
  * Fetch audit logs for an event.
  */
-export const getAttendanceAuditLogs = async (req, res, next) => {
+const getAttendanceAuditLogs = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
 
@@ -448,4 +448,11 @@ export const getAttendanceAuditLogs = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+module.exports = {
+  getEventAttendance,
+  updateEventAttendance,
+  exportEventAttendance,
+  getAttendanceAuditLogs
 };

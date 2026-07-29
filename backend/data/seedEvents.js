@@ -1,4 +1,4 @@
-export const INITIAL_EVENTS = [
+const INITIAL_EVENTS = [
   {
     id: 'evt-1',
     itemKey: 'evt1',
@@ -201,7 +201,7 @@ export const INITIAL_EVENTS = [
   }
 ];
 
-export const memoryRegistrations = [
+const memoryRegistrations = [
   {
     id: 'reg-101',
     eventId: 'evt-1',
@@ -354,7 +354,7 @@ export const memoryRegistrations = [
   }
 ];
 
-export const memoryAuditLogs = [
+const memoryAuditLogs = [
   {
     id: 'log-1',
     action: 'ATTENDANCE_CHECKIN',
@@ -382,3 +382,5 @@ export const memoryAuditLogs = [
     timestamp: '2026-07-27T09:45:12.000Z'
   }
 ];
+
+module.exports = { INITIAL_EVENTS, memoryRegistrations, memoryAuditLogs };

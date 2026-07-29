@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User, Mail, Lock, Shield, UserCheck, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export default function RegisterForm({ onSwitchToLogin }) {
+export default function RegisterForm({ onSwitchToLogin, hideCardWrapper = false }) {
   const { register } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
@@ -100,8 +100,8 @@ export default function RegisterForm({ onSwitchToLogin }) {
     }
   };
 
-  return (
-    <div className="auth-card">
+  const content = (
+    <>
       <div className="auth-header">
         <span className="auth-badge">
           <UserCheck size={14} /> Tier 2-4 Community Hub
@@ -264,6 +264,13 @@ export default function RegisterForm({ onSwitchToLogin }) {
           Sign In
         </button>
       </div>
-    </div>
+    </>
   );
+
+  if (hideCardWrapper) {
+    return <div className="auth-form-inner">{content}</div>;
+  }
+
+  return <div className="auth-card">{content}</div>;
 }
+

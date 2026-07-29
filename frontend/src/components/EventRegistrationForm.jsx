@@ -127,7 +127,7 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
             </h2>
             {selectedEvent && (
               <p className="modal-subtitle">
-                {selectedEvent.title} ({selectedEvent.location || selectedEvent.city})
+                {selectedEvent.title} ({(typeof selectedEvent.location === 'object' && selectedEvent.location !== null ? selectedEvent.location.placeName : selectedEvent.location) || selectedEvent.city})
               </p>
             )}
           </div>

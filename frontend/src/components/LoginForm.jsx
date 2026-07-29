@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, LogIn, AlertCircle, CheckCircle, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export default function LoginForm({ onSwitchToRegister, onLoginSuccess }) {
+export default function LoginForm({ onSwitchToRegister, onLoginSuccess, hideCardWrapper = false }) {
   const { login, resendVerification } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
@@ -72,8 +72,8 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess }) {
     }
   };
 
-  return (
-    <div className="auth-card">
+  const content = (
+    <>
       <div className="auth-header">
         <h1 className="auth-title">Welcome Back</h1>
         <p className="auth-subtitle">Sign in to your Community Portal account</p>
@@ -165,6 +165,13 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess }) {
           Register Now
         </button>
       </div>
-    </div>
+    </>
   );
+
+  if (hideCardWrapper) {
+    return <div className="auth-form-inner">{content}</div>;
+  }
+
+  return <div className="auth-card">{content}</div>;
 }
+

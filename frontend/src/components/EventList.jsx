@@ -45,7 +45,8 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
       }
 
       const eventsRes = await axios.get('/api/events', { params });
-      setEvents(eventsRes.data.events || []);
+      const fetchedEvents = eventsRes.data.events || eventsRes.data.data || (Array.isArray(eventsRes.data) ? eventsRes.data : []);
+      setEvents(fetchedEvents);
 
       // 2. Fetch AI Recommendations
       try {
@@ -262,11 +263,17 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
                   <div className="card-meta">
                     <div className="meta-item">
                       <span className="meta-label">📅 Date:</span>
-                      <span className="meta-value">{evt.date} {evt.time ? `(${evt.time})` : ''}</span>
+                      <span className="meta-value">
+                        {evt.date || (evt.startDate ? new Date(evt.startDate).toLocaleDateString() : 'Upcoming')} {evt.time ? `(${evt.time})` : ''}
+                      </span>
                     </div>
                     <div className="meta-item">
                       <span className="meta-label">📍 Location:</span>
-                      <span className="meta-value">{evt.location} ({evt.city})</span>
+                      <span className="meta-value">
+                        {typeof evt.location === 'object' && evt.location !== null
+                          ? (evt.location.placeName || 'Online')
+                          : (evt.location || 'Online')} {evt.city ? `(${evt.city})` : ''}
+                      </span>
                     </div>
                     <div className="meta-item">
                       <span className="meta-label">🎟️</span>

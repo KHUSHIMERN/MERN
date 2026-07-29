@@ -118,7 +118,7 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
       const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
-        setEvents(json.data || []);
+        setEvents(json.events || json.data || []);
       } else {
         setEvents(mockFallbackEvents);
       }
@@ -241,7 +241,7 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
       ) : (
         <Grid container spacing={3}>
           {filteredEvents.map(event => (
-            <Grid item key={event._id} xs={12} sm={6} md={4}>
+            <Grid item key={event._id || event.title} xs={12} sm={6} md={4}>
               <EventCard
                 event={event}
                 activeTimezone={activeTimezone}

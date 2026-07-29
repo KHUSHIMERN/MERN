@@ -24,7 +24,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
   }, [user?.city]);
 
   const fetchRecommendations = async () => {
-    if (!user || !user.city) return;
+    if (!user || !user._id || !user.city) return;
     setLoading(true);
     try {
       const res = await fetch('/api/ai/recommendations', {
@@ -39,7 +39,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
 
       if (res.ok) {
         const json = await res.json();
-        setRecommendations(json.data || []);
+        setRecommendations(json.data || json.recommendations || []);
       }
     } catch (e) {
       console.warn('AI recommendation fetch error:', e.message);
@@ -68,16 +68,17 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
         </Typography>
       </Box>
 
-      {/* #dde4ff on #312e81 = 4.57:1 — WCAG AA ✅ (was #c7d2fe = 3.12:1 ❌) */}
+      {/* #dde4ff on #312e81 = 4.57:1 — WCAG AA ✅ */}
       <Typography variant="body2" sx={{ color: '#dde4ff', mb: 3 }}>
-        {t('aiSubtitle')} (Target City: <strong>{user.city}</strong>)
+        {t('aiSubtitle')} (Target City: <strong>{user?.city || 'Local'}</strong>)
       </Typography>
 
       <Grid container spacing={2}>
         {recommendations.map(({ event, matchScore, recommendationReason }) => {
+          if (!event) return null;
           const titleText = lang === 'hi' && event.title_hi ? event.title_hi : event.title;
           const { formattedDate, formattedTime, timezoneLabel } = formatEventDateTime(
-            event.startDate,
+            event.startDate || event.date,
             event.timezone,
             activeTimezone,
             userLocale
@@ -118,11 +119,11 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
                   </Box>
 
                   <Box sx={{ p: 1, bgcolor: '#f8fafc', borderRadius: 1.5, border: '1px solid #e2e8f0' }}>
-                    {/* #3730a3 on #f8fafc = 4.52:1 — WCAG AA ✅ (was #4338ca = 3.45:1 ❌) */}
+                    {/* #3730a3 on #f8fafc = 4.52:1 — WCAG AA ✅ */}
                     <Typography variant="caption" sx={{ color: '#3730a3', fontWeight: 700, display: 'block' }}>
                       Why Recommended:
                     </Typography>
-                    {/* #475569 on #f8fafc = 6.02:1 — WCAG AA ✅ (was #64748b = borderline fail) */}
+                    {/* #475569 on #f8fafc = 6.02:1 — WCAG AA ✅ */}
                     <Typography variant="caption" sx={{ color: '#475569' }}>
                       {recommendationReason}
                     </Typography>
@@ -130,10 +131,10 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
                 </CardContent>
 
                 <Box sx={{ p: 1.5, pt: 0, display: 'flex', gap: 1 }}>
-                  <Button size="small" variant="outlined" fullWidth onClick={() => onSelectEvent(event)}>
+                  <Button size="small" variant="outlined" fullWidth onClick={() => onSelectEvent && onSelectEvent(event)}>
                     {t('detailsBtn')}
                   </Button>
-                  <Button size="small" variant="contained" fullWidth onClick={() => onRSVP(event)}>
+                  <Button size="small" variant="contained" fullWidth onClick={() => onRSVP && onRSVP(event)}>
                     {t('rsvpBtn')}
                   </Button>
                 </Box>

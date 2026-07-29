@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { TimezoneProvider } from './context/TimezoneContext';
 import { AuthProvider } from './context/AuthContext';
@@ -12,6 +13,7 @@ import I18nProvider from './components/I18nProvider';
 import Header from './components/Header';
 import HeroSection from './components/HeroSection';
 import EventList from './components/EventList';
+import OrganizerCheckIn from './components/OrganizerCheckIn';
 import EventRegistrationForm from './components/EventRegistrationForm';
 import FallbackTestDemo from './components/FallbackTestDemo';
 import Footer from './components/Footer';
@@ -65,6 +67,7 @@ const theme = createTheme({
  * Wrapped by I18nProvider (react-i18next) and MUI ThemeProvider.
  */
 function AppContent() {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [view, setView] = useState('events'); // 'events' | 'register' | 'login' | 'profile' | 'admin-requests'
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'fallbackDemo'
@@ -90,6 +93,10 @@ function AppContent() {
 
   return (
     <div className="app-layout">
+      <a href="#main-content" className="skip-to-content-link">
+        {t('app.skipToContent', 'Skip to main content')}
+      </a>
+
       {/* Global Header with Brand, Auth, Language Selector, Timezone & Role Controls */}
       <Header
         activeTab={activeTab}
@@ -102,7 +109,7 @@ function AppContent() {
       />
 
       {/* Main View Area */}
-      <main className="main-content">
+      <main id="main-content" tabIndex={-1} className="main-content">
         {view === 'register' && (
           <div className="auth-container-wrapper">
             <RegisterForm onSwitchToLogin={() => setView('login')} />
@@ -141,6 +148,12 @@ function AppContent() {
             )}
 
             {activeTab === 'fallbackDemo' && <FallbackTestDemo />}
+
+            {activeTab === 'checkin' && (
+              <OrganizerCheckIn
+                onSelectEventForRegister={(evt) => handleOpenRegisterModal(evt)}
+              />
+            )}
           </>
         )}
       </main>

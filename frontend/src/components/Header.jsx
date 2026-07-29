@@ -103,6 +103,19 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
               🧪 {t('header.nav.fallbackDemo', 'Fallback Demo')}
             </Button>
 
+            <Button
+              sx={{
+                color: view === 'events' && activeTab === 'checkin' ? '#38bdf8' : '#e2e8f0',
+                textTransform: 'none',
+              }}
+              onClick={() => {
+                if (setView) setView('events');
+                if (setActiveTab) setActiveTab('checkin');
+              }}
+            >
+              {t('header.nav.checkin', 'Check-in Desk')}
+            </Button>
+
             {/* Language Switcher */}
             <Button
               onClick={handleLangMenuOpen}

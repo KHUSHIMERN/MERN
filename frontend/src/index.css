@@ -357,6 +357,30 @@ button {
   border-width: 0;
 }
 
+.skip-to-content-link {
+  position: fixed;
+  top: -120px;
+  left: 20px;
+  z-index: 10000;
+  padding: 12px 24px;
+  background-color: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+}
+
+.skip-to-content-link:focus,
+.skip-to-content-link:focus-visible {
+  top: 20px;
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+main:focus {
+  outline: none;
+}
+
 /* i18n loading overlay fallback */
 .i18n-loading {
   display: flex;

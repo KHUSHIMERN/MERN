@@ -123,7 +123,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
                 {t('locationLabel')}
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {event.location}
+                {typeof event.location === 'object' && event.location !== null ? (event.location.placeName || 'Online') : (event.location || 'Online')}
               </Typography>
             </Box>
           </Box>

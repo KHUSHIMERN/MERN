@@ -24,7 +24,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
   }, [user?.city]);
 
   const fetchRecommendations = async () => {
-    if (!user || !user._id || !user.city) return;
+    if (!user || !user.city) return;
     setLoading(true);
     try {
       const res = await fetch('/api/ai/recommendations', {
@@ -93,13 +93,11 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
                       icon={<AutoAwesomeIcon style={{ fontSize: '0.875rem', color: '#4f46e5' }} aria-hidden="true" />}
                       label={`AI Match: ${matchScore}%`}
                       size="small"
-                      sx={{ fontWeight: 800, bgcolor: '#e0e7ff', color: '#3730a3' }} // #3730a3 on #e0e7ff = 6.88:1 ✅
+                      sx={{ fontWeight: 800, bgcolor: '#e0e7ff', color: '#3730a3' }}
                     />
-                    {/* 0.75rem min size; color label already has text — WCAG 1.4.1 ✅ */}
                     <Chip label={event.category?.toUpperCase()} size="small" color="primary" sx={{ fontSize: '0.75rem' }} />
                   </Box>
 
-                  {/* component="h2": keeps h1→h2 heading order within the page (WCAG 1.3.1) */}
                   <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 800, color: '#0f172a', lineHeight: 1.2, mb: 1 }}>
                     {titleText}
                   </Typography>
@@ -107,7 +105,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: '#475569', mb: 1 }}>
                     <LocationOnIcon fontSize="small" aria-hidden="true" />
                     <Typography variant="caption" noWrap sx={{ fontWeight: 600 }}>
-                      {event.location}
+                      {typeof event.location === 'object' && event.location !== null ? (event.location.placeName || 'Online') : (event.location || 'Online')}
                     </Typography>
                   </Box>
 
@@ -119,11 +117,9 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
                   </Box>
 
                   <Box sx={{ p: 1, bgcolor: '#f8fafc', borderRadius: 1.5, border: '1px solid #e2e8f0' }}>
-                    {/* #3730a3 on #f8fafc = 4.52:1 — WCAG AA ✅ */}
                     <Typography variant="caption" sx={{ color: '#3730a3', fontWeight: 700, display: 'block' }}>
                       Why Recommended:
                     </Typography>
-                    {/* #475569 on #f8fafc = 6.02:1 — WCAG AA ✅ */}
                     <Typography variant="caption" sx={{ color: '#475569' }}>
                       {recommendationReason}
                     </Typography>

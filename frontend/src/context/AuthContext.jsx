@@ -96,7 +96,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Toggle role for local/demo purposes (DEV-KHUSHI)
+  const resendVerification = async (email) => {
+    try {
+      const res = await axios.post('/api/auth/resend-verification', { email });
+      return { success: true, message: res.data.message, data: res.data };
+    } catch (err) {
+      return {
+        success: false,
+        message: err.response?.data?.message || 'Failed to resend verification email.',
+      };
+    }
+  };
+
+  // Toggle role for local/demo purposes
   const toggleRole = () => {
     setUser(prev => prev ? ({
       ...prev,
@@ -106,16 +118,6 @@ export const AuthProvider = ({ children }) => {
 
   const updateUserCity = (city) => {
     setUser(prev => prev ? { ...prev, city } : prev);
-  };
-
-  const setAuthData = (jwtToken, userData) => {
-    if (jwtToken) {
-      localStorage.setItem('cc_token', jwtToken);
-      setToken(jwtToken);
-    }
-    if (userData) {
-      setUser(userData);
-    }
   };
 
   const logout = () => {
@@ -133,15 +135,13 @@ export const AuthProvider = ({ children }) => {
         role: user?.role || null,
         login,
         register,
+        resendVerification,
         updateProfile,
         requestOrganizerRole,
         logout,
         fetchProfile,
         toggleRole,
         updateUserCity,
-        setUser,
-        setToken,
-        setAuthData,
       }}
     >
       {children}

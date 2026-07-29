@@ -8,3 +8,6 @@
 *.css  text eol=lf
 *.html text eol=lf
 *.md   text eol=lf
+
+# Generated bundles may preserve the line endings committed by their source branch.
+frontend/dist/** -text

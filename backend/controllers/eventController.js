@@ -1,21 +1,48 @@
-import mongoose from 'mongoose';
-import { isConnectedToMongoDB } from '../config/db.js';
-import Event from '../models/Event.js';
-import { INITIAL_EVENTS } from '../data/seedEvents.js';
+const mongoose = require('mongoose');
+const { isConnectedToMongoDB } = require('../config/db');
+const Event = require('../models/Event');
+const { INITIAL_EVENTS } = require('../data/seedEvents');
+
+const getCategoryMatchPatterns = (cat) => {
+  if (!cat || String(cat).toLowerCase() === 'all') return [];
+  const c = String(cat).toLowerCase();
+  if (c.includes('career') || c.includes('job') || c.includes('tech')) {
+    return ['tech', 'career', 'job', 'Career & Jobs', 'Tech & AI'];
+  }
+  if (c.includes('workshop') || c.includes('skill')) {
+    return ['workshop', 'skill', 'Skill Workshops', 'Workshops'];
+  }
+  if (c.includes('culture') || c.includes('cultural') || c.includes('festival')) {
+    return ['culture', 'cultural', 'festival', 'Cultural Festivals', 'Culture & Heritage'];
+  }
+  if (c.includes('charity') || c.includes('civic') || c.includes('community')) {
+    return ['charity', 'civic', 'community', 'Civic & Community', 'Charity & Volunteer'];
+  }
+  if (c.includes('health') || c.includes('wellness') || c.includes('sport') || c.includes('fitness')) {
+    return ['health', 'wellness', 'sports', 'marathon', 'fitness', 'Health & Wellness', 'charity'];
+  }
+  return [cat];
+};
 
 /**
  * GET /api/events
  * Fetch all events with category, tags, date range, published, and search filter support.
  */
-export const getEvents = async (req, res, next) => {
+const getEvents = async (req, res, next) => {
   try {
     const { category, tags, published, startDate, endDate, search } = req.query;
 
     if (isConnectedToMongoDB) {
       const query = {};
 
-      if (category && category !== 'all') {
-        query.category = category;
+      if (category && String(category).toLowerCase() !== 'all') {
+        const patterns = getCategoryMatchPatterns(category);
+        const regexList = patterns.map((p) => new RegExp(p, 'i'));
+        query.$or = [
+          { category: { $in: regexList } },
+          { title: { $in: regexList } },
+          { tags: { $in: regexList } }
+        ];
       }
 
       if (published !== undefined && published !== 'all') {
@@ -42,22 +69,37 @@ export const getEvents = async (req, res, next) => {
 
       if (search && search.trim()) {
         const regex = new RegExp(search.trim(), 'i');
-        query.$or = [
+        const searchCond = [
           { title: regex },
           { description: regex },
           { 'location.placeName': regex }
         ];
+        if (query.$or) {
+          query.$and = [{ $or: query.$or }, { $or: searchCond }];
+          delete query.$or;
+        } else {
+          query.$or = searchCond;
+        }
       }
 
       const events = await Event.find(query).sort({ startDate: 1, createdAt: -1 });
-      return res.json({ success: true, count: events.length, data: events });
+      return res.json({ success: true, count: events.length, data: events, events });
     }
 
     // In-memory fallback store mode
     let results = [...INITIAL_EVENTS];
 
-    if (category && category !== 'all') {
-      results = results.filter((e) => e.category === category);
+    if (category && String(category).toLowerCase() !== 'all') {
+      const patterns = getCategoryMatchPatterns(category);
+      const regexes = patterns.map((p) => new RegExp(p, 'i'));
+      results = results.filter((e) =>
+        regexes.some(
+          (r) =>
+            r.test(e.category) ||
+            r.test(e.title) ||
+            (Array.isArray(e.tags) && e.tags.some((t) => r.test(t)))
+        )
+      );
     }
 
     if (published !== undefined && published !== 'all') {
@@ -102,7 +144,7 @@ export const getEvents = async (req, res, next) => {
       });
     }
 
-    return res.json({ success: true, count: results.length, data: results });
+    return res.json({ success: true, count: results.length, data: results, events: results });
   } catch (error) {
     next(error);
   }
@@ -112,7 +154,7 @@ export const getEvents = async (req, res, next) => {
  * GET /api/events/search?q=<query>
  * Dedicated keyword search endpoint matching title, description, or tags (case-insensitive).
  */
-export const searchEvents = async (req, res, next) => {
+const searchEvents = async (req, res, next) => {
   try {
     const q = req.query.q || req.query.search || req.query.query || '';
     const queryTerm = String(q).trim();
@@ -164,7 +206,7 @@ export const searchEvents = async (req, res, next) => {
  * GET /api/events/:id
  * Fetch single event by ID or itemKey.
  */
-export const getEventById = async (req, res, next) => {
+const getEventById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -197,7 +239,7 @@ export const getEventById = async (req, res, next) => {
  * POST /api/events
  * Create a new event with input validation (required fields & date range sanity).
  */
-export const createEvent = async (req, res, next) => {
+const createEvent = async (req, res, next) => {
   try {
     const {
       title,
@@ -313,7 +355,7 @@ export const createEvent = async (req, res, next) => {
  * PUT /api/events/:id
  * Full update of an event by ID with validation.
  */
-export const updateEvent = async (req, res, next) => {
+const updateEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
     const updatePayload = { ...req.body };
@@ -388,7 +430,7 @@ export const updateEvent = async (req, res, next) => {
  * DELETE /api/events/:id
  * Delete event by ID.
  */
-export const deleteEvent = async (req, res, next) => {
+const deleteEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -426,7 +468,7 @@ export const deleteEvent = async (req, res, next) => {
  * Change published boolean status and update updatedAt.
  * Ensures ONLY the published field (and updatedAt timestamp) is mutated.
  */
-export const publishEvent = async (req, res, next) => {
+const publishEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { published, isPublished } = req.body || {};
@@ -502,127 +544,7 @@ export const publishEvent = async (req, res, next) => {
     next(error);
   }
 };
-const mongoose = require('mongoose');
-const Event = require('../models/Event');
-const User = require('../models/User');
-
-// @desc    Get all events
-// @route   GET /api/events
-exports.getEvents = async (req, res) => {
-  try {
-    const { category, search, city } = req.query;
-    let query = {};
-
-    if (category && category !== 'all') {
-      const catLower = category.toLowerCase().trim();
-      const categoryPatterns = {
-        career: /career/i,
-        workshop: /(workshop|skill)/i,
-        health: /health/i,
-        culture: /(culture|festival|art)/i,
-        civic: /civic/i,
-        general: /general/i,
-      };
-      if (categoryPatterns[catLower]) {
-        query.category = categoryPatterns[catLower];
-      } else {
-        query.category = { $regex: category, $options: 'i' };
-      }
-    }
-
-    if (city && city !== 'all') {
-      query.city = city;
-    }
-
-    if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { location: { $regex: search, $options: 'i' } },
-        { city: { $regex: search, $options: 'i' } }
-      ];
-    }
-
-    const events = await Event.find(query).sort({ startDate: 1 });
-    res.json({ success: true, count: events.length, data: events });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// @desc    Get single event by ID
-// @route   GET /api/events/:id
-exports.getEventById = async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Event not found' });
-    }
-    res.json({ success: true, data: event });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// @desc    Create new event (Organizer feature)
-// @route   POST /api/events
-exports.createEvent = async (req, res) => {
-  try {
-    const {
-      title,
-      title_hi,
-      description,
-      description_hi,
-      category,
-      location,
-      city,
-      startDate,
-      endDate,
-      timezone,
-      organizer,
-      capacity,
-      tags,
-      imageUrl,
-      imageUrlAlt
-    } = req.body;
-
-    const eventTimezone = timezone || 'Asia/Kolkata';
-    try {
-      Intl.DateTimeFormat(undefined, { timeZone: eventTimezone });
-    } catch (e) {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid IANA timezone identifier: '${eventTimezone}'`
-      });
-    }
-
-    const event = await Event.create({
-      title,
-      title_hi,
-      description,
-      description_hi,
-      category: category || 'general',
-      location,
-      city: city || 'Jaipur',
-      startDate,
-      endDate,
-      timezone: eventTimezone,
-      organizer: organizer || 'Community Organizer',
-      capacity: capacity || 100,
-      tags: tags || [],
-      imageUrl: imageUrl || '',
-      imageUrlAlt: imageUrlAlt || (title ? `Banner image for ${title}` : 'Event banner image')
-    });
-
-    res.status(201).json({ success: true, data: event });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
-
-// @desc    RSVP for an event (Attendee feature)
-// @route   POST /api/events/:id/rsvp
-exports.rsvpEvent = async (req, res) => {
+const rsvpEvent = async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
     if (!event) {
@@ -646,54 +568,9 @@ exports.rsvpEvent = async (req, res) => {
   }
 };
 
-// @desc    Update event
-// @route   PUT /api/events/:id
-exports.updateEvent = async (req, res) => {
-  try {
-    const { timezone } = req.body;
-    if (timezone) {
-      try {
-        Intl.DateTimeFormat(undefined, { timeZone: timezone });
-      } catch (e) {
-        return res.status(400).json({
-          success: false,
-          message: `Invalid IANA timezone identifier: '${timezone}'`
-        });
-      }
-    }
-
-    const event = await Event.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    });
-
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Event not found' });
-    }
-
-    res.json({ success: true, data: event });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
-
-// @desc    Delete event
-// @route   DELETE /api/events/:id
-exports.deleteEvent = async (req, res) => {
-  try {
-    const event = await Event.findByIdAndDelete(req.params.id);
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Event not found' });
-    }
-    res.json({ success: true, message: 'Event removed' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
 // @desc    Get attendance metrics for an organizer (Task 1 of Story 3)
 // @route   GET /organizer/:id/attendance-metrics
-exports.getOrganizerAttendanceMetrics = async (req, res) => {
+const getOrganizerAttendanceMetrics = async (req, res) => {
   try {
     const { id } = req.params;
     const limitVal = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 6;
@@ -816,7 +693,7 @@ exports.getOrganizerAttendanceMetrics = async (req, res) => {
 
 // @desc    Export attendance metrics as CSV for an organizer (Task 3 of Story 3)
 // @route   GET /organizer/:id/attendance-metrics/export
-exports.exportOrganizerAttendanceMetricsCSV = async (req, res) => {
+const exportOrganizerAttendanceMetricsCSV = async (req, res) => {
   try {
     const { id } = req.params;
     const limitVal = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 0;
@@ -968,6 +845,19 @@ exports.exportOrganizerAttendanceMetricsCSV = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
+};
+
+module.exports = {
+  getEvents,
+  searchEvents,
+  getEventById,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  publishEvent,
+  rsvpEvent,
+  getOrganizerAttendanceMetrics,
+  exportOrganizerAttendanceMetricsCSV
 };
 
 

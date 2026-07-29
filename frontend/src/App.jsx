@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { TimezoneProvider } from './context/TimezoneContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
-import { useAuth } from './context/AuthContext';
 import RegisterForm from './components/RegisterForm';
 import LoginForm from './components/LoginForm';
+import AuthPage from './components/AuthPage';
 import ProfilePage from './components/ProfilePage';
 import AdminRoleRequests from './components/AdminRoleRequests';
 import I18nProvider from './components/I18nProvider';
@@ -19,10 +19,25 @@ import FallbackTestDemo from './components/FallbackTestDemo';
 import Footer from './components/Footer';
 import './App.css';
 
-// MUI Theme — rem-based typography so all sizes scale with browser zoom (WCAG 1.4.4)
 const theme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#6366f1'
+    },
+    secondary: {
+      main: '#8b5cf6'
+    },
+    background: {
+      default: '#0b0f19',
+      paper: '#1e293b'
+    },
+    text: {
+      primary: '#f8fafc',
+      secondary: '#94a3b8'
+    }
+  },
   typography: {
-    // Base font size set in rem units so all elements scale dynamically with browser zoom (WCAG 1.4.4)
     htmlFontSize: 16,
     fontFamily: '"Plus Jakarta Sans", "Roboto", "Helvetica", "Arial", sans-serif',
     h1: { fontSize: 'var(--font-size-4xl, 2.25rem)' },
@@ -42,35 +57,22 @@ const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         html: {
-          fontSize: '100%' // Allows root font-size to scale seamlessly with browser zoom & font settings
+          fontSize: '100%'
+        },
+        body: {
+          backgroundColor: '#0b0f19',
+          color: '#f8fafc'
         }
       }
-    }
-  },
-  palette: {
-    // primary.main: #1d4ed8 — contrast 5.11:1 on white (WCAG AA ✅)
-    primary: {
-      main: '#1d4ed8'
-    },
-    // secondary.main: #374151 — contrast 7.23:1 on white (WCAG AA ✅)
-    secondary: {
-      main: '#374151'
-    },
-    background: {
-      default: '#f8fafc'
     }
   }
 });
 
-/**
- * AppContent — inner layout component with all page sections.
- * Wrapped by I18nProvider (react-i18next) and MUI ThemeProvider.
- */
 function AppContent() {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
-  const [view, setView] = useState('events'); // 'events' | 'register' | 'login' | 'profile' | 'admin-requests'
-  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'fallbackDemo'
+  const [view, setView] = useState('register'); // 'register' | 'login' | 'events' | 'profile' | 'admin-requests'
+  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedEventForModal, setSelectedEventForModal] = useState(null);
 
@@ -93,11 +95,12 @@ function AppContent() {
 
   return (
     <div className="app-layout">
+      {/* Skip-to-Content Link for Keyboard Accessibility */}
       <a href="#main-content" className="skip-to-content-link">
         {t('app.skipToContent', 'Skip to main content')}
       </a>
 
-      {/* Global Header with Brand, Auth, Language Selector, Timezone & Role Controls */}
+      {/* Global Header */}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -110,23 +113,17 @@ function AppContent() {
 
       {/* Main View Area */}
       <main id="main-content" tabIndex={-1} className="main-content">
-        {view === 'register' && (
+        {(view === 'register' || view === 'login') && (
           <div className="auth-container-wrapper">
-            <RegisterForm onSwitchToLogin={() => setView('login')} />
-          </div>
-        )}
-
-        {view === 'login' && (
-          <div className="auth-container-wrapper">
-            <LoginForm
-              onSwitchToRegister={() => setView('register')}
+            <AuthPage
+              initialMode={view === 'register' ? 'register' : 'login'}
               onLoginSuccess={() => setView('events')}
             />
           </div>
         )}
 
         {view === 'profile' && (
-          <ProfilePage onNavigateHome={() => setView(user ? 'profile' : 'login')} />
+          <ProfilePage onNavigateHome={() => setView('events')} />
         )}
 
         {view === 'admin-requests' && (
@@ -147,13 +144,13 @@ function AppContent() {
               />
             )}
 
-            {activeTab === 'fallbackDemo' && <FallbackTestDemo />}
-
             {activeTab === 'checkin' && (
               <OrganizerCheckIn
                 onSelectEventForRegister={(evt) => handleOpenRegisterModal(evt)}
               />
             )}
+
+            {activeTab === 'fallbackDemo' && <FallbackTestDemo />}
           </>
         )}
       </main>
@@ -163,6 +160,7 @@ function AppContent() {
         <EventRegistrationForm
           selectedEvent={selectedEventForModal}
           onClose={handleCloseRegisterModal}
+          onNavigateProfile={() => setView('profile')}
         />
       )}
 
@@ -172,10 +170,6 @@ function AppContent() {
   );
 }
 
-/**
- * App — root component.
- * Provides: I18nProvider (react-i18next) → MUI ThemeProvider → Context providers → AppContent
- */
 export function App() {
   return (
     <I18nProvider>

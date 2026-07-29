@@ -1,12 +1,12 @@
-import { isConnectedToMongoDB } from '../config/db.js';
-import Registration from '../models/Registration.js';
-import { memoryRegistrations } from '../data/seedEvents.js';
+const { isConnectedToMongoDB } = require('../config/db');
+const Registration = require('../models/Registration');
+const { memoryRegistrations } = require('../data/seedEvents');
 
 /**
  * POST /api/registrations
  * Submit a registration for an event.
  */
-export const registerForEvent = async (req, res, next) => {
+const registerForEvent = async (req, res, next) => {
   try {
     const { eventId, fullName, email, ticketType, attendees, notes, agreeTerms } = req.body;
 
@@ -54,7 +54,7 @@ export const registerForEvent = async (req, res, next) => {
  * GET /api/registrations
  * Retrieve all registrations.
  */
-export const getRegistrations = async (req, res, next) => {
+const getRegistrations = async (req, res, next) => {
   try {
     if (isConnectedToMongoDB) {
       const records = await Registration.find({}).sort({ createdAt: -1 });
@@ -65,4 +65,9 @@ export const getRegistrations = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+module.exports = {
+  registerForEvent,
+  getRegistrations
 };

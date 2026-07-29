@@ -160,7 +160,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary' }}>
           <LocationOnIcon fontSize="small" color="action" aria-hidden="true" />
           <Typography variant="body2" noWrap>
-            {event.location}
+            {typeof event.location === 'object' && event.location !== null ? (event.location.placeName || 'Online') : (event.location || 'Online')}
           </Typography>
         </Box>
 

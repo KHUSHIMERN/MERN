@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import LANGUAGES from '../constants/languages';
 
-export function LanguageSelector({ variant = 'both' }) {
+export function LanguageSelector({ variant = 'dropdown' }) {
   const { i18n, t } = useTranslation();
 
   const currentLanguage = (i18n.language || 'en').slice(0, 2);
@@ -69,7 +69,7 @@ export function LanguageSelector({ variant = 'both' }) {
             >
               {LANGUAGES.map((lang) => (
                 <option key={lang.code} value={lang.code}>
-                  {lang.flag} {lang.nativeName} ({lang.name})
+                  {lang.name}
                 </option>
               ))}
             </select>

@@ -1,9 +1,4 @@
-/**
- * Role-Based Access Control Middleware for Organizer Endpoints
- * Verifies that the requesting user has the 'organizer' role.
- * Role can be supplied via header 'x-user-role', query param 'role', or request body 'role'.
- */
-export const requireOrganizer = (req, res, next) => {
+const requireOrganizer = (req, res, next) => {
   const userRole =
     req.headers['x-user-role'] ||
     req.headers['user-role'] ||
@@ -18,7 +13,6 @@ export const requireOrganizer = (req, res, next) => {
     });
   }
 
-  // Extract organizer identity details for audit logging
   const performerName =
     req.headers['x-user-name'] ||
     (req.body && req.body.performerName) ||
@@ -38,4 +32,4 @@ export const requireOrganizer = (req, res, next) => {
   next();
 };
 
-export default requireOrganizer;
+module.exports = { requireOrganizer };

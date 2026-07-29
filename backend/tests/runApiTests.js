@@ -1,6 +1,5 @@
-process.env.NODE_ENV = 'test';
-import app from '../server.js';
-import http from 'http';
+const app = require('../server.js');
+const http = require('http');
 
 const server = http.createServer(app);
 

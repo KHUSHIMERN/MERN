@@ -1,8 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+
 /* ============================================================
    Global Design System Tokens — WCAG 1.4.4 Scalable Font Sizes
    ============================================================ */
 
-/* Font-size scale in rem units (scales with browser zoom & user font preferences) */
 :root {
   --font-size-xs: 0.75rem;   /* 12px */
   --font-size-sm: 0.875rem;  /* 14px */
@@ -14,7 +15,7 @@
   --font-size-4xl: 2.25rem;  /* 36px */
   --font-size-5xl: 3.75rem;  /* 60px */
 
-  /* ── Color Design Tokens ── */
+  /* Color Design Tokens */
   --primary: #6366f1;
   --primary-hover: #4f46e5;
   --primary-light: rgba(99, 102, 241, 0.12);
@@ -57,14 +58,13 @@
   --shadow-glow: 0 12px 40px rgba(99, 102, 241, 0.25);
   --glow-primary: 0 0 25px rgba(99, 102, 241, 0.35);
 
-  /* ── Font Families ── */
+  /* Font Families */
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-heading: 'Space Grotesk', system-ui, -apple-system, sans-serif;
 }
 
-/* Ensure root font-size scales with browser zoom & default font preferences (WCAG 1.4.4) */
 html {
-  font-size: 100%; /* 1rem = 16px by default, scales dynamically when zoomed or base font changed */
+  font-size: 100%;
   box-sizing: border-box;
 }
 
@@ -78,11 +78,11 @@ body {
   font-family: var(--font-sans);
   background-color: var(--bg-main);
   color: var(--text-main);
-  font-size: var(--font-size-base);
   line-height: 1.6;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-size: var(--font-size-base);
 }
 
 .auth-container-wrapper {
@@ -109,6 +109,107 @@ body {
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   max-width: 520px;
   margin: 0 auto;
+}
+
+/* Unified Auth Tabs */
+.auth-unified-card {
+  width: 100%;
+}
+
+.auth-tabs-wrapper {
+  display: flex;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  margin-bottom: 24px;
+  gap: 4px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.auth-tab:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.auth-tab.active {
+  background: var(--accent-gradient);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+}
+
+/* Sleek Timezone Pill Button for Header */
+.timezone-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  color: var(--text-main);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+}
+
+.timezone-pill-btn:hover {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+}
+
+.timezone-pill-btn.is-override {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+}
+
+.timezone-pill-btn.is-override:hover {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+}
+
+.tz-globe-icon {
+  font-size: 0.9rem;
+}
+
+.tz-city-name {
+  font-weight: 700;
+}
+
+.tz-offset-badge {
+  font-size: 0.72rem;
+  opacity: 0.85;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.tz-override-dot {
+  font-size: 0.75rem;
+  color: #fbbf24;
 }
 
 .auth-header {
@@ -357,6 +458,7 @@ button {
   border-width: 0;
 }
 
+/* Skip-to-content link for keyboard accessibility */
 .skip-to-content-link {
   position: fixed;
   top: -120px;
@@ -364,17 +466,27 @@ button {
   z-index: 10000;
   padding: 12px 24px;
   background-color: var(--primary);
-  color: #fff;
+  color: #ffffff;
   font-weight: 700;
+  font-size: 0.95rem;
   border-radius: var(--radius-md);
+  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.6);
   text-decoration: none;
+  transition: top 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .skip-to-content-link:focus,
 .skip-to-content-link:focus-visible {
   top: 20px;
-  outline: 3px solid #fff;
+  outline: 3px solid #ffffff;
   outline-offset: 3px;
+}
+
+/* Global focus-visible indicator for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px var(--primary-light);
 }
 
 main:focus {

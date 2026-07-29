@@ -24,6 +24,7 @@ axios.defaults.withCredentials = true;
 // In-memory access token storage
 let inMemoryToken = '';
 let onLogoutCallback = null;
+let onForbiddenCallback = null;
 
 // Axios Request Interceptor: Attach the in-memory access token to every outgoing request
 axios.interceptors.request.use(
@@ -36,11 +37,18 @@ axios.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Axios Response Interceptor: Catch 401 and transparently attempt token refresh
+// Axios Response Interceptor: Catch 401/403 and handle token refresh or access denied
 axios.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    
+    // Check if error is 403 (Forbidden)
+    if (error.response?.status === 403) {
+      if (onForbiddenCallback) {
+        onForbiddenCallback(error.response.data?.message || 'Access Denied: You do not have permission to perform this action.');
+      }
+    }
     
     // Check if error is 401 (Unauthorized) and request is not already a retry or auth route
     if (
@@ -78,6 +86,8 @@ function App() {
   // App States
   const [currentUser, setCurrentUser] = useState(null);
   const [isAppLoading, setIsAppLoading] = useState(true);
+  const [showForbiddenModal, setShowForbiddenModal] = useState(false);
+  const [forbiddenMessage, setForbiddenMessage] = useState('');
   
   // Login Form States
   const [loginEmail, setLoginEmail] = useState('');
@@ -144,7 +154,7 @@ function App() {
     }
   };
 
-  // Register logout callback for interceptor
+  // Register logout and forbidden callbacks for interceptor
   useEffect(() => {
     onLogoutCallback = () => {
       inMemoryToken = '';
@@ -154,6 +164,11 @@ function App() {
       setTestApiResult(null);
       setTestApiError('');
       addToast('Session expired. Please log in again.', 'warning');
+    };
+
+    onForbiddenCallback = (msg) => {
+      setForbiddenMessage(msg);
+      setShowForbiddenModal(true);
     };
     
     // Check session on start (silent refresh)
@@ -178,8 +193,17 @@ function App() {
 
     return () => {
       onLogoutCallback = null;
+      onForbiddenCallback = null;
     };
   }, []);
+
+  // Redirect/reset organizer/admin states if a resident logs in or role changes
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'resident') {
+      setShowCreateForm(false);
+      setSelectedEventId(null);
+    }
+  }, [currentUser]);
 
   // Fetch active events when user changes
   useEffect(() => {
@@ -470,7 +494,7 @@ function App() {
               </div>
 
               {/* Create Event Form Overlay */}
-              {showCreateForm && (
+              {showCreateForm && (currentUser.role === 'organizer' || currentUser.role === 'admin') && (
                 <form onSubmit={handleCreateEvent} className="glass-card animate-fade-in" style={{ padding: '2rem', border: '1px solid rgba(139, 92, 246, 0.25)' }}>
                   <h3 style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, #fff, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Post a New Event</h3>
                   
@@ -607,25 +631,27 @@ function App() {
                           {/* Action buttons */}
                           <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
                             {/* Details/Registrations View */}
-                            <button 
-                              onClick={() => setSelectedEventId(isSelected ? null : ev._id)}
-                              style={{ 
-                                background: 'rgba(255,255,255,0.04)', 
-                                border: '1px solid var(--border-color)', 
-                                color: 'var(--text-primary)', 
-                                padding: '0.5rem 1rem', 
-                                borderRadius: '8px', 
-                                fontSize: '0.85rem',
-                                fontWeight: 500,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
-                            >
-                              <span>{isSelected ? 'Hide Panel' : 'Manage & Track'}</span>
-                              <ChevronRight size={14} style={{ transform: isSelected ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
-                            </button>
+                            {(currentUser.role === 'organizer' || currentUser.role === 'admin') && (
+                              <button 
+                                onClick={() => setSelectedEventId(isSelected ? null : ev._id)}
+                                style={{ 
+                                  background: 'rgba(255,255,255,0.04)', 
+                                  border: '1px solid var(--border-color)', 
+                                  color: 'var(--text-primary)', 
+                                  padding: '0.5rem 1rem', 
+                                  borderRadius: '8px', 
+                                  fontSize: '0.85rem',
+                                  fontWeight: 500,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                <span>{isSelected ? 'Hide Panel' : 'Manage & Track'}</span>
+                                <ChevronRight size={14} style={{ transform: isSelected ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
+                              </button>
+                            )}
 
                             {/* Resident RSVP / Cancel controls */}
                             {currentUser.role === 'resident' && (
@@ -681,7 +707,7 @@ function App() {
 
             {/* Right Panel: Attendee list details OR Role Authorization Test Bed */}
             <div className="glass-card animate-fade-in" style={{ padding: '1.8rem', height: 'fit-content', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
-              {selectedEventId ? (
+              {selectedEventId && (currentUser.role === 'organizer' || currentUser.role === 'admin') ? (
                 selectedEventRSVPs ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     <div>
@@ -986,6 +1012,86 @@ function App() {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 403 Forbidden Modal */}
+      {showForbiddenModal && (
+        <div 
+          className="animate-fade-in"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(11, 10, 20, 0.85)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 2000,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '1rem'
+          }}
+        >
+          <div 
+            className="glass-card" 
+            style={{ 
+              width: '100%',
+              maxWidth: '450px', 
+              padding: '2.5rem 2rem', 
+              border: '1px solid rgba(239, 68, 68, 0.4)', 
+              boxShadow: '0 20px 50px rgba(239, 68, 68, 0.15)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              gap: '1.25rem',
+              background: 'var(--bg-secondary)',
+              borderRadius: '16px'
+            }}
+          >
+            <div 
+              style={{ 
+                background: 'rgba(239, 68, 68, 0.1)', 
+                padding: '16px', 
+                borderRadius: '50%', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                boxShadow: '0 0 20px rgba(239, 68, 68, 0.1) inset'
+              }}
+            >
+              <Lock size={36} color="var(--danger)" />
+            </div>
+
+            <h3 style={{ fontSize: '1.6rem', color: '#fff', fontWeight: 700, margin: 0 }}>
+              Access Denied
+            </h3>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', margin: 0, lineHeight: 1.6 }}>
+              {forbiddenMessage || "You do not have the required permissions to access this resource."}
+            </p>
+
+            <button 
+              onClick={() => {
+                setShowForbiddenModal(false);
+                setForbiddenMessage('');
+              }} 
+              className="cancel-btn" 
+              style={{ 
+                width: '100%', 
+                padding: '0.75rem', 
+                fontSize: '0.95rem',
+                marginTop: '0.5rem',
+                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.05) 100%)',
+                borderColor: 'rgba(239, 68, 68, 0.3)'
+              }}
+            >
+              Acknowledge & Close
+            </button>
           </div>
         </div>
       )}

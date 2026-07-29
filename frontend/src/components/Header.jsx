@@ -1,5 +1,97 @@
 import React, { useState } from 'react';
-import { AppBar, Toolbar, Typography, Box, Button, IconButton, Menu, MenuItem } from '@mui/material';
+import { useTranslation } from 'react-i18next';
+import { LanguageSelector } from './LanguageSelector';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+
+export function Header({ activeTab, setActiveTab, onOpenRegisterModal }) {
+  const { t } = useTranslation();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const mobileNavRef = useFocusTrap(isMobileMenuOpen, () => setIsMobileMenuOpen(false));
+
+  const handleNavClick = (tab) => {
+    setActiveTab(tab);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleRegisterClick = () => {
+    onOpenRegisterModal();
+    setIsMobileMenuOpen(false);
+  };
+
+  return (
+    <header className="global-header">
+      <div className="header-container">
+        {/* Brand Logo & Title */}
+        <button
+          type="button"
+          className="header-brand"
+          onClick={() => handleNavClick('events')}
+        >
+          <div className="brand-logo-icon">✨</div>
+          <div className="brand-titles">
+            <h1 className="brand-title">{t('header.brand', 'EventPulse')}</h1>
+            <span className="brand-subtitle">{t('header.subtitle', 'Community Hub')}</span>
+          </div>
+        </button>
+
+        {/* Mobile Menu Toggle Button */}
+        <button
+          type="button"
+          className="mobile-menu-toggle"
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          aria-expanded={isMobileMenuOpen}
+          aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        >
+          {isMobileMenuOpen ? '✕' : '☰'}
+        </button>
+
+        {/* Navigation Links & Mobile Nav with Focus Trap */}
+        <nav
+          className={`header-nav ${isMobileMenuOpen ? 'mobile-nav-open' : ''}`}
+          aria-label="Main Navigation"
+          ref={mobileNavRef}
+        >
+          <button
+            type="button"
+            className={`nav-link ${activeTab === 'events' ? 'active' : ''}`}
+            onClick={() => handleNavClick('events')}
+          >
+            {t('header.nav.events', 'Events')}
+          </button>
+          
+          <button
+            type="button"
+            className={`nav-link nav-link-checkin ${activeTab === 'checkin' ? 'active' : ''}`}
+            onClick={() => handleNavClick('checkin')}
+          >
+            📋 {t('header.nav.checkin', 'Check-in Desk')}
+          </button>
+
+          <button
+            type="button"
+            className="nav-link nav-link-highlight"
+            onClick={handleRegisterClick}
+          >
+            + {t('header.nav.register', 'Register Event')}
+          </button>
+          
+          <button
+            type="button"
+            className={`nav-link ${activeTab === 'fallbackDemo' ? 'active' : ''}`}
+            onClick={() => handleNavClick('fallbackDemo')}
+          >
+            🧪 {t('header.nav.fallbackDemo', 'Fallback Demo')}
+          </button>
+        </nav>
+
+        {/* Global Language Selector */}
+        <div className="header-language-control">
+          <LanguageSelector variant="both" />
+        </div>
+      </div>
+    </header>
+import { AppBar, Toolbar, Typography, Box, Button, Menu, MenuItem } from '@mui/material';
 import EventIcon from '@mui/icons-material/Event';
 import PublicIcon from '@mui/icons-material/Public';
 import LanguageIcon from '@mui/icons-material/Language';
@@ -117,21 +209,61 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
               onClose={handleLangMenuClose}
             >
               <MenuItem onClick={() => handleLangSelect('en')}>English</MenuItem>
-              <MenuItem onClick={() => handleLangSelect('hi')}>हिंदी</MenuItem>
-              <MenuItem onClick={() => handleLangSelect('kn')}>ಕನ್ನಡ</MenuItem>
+              <MenuItem onClick={() => handleLangSelect('hi')}>हिंदी (Hindi)</MenuItem>
+              <MenuItem onClick={() => handleLangSelect('kn')}>ಕನ್ನಡ (Kannada)</MenuItem>
             </Menu>
 
-            {/* Timezone Switcher */}
+            {/* Timezone Button */}
             <Button
               onClick={() => setTzModalOpen(true)}
+              sx={{
+                backgroundColor: isOverridden ? 'rgba(245, 158, 11, 0.15)' : 'rgba(56, 189, 248, 0.08)',
+                border: `1px solid ${isOverridden ? 'rgba(245, 158, 11, 0.4)' : 'rgba(56, 189, 248, 0.2)'}`,
+                borderRadius: 2,
+                px: 2,
+                py: 0.8,
+                color: isOverridden ? '#fbbf24' : '#38bdf8',
+                textTransform: 'none',
+                '&:hover': {
+                  backgroundColor: isOverridden ? 'rgba(245, 158, 11, 0.25)' : 'rgba(56, 189, 248, 0.15)'
+                }
+              }}
               startIcon={<PublicIcon />}
-              sx={{ color: '#f8fafc', textTransform: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 2 }}
             >
-              {isOverridden ? offsetLabel : t('header.timezone', 'Timezone')}
+              <Box sx={{ textAlign: 'left' }}>
+                <Typography variant="caption" sx={{ display: 'block', lineHeight: 1, fontSize: '0.75rem', color: '#cbd5e1' }}>
+                  {t('activeTimezone')} {isOverridden ? `(${t('override')})` : `(${t('detected')})`}
+                </Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                  {activeTimezone} • {offsetLabel}
+                </Typography>
+              </Box>
             </Button>
 
+            {/* Auth Controls */}
             {user ? (
               <>
+                <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.8125rem' }}>
+                  Signed in as <strong>{user.name}</strong> ({user.role})
+                </Typography>
+
+                {user.role === 'admin' && (
+                  <Button
+                    onClick={() => setView && setView('admin-requests')}
+                    sx={{ background: 'linear-gradient(135deg, #818cf8, #6366f1)', color: '#fff', borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+                  >
+                    Admin Requests
+                  </Button>
+                )}
+
+                <Button
+                  color="inherit"
+                  onClick={() => setView && setView('profile')}
+                  sx={{ textTransform: 'none', color: view === 'profile' ? '#38bdf8' : '#e2e8f0', borderRadius: 2 }}
+                >
+                  Profile
+                </Button>
+
                 <Button
                   color="inherit"
                   onClick={() => {
@@ -197,7 +329,6 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
               }}
             >
               <Box sx={{ textAlign: 'left' }}>
-                {/* #cbd5e1 on dark bg = 5.53:1 — WCAG AA ✅ */}
                 <Typography variant="caption" sx={{ display: 'block', lineHeight: 1, fontSize: '0.75rem', color: '#cbd5e1' }}>
                   Role (Click to Toggle)
                 </Typography>
@@ -235,7 +366,6 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
           open={createModalOpen}
           onClose={() => setCreateModalOpen(false)}
           onEventCreated={(newEvent) => {
-            // Trigger a page reload or notify event list to refresh
             window.location.reload();
           }}
         />

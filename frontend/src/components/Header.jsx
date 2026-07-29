@@ -39,7 +39,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
           </button>
           <button
             type="button"
-            className="nav-link nav-link-highlight"
+            className="nav-link"
             onClick={onOpenRegisterModal}
           >
             + {t('header.nav.register', 'Register Event')}
@@ -57,18 +57,17 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
         </nav>
 
         {/* Global Controls: Auth & Language Selector */}
-        <div className="header-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="header-controls">
           {user ? (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <span style={{ fontSize: '13px', color: '#94a3b8' }}>
+            <div className="header-user-actions">
+              <span className="user-signed-in-info">
                 Signed in as <strong>{user.name}</strong> ({user.role})
               </span>
               {user.role === 'admin' && (
                 <button
                   type="button"
-                  className="nav-link"
+                  className="nav-link nav-link-admin"
                   onClick={() => setView && setView('admin-requests')}
-                  style={{ background: 'linear-gradient(135deg, #818cf8, #6366f1)', color: '#fff', padding: '6px 12px', borderRadius: '6px' }}
                 >
                   Admin Requests
                 </button>
@@ -82,18 +81,17 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
               </button>
               <button
                 type="button"
-                className="nav-link"
+                className="nav-link nav-link-logout"
                 onClick={() => {
                   if (logout) logout();
                   if (setView) setView('login');
                 }}
-                style={{ color: '#f87171' }}
               >
                 Logout
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div className="header-auth-actions">
               <button
                 type="button"
                 className={`nav-link ${view === 'login' ? 'active' : ''}`}
@@ -110,7 +108,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
               </button>
             </div>
           )}
-          <LanguageSelector variant="both" />
+          <LanguageSelector variant="dropdown" />
         </div>
       </div>
     </header>

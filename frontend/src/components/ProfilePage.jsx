@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { User, Phone, Globe, Shield, Send, CheckCircle, AlertCircle, Edit3, Save, X, Clock } from 'lucide-react';
+import { User, Phone, Globe, Shield, Send, CheckCircle, AlertCircle, Edit3, Save, X, Clock, Ticket } from 'lucide-react';
 
 export default function ProfilePage({ onNavigateHome }) {
-  const { user, updateProfile, requestOrganizerRole, logout } = useAuth();
+  const { user, updateProfile, requestOrganizerRole, fetchProfile, logout } = useAuth();
 
   // Inline edit state
   const [isEditing, setIsEditing] = useState(false);
@@ -328,6 +329,70 @@ export default function ProfilePage({ onNavigateHome }) {
             </div>
           )}
         </form>
+      </div>
+
+      {/* My Registered Events (RSVPs) Section */}
+      <div className="card" style={{ padding: '32px', borderRadius: '16px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <Ticket size={24} color="#6366f1" />
+          <h3 style={{ fontSize: '18px', fontWeight: '700' }}>My Registered Events ({user.rsvpedEvents?.length || 0})</h3>
+        </div>
+
+        {!user.rsvpedEvents || user.rsvpedEvents.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+            You have not registered for any events yet. Explore upcoming community events to RSVP!
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {user.rsvpedEvents.map((evt) => {
+              const eventObj = typeof evt === 'object' ? evt : null;
+              const eventId = eventObj ? eventObj._id : evt;
+              return (
+                <div
+                  key={eventId}
+                  style={{
+                    display: 'flex',
+                    justify: 'space-between',
+                    alignItems: 'center',
+                    padding: '14px 18px',
+                    background: 'var(--input-bg)',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-color)',
+                  }}
+                >
+                  <div>
+                    <h4 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-main)', marginBottom: '4px' }}>
+                      {eventObj ? eventObj.title : `Event ID: ${eventId}`}
+                    </h4>
+                    {eventObj && (
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        📅 {eventObj.date} • 📍 {eventObj.location || eventObj.city} • 🏷️ {eventObj.category}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={async () => {
+                      try {
+                        setStatusMessage({ type: 'info', text: 'Cancelling RSVP...' });
+                        await axios.delete(`/api/events/${eventId}/rsvp`);
+                        await fetchProfile();
+                        setStatusMessage({ type: 'success', text: 'RSVP cancelled successfully.' });
+                        setTimeout(() => setStatusMessage(null), 4000);
+                      } catch (err) {
+                        setStatusMessage({ type: 'error', text: err.response?.data?.message || 'Failed to cancel RSVP.' });
+                      }
+                    }}
+                    style={{ fontSize: '12px', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)' }}
+                  >
+                    Cancel RSVP
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Organizer Role Request Workflow Section */}

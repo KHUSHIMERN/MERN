@@ -60,12 +60,15 @@ function AppContent() {
 
         {view === 'login' && (
           <div className="auth-container-wrapper">
-            <LoginForm onSwitchToRegister={() => setView('register')} />
+            <LoginForm
+              onSwitchToRegister={() => setView('register')}
+              onLoginSuccess={() => setView('events')}
+            />
           </div>
         )}
 
         {view === 'profile' && (
-          <ProfilePage onNavigateHome={() => setView(user ? 'profile' : 'login')} />
+          <ProfilePage onNavigateHome={() => setView('events')} />
         )}
 
         {view === 'admin-requests' && (
@@ -96,6 +99,7 @@ function AppContent() {
         <EventRegistrationForm
           selectedEvent={selectedEventForModal}
           onClose={handleCloseRegisterModal}
+          onNavigateProfile={() => setView('profile')}
         />
       )}
 

@@ -4,7 +4,7 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 let mongoMemoryServer = null;
 
 const connectDB = async () => {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/communityconnect';
+  const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/communityconnect';
 
   try {
     // Attempt connecting to configured MongoDB (e.g., local MongoDB service or Atlas)

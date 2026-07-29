@@ -96,6 +96,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const resendVerification = async (email) => {
+    try {
+      const res = await axios.post('/api/auth/resend-verification', { email });
+      return { success: true, message: res.data.message, data: res.data };
+    } catch (err) {
+      return {
+        success: false,
+        message: err.response?.data?.message || 'Failed to resend verification email.',
+      };
+    }
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -110,6 +122,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         register,
+        resendVerification,
         updateProfile,
         requestOrganizerRole,
         logout,

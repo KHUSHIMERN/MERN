@@ -1,58 +1,133 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../context/AuthContext';
+import { Calendar, MapPin, PlusCircle, CheckCircle, AlertCircle, ShieldAlert } from 'lucide-react';
 
-export function EventRegistrationForm({ selectedEvent, onClose }) {
+export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfile }) {
   const { t } = useTranslation();
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    ticketType: 'standard',
-    attendees: 1,
+  const { user, fetchProfile } = useAuth();
+
+  const isCreateMode = !selectedEvent;
+  const isOrganizerOrAdmin = user && (user.role === 'organizer' || user.role === 'admin');
+
+  // RSVP Form State
+  const [rsvpData, setRsvpData] = useState({
+    fullName: user?.name || '',
+    email: user?.email || '',
     notes: '',
     agreeTerms: false,
   });
+
+  // Event Creation Form State (for organizers/admins)
+  const [createData, setCreateData] = useState({
+    title: '',
+    description: '',
+    category: 'Career & Jobs',
+    city: user?.city || 'Indore',
+    tier: 'Tier 2',
+    location: '',
+    date: '',
+    time: '10:00 AM - 04:00 PM',
+    capacity: 100,
+    image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80',
+  });
+
+  const [loading, setLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
-  const eventTitle = selectedEvent?.itemKey
-    ? t(`events.items.${selectedEvent.itemKey}.title`)
-    : selectedEvent?.title;
-  const eventLocation = selectedEvent?.itemKey
-    ? t(`events.items.${selectedEvent.itemKey}.location`)
-    : selectedEvent?.location;
+  useEffect(() => {
+    if (user) {
+      setRsvpData((prev) => ({
+        ...prev,
+        fullName: user.name || prev.fullName,
+        email: user.email || prev.email,
+      }));
+    }
+  }, [user]);
 
-  const handleChange = (e) => {
+  const handleRsvpChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
+    setRsvpData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleCreateChange = (e) => {
+    const { name, value } = e.target;
+    setCreateData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleRsvpSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.fullName.trim() || !formData.email.trim()) {
-      setErrorMsg(t('form.requiredFieldsError', 'Please fill in all required fields.'));
+    setErrorMsg('');
+
+    if (!user) {
+      setErrorMsg('You must be logged in with a verified account to register for events.');
       return;
     }
-    if (!formData.agreeTerms) {
+
+    if (!user.isVerified) {
+      setErrorMsg('Your account email is unverified. Please verify your email before registering.');
+      return;
+    }
+
+    if (!rsvpData.agreeTerms) {
       setErrorMsg(t('form.agreeTermsError', 'You must agree to the terms to proceed.'));
       return;
     }
 
+    setLoading(true);
+
+    try {
+      const eventId = selectedEvent._id || selectedEvent.id;
+      const res = await axios.post(`/api/events/${eventId}/rsvp`);
+      await fetchProfile();
+      setSuccessMsg(res.data.message || 'Successfully registered for event!');
+      setIsSubmitted(true);
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'RSVP registration failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateSubmit = async (e) => {
+    e.preventDefault();
     setErrorMsg('');
-    setIsSubmitted(true);
+
+    if (!createData.title.trim() || !createData.description.trim() || !createData.location.trim() || !createData.date) {
+      setErrorMsg('Please fill in all required fields (title, description, location, date).');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const res = await axios.post('/api/events', createData);
+      setSuccessMsg(res.data.message || 'Event created and published successfully!');
+      setIsSubmitted(true);
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Failed to create event.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: isCreateMode ? '640px' : '520px' }}>
         <div className="modal-header">
           <div>
-            <h2 className="modal-title">{t('form.title', 'Register for Event')}</h2>
+            <h2 className="modal-title">
+              {isCreateMode ? '➕ Create & Publish Local Event' : t('form.title', 'Register for Event')}
+            </h2>
             {selectedEvent && (
               <p className="modal-subtitle">
-                {eventTitle} ({eventLocation})
+                {selectedEvent.title} ({selectedEvent.location || selectedEvent.city})
               </p>
             )}
           </div>
@@ -64,13 +139,178 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
         {isSubmitted ? (
           <div className="form-success-box">
             <div className="success-icon">🎉</div>
-            <p className="success-text">{t('form.successMsg', 'Registration successful! Confirmation details sent to your email.')}</p>
+            <p className="success-text">{successMsg}</p>
             <button type="button" className="btn-primary" onClick={onClose}>
               {t('form.okBtn', 'OK')}
             </button>
           </div>
+        ) : isCreateMode && !isOrganizerOrAdmin ? (
+          /* Resident Notice when clicking Create Event */
+          <div style={{ padding: '24px 0', textAlign: 'center' }}>
+            <ShieldAlert size={48} color="#f59e0b" style={{ margin: '0 auto 16px' }} />
+            <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '8px' }}>
+              Organizer Permission Required
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '20px', lineHeight: 1.6 }}>
+              Publishing new community events is reserved for verified Event Organizers. As a Resident user, you can request an organizer role from your profile page.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  onClose();
+                  if (onNavigateProfile) onNavigateProfile();
+                }}
+              >
+                Go to Profile & Request Role
+              </button>
+              <button type="button" className="btn-secondary" onClick={onClose}>
+                Close
+              </button>
+            </div>
+          </div>
+        ) : isCreateMode ? (
+          /* Organizer Create Event Form */
+          <form className="registration-form" onSubmit={handleCreateSubmit}>
+            {errorMsg && <div className="form-error-alert">{errorMsg}</div>}
+
+            <div className="form-group">
+              <label className="form-label">Event Title *</label>
+              <input
+                type="text"
+                name="title"
+                className="form-input"
+                placeholder="e.g. Indore Youth Tech Conference 2026"
+                value={createData.title}
+                onChange={handleCreateChange}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Description *</label>
+              <textarea
+                name="description"
+                rows="3"
+                className="form-textarea"
+                placeholder="Describe the event, agenda, target audience..."
+                value={createData.description}
+                onChange={handleCreateChange}
+                required
+              ></textarea>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group half-width">
+                <label className="form-label">Category *</label>
+                <select
+                  name="category"
+                  className="form-select"
+                  value={createData.category}
+                  onChange={handleCreateChange}
+                >
+                  <option value="Career & Jobs">Career & Jobs</option>
+                  <option value="Skill Workshops">Skill Workshops</option>
+                  <option value="Health & Wellness">Health & Wellness</option>
+                  <option value="Cultural Festivals">Cultural Festivals</option>
+                  <option value="Civic & Community">Civic & Community</option>
+                </select>
+              </div>
+
+              <div className="form-group half-width">
+                <label className="form-label">City *</label>
+                <input
+                  type="text"
+                  name="city"
+                  className="form-input"
+                  placeholder="e.g. Indore, Jaipur, Bhopal"
+                  value={createData.city}
+                  onChange={handleCreateChange}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group half-width">
+                <label className="form-label">City Tier</label>
+                <select
+                  name="tier"
+                  className="form-select"
+                  value={createData.tier}
+                  onChange={handleCreateChange}
+                >
+                  <option value="Tier 2">Tier 2</option>
+                  <option value="Tier 3">Tier 3</option>
+                  <option value="Tier 4">Tier 4</option>
+                </select>
+              </div>
+
+              <div className="form-group half-width">
+                <label className="form-label">Capacity (Seats)</label>
+                <input
+                  type="number"
+                  name="capacity"
+                  min="1"
+                  className="form-input"
+                  value={createData.capacity}
+                  onChange={handleCreateChange}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Venue Location *</label>
+              <input
+                type="text"
+                name="location"
+                className="form-input"
+                placeholder="e.g. Brilliant Convention Centre, Vijay Nagar"
+                value={createData.location}
+                onChange={handleCreateChange}
+                required
+              />
+            </div>
+
+            <div className="form-row">
+              <div className="form-group half-width">
+                <label className="form-label">Date *</label>
+                <input
+                  type="date"
+                  name="date"
+                  className="form-input"
+                  value={createData.date}
+                  onChange={handleCreateChange}
+                  required
+                />
+              </div>
+
+              <div className="form-group half-width">
+                <label className="form-label">Time</label>
+                <input
+                  type="text"
+                  name="time"
+                  className="form-input"
+                  placeholder="10:00 AM - 04:00 PM"
+                  value={createData.time}
+                  onChange={handleCreateChange}
+                />
+              </div>
+            </div>
+
+            <div className="form-actions">
+              <button type="button" className="btn-secondary" onClick={onClose}>
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary" disabled={loading}>
+                {loading ? 'Publishing...' : 'Publish Event'}
+              </button>
+            </div>
+          </form>
         ) : (
-          <form className="registration-form" onSubmit={handleSubmit}>
+          /* RSVP for existing event Form */
+          <form className="registration-form" onSubmit={handleRsvpSubmit}>
             {errorMsg && <div className="form-error-alert">{errorMsg}</div>}
 
             <div className="form-group">
@@ -83,8 +323,8 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
                 name="fullName"
                 className="form-input"
                 placeholder={t('form.fullNamePlaceholder', 'Enter your full name')}
-                value={formData.fullName}
-                onChange={handleChange}
+                value={rsvpData.fullName}
+                onChange={handleRsvpChange}
                 required
               />
             </div>
@@ -99,45 +339,10 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
                 name="email"
                 className="form-input"
                 placeholder={t('form.emailPlaceholder', 'name@example.com')}
-                value={formData.email}
-                onChange={handleChange}
+                value={rsvpData.email}
+                onChange={handleRsvpChange}
                 required
               />
-            </div>
-
-            <div className="form-row">
-              <div className="form-group half-width">
-                <label htmlFor="ticketType" className="form-label">
-                  {t('form.ticketType', 'Ticket Category')}
-                </label>
-                <select
-                  id="ticketType"
-                  name="ticketType"
-                  className="form-select"
-                  value={formData.ticketType}
-                  onChange={handleChange}
-                >
-                  <option value="standard">{t('form.ticketTypes.standard', 'Standard Pass (Free)')}</option>
-                  <option value="vip">{t('form.ticketTypes.vip', 'VIP Pass ($15)')}</option>
-                  <option value="student">{t('form.ticketTypes.student', 'Student Pass (Free with ID)')}</option>
-                </select>
-              </div>
-
-              <div className="form-group half-width">
-                <label htmlFor="attendees" className="form-label">
-                  {t('form.attendees', 'Number of Attendees')}
-                </label>
-                <input
-                  type="number"
-                  id="attendees"
-                  name="attendees"
-                  min="1"
-                  max="10"
-                  className="form-input"
-                  value={formData.attendees}
-                  onChange={handleChange}
-                />
-              </div>
             </div>
 
             <div className="form-group">
@@ -147,11 +352,11 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
               <textarea
                 id="notes"
                 name="notes"
-                rows="3"
+                rows="2"
                 className="form-textarea"
                 placeholder={t('form.notesPlaceholder', 'Dietary requirements, accessibility needs, etc.')}
-                value={formData.notes}
-                onChange={handleChange}
+                value={rsvpData.notes}
+                onChange={handleRsvpChange}
               ></textarea>
             </div>
 
@@ -161,8 +366,8 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
                 id="agreeTerms"
                 name="agreeTerms"
                 className="form-checkbox"
-                checked={formData.agreeTerms}
-                onChange={handleChange}
+                checked={rsvpData.agreeTerms}
+                onChange={handleRsvpChange}
                 required
               />
               <label htmlFor="agreeTerms" className="checkbox-label">
@@ -174,8 +379,8 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
               <button type="button" className="btn-secondary" onClick={onClose}>
                 {t('form.cancelBtn', 'Cancel')}
               </button>
-              <button type="submit" className="btn-primary">
-                {t('form.submitBtn', 'Confirm Registration')}
+              <button type="submit" className="btn-primary" disabled={loading}>
+                {loading ? 'Submitting...' : t('form.submitBtn', 'Confirm Registration')}
               </button>
             </div>
           </form>

@@ -82,15 +82,23 @@ describe('Role-Based Authorization & RSVP System Integration Tests', () => {
   test('4. [Example Protected Endpoints] /api/organizer/events restricts access to organizers', async () => {
     const resident = await User.create({ name: 'Resident', email: 'res@test.com', role: 'resident', password: 'password' });
     const organizer = await User.create({ name: 'Organizer', email: 'org@test.com', role: 'organizer', password: 'password' });
+    const admin = await User.create({ name: 'Admin', email: 'admin@test.com', role: 'admin', password: 'password' });
     
     const residentToken = generateToken(resident);
     const organizerToken = generateToken(organizer);
+    const adminToken = generateToken(admin);
 
     // Resident accessing organizer-only endpoint -> 403
     const resForbidden = await request(app)
       .get('/api/organizer/events')
       .set('Authorization', `Bearer ${residentToken}`);
     expect(resForbidden.status).toBe(403);
+
+    // Admin accessing organizer-only endpoint -> 403
+    const adminForbidden = await request(app)
+      .get('/api/organizer/events')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(adminForbidden.status).toBe(403);
 
     // Organizer accessing organizer-only endpoint -> 200
     const resAllowed = await request(app)
@@ -101,17 +109,25 @@ describe('Role-Based Authorization & RSVP System Integration Tests', () => {
   });
 
   test('5. [Example Protected Endpoints] /api/admin/users restricts access to admins', async () => {
+    const resident = await User.create({ name: 'Resident', email: 'res@test.com', role: 'resident', password: 'password' });
     const organizer = await User.create({ name: 'Organizer', email: 'org@test.com', role: 'organizer', password: 'password' });
     const admin = await User.create({ name: 'Admin', email: 'admin@test.com', role: 'admin', password: 'password' });
 
+    const residentToken = generateToken(resident);
     const organizerToken = generateToken(organizer);
     const adminToken = generateToken(admin);
 
+    // Resident accessing admin-only endpoint -> 403
+    const resForbiddenRes = await request(app)
+      .get('/api/admin/users')
+      .set('Authorization', `Bearer ${residentToken}`);
+    expect(resForbiddenRes.status).toBe(403);
+
     // Organizer accessing admin-only endpoint -> 403
-    const resForbidden = await request(app)
+    const resForbiddenOrg = await request(app)
       .get('/api/admin/users')
       .set('Authorization', `Bearer ${organizerToken}`);
-    expect(resForbidden.status).toBe(403);
+    expect(resForbiddenOrg.status).toBe(403);
 
     // Admin accessing admin-only endpoint -> 200
     const resAllowed = await request(app)

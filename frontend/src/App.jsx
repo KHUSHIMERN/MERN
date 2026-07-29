@@ -121,6 +121,29 @@ function App() {
     }, 4500);
   };
 
+  // Test Protected API states
+  const [testApiLoading, setTestApiLoading] = useState(null);
+  const [testApiResult, setTestApiResult] = useState(null);
+  const [testApiError, setTestApiError] = useState('');
+
+  const handleTestProtectedApi = async (endpoint, label) => {
+    setTestApiLoading(endpoint);
+    setTestApiResult(null);
+    setTestApiError('');
+    try {
+      const response = await axios.get(`${API_BASE_URL}${endpoint}`);
+      setTestApiResult(response.data);
+      addToast(`Access Granted: Successfully retrieved ${label}`, 'success');
+    } catch (err) {
+      console.error(`Protected API error on ${endpoint}:`, err);
+      const errMsg = err.response?.data?.message || err.message || `Failed to fetch from ${endpoint}`;
+      setTestApiError(errMsg);
+      addToast(`Access Denied (403): ${errMsg}`, 'danger');
+    } finally {
+      setTestApiLoading(null);
+    }
+  };
+
   // Register logout callback for interceptor
   useEffect(() => {
     onLogoutCallback = () => {
@@ -128,6 +151,8 @@ function App() {
       setCurrentUser(null);
       setEvents([]);
       setSelectedEventId(null);
+      setTestApiResult(null);
+      setTestApiError('');
       addToast('Session expired. Please log in again.', 'warning');
     };
     
@@ -190,6 +215,8 @@ function App() {
       const { accessToken, user } = response.data;
       inMemoryToken = accessToken;
       setCurrentUser(user);
+      setTestApiResult(null);
+      setTestApiError('');
       
       setLoginEmail('');
       setLoginPassword('');
@@ -227,6 +254,8 @@ function App() {
       setCurrentUser(null);
       setEvents([]);
       setSelectedEventId(null);
+      setTestApiResult(null);
+      setTestApiError('');
       addToast('Logged out successfully', 'info');
       setLoading(false);
     }
@@ -421,7 +450,7 @@ function App() {
             </div>
           </header>
 
-          <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: selectedEventId ? '1fr 380px' : '1fr', gap: '2rem', transition: 'all 0.3s ease' }}>
+          <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '2rem', transition: 'all 0.3s ease' }}>
             {/* Main Events Section */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -650,10 +679,10 @@ function App() {
               )}
             </div>
 
-            {/* Right Panel: Attendee list details */}
-            {selectedEventId && (
-              <div className="glass-card animate-fade-in" style={{ padding: '1.8rem', height: 'fit-content', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
-                {selectedEventRSVPs ? (
+            {/* Right Panel: Attendee list details OR Role Authorization Test Bed */}
+            <div className="glass-card animate-fade-in" style={{ padding: '1.8rem', height: 'fit-content', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+              {selectedEventId ? (
+                selectedEventRSVPs ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     <div>
                       <h3 style={{ fontSize: '1.3rem', color: '#fff', marginBottom: '0.2rem' }}>Registration Desk</h3>
@@ -757,9 +786,112 @@ function App() {
                     <Clock className="pulse" size={24} style={{ color: 'var(--accent-primary)', marginBottom: '0.5rem' }} />
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Loading registration data...</p>
                   </div>
-                )}
-              </div>
-            )}
+                )
+              ) : (
+                /* Role Authorization Test Bed */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.3rem', color: '#fff', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Lock size={18} color="#a78bfa" />
+                      <span>Role Auth Test Bed</span>
+                    </h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Verify server-side middleware behavior and role-based access controls in real-time.</p>
+                  </div>
+
+                  <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '0.75rem 1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Current Identity:</span>
+                      <span className={`badge ${currentUser.role === 'admin' ? 'badge-confirmed' : currentUser.role === 'organizer' ? 'badge-waitlist' : 'badge-capacity'}`}>
+                        {currentUser.role}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Route 1: Organizer-only */}
+                  <div style={{ background: 'rgba(139, 92, 246, 0.03)', border: '1px solid rgba(139, 92, 246, 0.1)', borderRadius: '10px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, fontFamily: 'monospace', color: '#a78bfa' }}>/api/organizer/events</span>
+                      <span className="badge badge-waitlist" style={{ fontSize: '0.65rem', padding: '1px 6px' }}>ORGANIZER</span>
+                    </div>
+                    <button
+                      onClick={() => handleTestProtectedApi('/organizer/events', 'Organizer Events')}
+                      className="glow-btn"
+                      style={{ 
+                        padding: '0.5rem 1rem', 
+                        fontSize: '0.85rem',
+                        background: currentUser.role !== 'organizer' ? 'linear-gradient(135deg, #4b5563 0%, #374151 100%)' : undefined,
+                        boxShadow: currentUser.role !== 'organizer' ? 'none' : undefined
+                      }}
+                      disabled={testApiLoading !== null}
+                    >
+                      {testApiLoading === '/organizer/events' ? 'Requesting...' : 'Query Organizer Events'}
+                    </button>
+                  </div>
+
+                  {/* Route 2: Admin-only */}
+                  <div style={{ background: 'rgba(16, 185, 129, 0.03)', border: '1px solid rgba(16, 185, 129, 0.1)', borderRadius: '10px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, fontFamily: 'monospace', color: '#34d399' }}>/api/admin/users</span>
+                      <span className="badge badge-confirmed" style={{ fontSize: '0.65rem', padding: '1px 6px' }}>ADMIN</span>
+                    </div>
+                    <button
+                      onClick={() => handleTestProtectedApi('/admin/users', 'Registered Users')}
+                      className="glow-btn"
+                      style={{ 
+                        padding: '0.5rem 1rem', 
+                        fontSize: '0.85rem',
+                        background: currentUser.role !== 'admin' ? 'linear-gradient(135deg, #4b5563 0%, #374151 100%)' : undefined,
+                        boxShadow: currentUser.role !== 'admin' ? 'none' : undefined
+                      }}
+                      disabled={testApiLoading !== null}
+                    >
+                      {testApiLoading === '/admin/users' ? 'Requesting...' : 'List Registered Users'}
+                    </button>
+                  </div>
+
+                  {/* Results Section */}
+                  {(testApiResult || testApiError) && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Server Response:</span>
+                        <button 
+                          onClick={() => { setTestApiResult(null); setTestApiError(''); }}
+                          style={{ background: 'transparent', border: 'none', color: '#fca5a5', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div 
+                        style={{ 
+                          background: '#07060e', 
+                          border: testApiError ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)', 
+                          borderRadius: '8px', 
+                          padding: '0.75rem',
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                          fontFamily: 'monospace',
+                          fontSize: '0.75rem'
+                        }}
+                      >
+                        {testApiError ? (
+                          <div style={{ color: '#fca5a5', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ fontWeight: 'bold' }}>Status: 403 Forbidden</div>
+                            <div>{testApiError}</div>
+                          </div>
+                        ) : (
+                          <div style={{ color: '#34d399' }}>
+                            <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>Status: 200 OK</div>
+                            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                              {JSON.stringify(testApiResult, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </>
       ) : (

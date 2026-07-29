@@ -1,3 +1,8 @@
+require('dotenv').config();
+const dns = require('dns');
+if (typeof dns.setDefaultResultOrder === 'function') dns.setDefaultResultOrder('ipv4first');
+try { dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']); } catch(e) {}
+
 const mongoose = require('mongoose');
 const Event = require('./models/Event');
 const { getOrganizerAttendanceMetrics } = require('./controllers/eventController');
@@ -56,8 +61,8 @@ async function runTests() {
 
   // Test 4: Verify MongoDB Pipeline query execution / logic
   try {
-    const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/mern_events_test_story3';
-    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 2000 });
+    const connectDB = require('./config/db');
+    await connectDB();
 
     await Event.deleteMany({});
     const mockId = new mongoose.Types.ObjectId();

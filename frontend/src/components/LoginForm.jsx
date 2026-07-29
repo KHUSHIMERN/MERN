@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Mail, Lock, LogIn, AlertCircle, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-export default function LoginForm({ onSwitchToRegister }) {
+export default function LoginForm({ onSwitchToRegister, onLoginSuccess }) {
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -31,22 +33,16 @@ export default function LoginForm({ onSwitchToRegister }) {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email.trim(),
-          password: formData.password,
-        }),
-      });
+      const result = await login(formData.email.trim(), formData.password);
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setApiError(data.message || 'Login failed.');
+      if (!result.success) {
+        setApiError(result.message || 'Login failed.');
       } else {
-        setApiSuccess(`Welcome back, ${data.user.name}! Access granted.`);
-        setUserProfile(data.user);
+        setApiSuccess(`Welcome back, ${result.user.name}! Access granted.`);
+        setUserProfile(result.user);
+        if (onLoginSuccess) {
+          setTimeout(() => onLoginSuccess(result.user), 1000);
+        }
       }
     } catch (err) {
       console.error('[Login submit error]:', err);

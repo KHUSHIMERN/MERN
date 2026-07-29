@@ -80,12 +80,13 @@ export default function RegisterForm({ onSwitchToLogin }) {
 
       const data = await response.json();
 
-      if (!response.ok || !data.success) {
+      if (!response.ok) {
         setApiError(data.message || 'Registration failed. Please try again.');
       } else {
-        setApiSuccess(data.message);
-        if (data.data && data.data.verificationLink) {
-          setVerificationLink(data.data.verificationLink);
+        setApiSuccess(data.message || 'Registration successful!');
+        const link = data.verificationLink || data.backendVerifyLink || (data.data && data.data.verificationLink);
+        if (link) {
+          setVerificationLink(link);
         }
         // Reset sensitive form fields
         setFormData({

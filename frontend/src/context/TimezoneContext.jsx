@@ -24,7 +24,11 @@ export function TimezoneProvider({ children }) {
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        const res = await fetch('/api/users/profile');
+        const token = localStorage.getItem('cc_token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch('/api/users/profile', { headers });
         if (res.ok) {
           const json = await res.json();
           if (json.data && json.data.preferredTimezone) {
@@ -51,10 +55,14 @@ export function TimezoneProvider({ children }) {
       localStorage.setItem(STORAGE_KEY, tz);
       setOverrideTimezoneState(tz);
 
+      const token = localStorage.getItem('cc_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       // Save to profile API
       await fetch('/api/users/profile', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ preferredTimezone: tz })
       });
     } catch (e) {
@@ -67,9 +75,13 @@ export function TimezoneProvider({ children }) {
       localStorage.removeItem(STORAGE_KEY);
       setOverrideTimezoneState(null);
 
+      const token = localStorage.getItem('cc_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       await fetch('/api/users/profile', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ preferredTimezone: null })
       });
     } catch (e) {

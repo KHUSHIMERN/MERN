@@ -1,96 +1,4 @@
 import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { LanguageSelector } from './LanguageSelector';
-import { useFocusTrap } from '../hooks/useFocusTrap';
-
-export function Header({ activeTab, setActiveTab, onOpenRegisterModal }) {
-  const { t } = useTranslation();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const mobileNavRef = useFocusTrap(isMobileMenuOpen, () => setIsMobileMenuOpen(false));
-
-  const handleNavClick = (tab) => {
-    setActiveTab(tab);
-    setIsMobileMenuOpen(false);
-  };
-
-  const handleRegisterClick = () => {
-    onOpenRegisterModal();
-    setIsMobileMenuOpen(false);
-  };
-
-  return (
-    <header className="global-header">
-      <div className="header-container">
-        {/* Brand Logo & Title */}
-        <button
-          type="button"
-          className="header-brand"
-          onClick={() => handleNavClick('events')}
-        >
-          <div className="brand-logo-icon">✨</div>
-          <div className="brand-titles">
-            <h1 className="brand-title">{t('header.brand', 'EventPulse')}</h1>
-            <span className="brand-subtitle">{t('header.subtitle', 'Community Hub')}</span>
-          </div>
-        </button>
-
-        {/* Mobile Menu Toggle Button */}
-        <button
-          type="button"
-          className="mobile-menu-toggle"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          aria-expanded={isMobileMenuOpen}
-          aria-label={isMobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-        >
-          {isMobileMenuOpen ? '✕' : '☰'}
-        </button>
-
-        {/* Navigation Links & Mobile Nav with Focus Trap */}
-        <nav
-          className={`header-nav ${isMobileMenuOpen ? 'mobile-nav-open' : ''}`}
-          aria-label="Main Navigation"
-          ref={mobileNavRef}
-        >
-          <button
-            type="button"
-            className={`nav-link ${activeTab === 'events' ? 'active' : ''}`}
-            onClick={() => handleNavClick('events')}
-          >
-            {t('header.nav.events', 'Events')}
-          </button>
-          
-          <button
-            type="button"
-            className={`nav-link nav-link-checkin ${activeTab === 'checkin' ? 'active' : ''}`}
-            onClick={() => handleNavClick('checkin')}
-          >
-            📋 {t('header.nav.checkin', 'Check-in Desk')}
-          </button>
-
-          <button
-            type="button"
-            className="nav-link nav-link-highlight"
-            onClick={handleRegisterClick}
-          >
-            + {t('header.nav.register', 'Register Event')}
-          </button>
-          
-          <button
-            type="button"
-            className={`nav-link ${activeTab === 'fallbackDemo' ? 'active' : ''}`}
-            onClick={() => handleNavClick('fallbackDemo')}
-          >
-            🧪 {t('header.nav.fallbackDemo', 'Fallback Demo')}
-          </button>
-        </nav>
-
-        {/* Global Language Selector */}
-        <div className="header-language-control">
-          <LanguageSelector variant="both" />
-        </div>
-      </div>
-    </header>
 import { AppBar, Toolbar, Typography, Box, Button, Menu, MenuItem } from '@mui/material';
 import EventIcon from '@mui/icons-material/Event';
 import PublicIcon from '@mui/icons-material/Public';
@@ -106,15 +14,6 @@ import { getTimezoneOffsetLabel } from '../utils/dateUtils';
 
 /**
  * Header — sticky global navigation bar.
- *
- * Props:
- *   activeTab           {string}   — current active tab ('events' | 'fallbackDemo')
- *   setActiveTab        {function} — setter to switch tabs
- *   onOpenRegisterModal {function} — opens the EventRegistrationForm modal
- *   user                {object}   — authenticated user object (null if not logged in)
- *   logout              {function} — logs the user out
- *   view                {string}   — current view ('events' | 'login' | 'register' | 'profile' | 'admin-requests')
- *   setView             {function} — setter to switch views
  */
 export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, logout, view, setView }) {
   const [tzModalOpen, setTzModalOpen] = useState(false);
@@ -124,7 +23,6 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
   const { role, toggleRole } = useAuth();
 
   const [langAnchorEl, setLangAnchorEl] = useState(null);
-
   const offsetLabel = getTimezoneOffsetLabel(activeTimezone);
 
   const handleLangMenuOpen = (event) => {
@@ -158,11 +56,10 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
             <EventIcon sx={{ color: '#38bdf8', fontSize: '2rem' }} />
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 800, color: '#f8fafc', lineHeight: 1.1 }}>
-                {t('appTitle')}
+                {t('appTitle', 'EventPulse')}
               </Typography>
-              {/* #cbd5e1 on #0f172a = 5.53:1 — WCAG AA ✅ */}
               <Typography variant="caption" sx={{ color: '#cbd5e1', fontSize: '0.75rem' }}>
-                {t('appSubtitle')}
+                {t('appSubtitle', 'Tier 2, 3, 4 City Local Event Portal')}
               </Typography>
             </Box>
           </Box>
@@ -171,8 +68,9 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
             {/* Navigation Tabs */}
             <Button
               sx={{
-                color: view === 'events' && activeTab === 'events' ? '#38bdf8' : '#e2e8f0',
+                color: (view === 'events' && activeTab === 'events') ? '#38bdf8' : '#e2e8f0',
                 textTransform: 'none',
+                fontWeight: activeTab === 'events' ? 700 : 500
               }}
               onClick={() => {
                 if (setView) setView('events');
@@ -184,8 +82,23 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
 
             <Button
               sx={{
-                color: view === 'events' && activeTab === 'fallbackDemo' ? '#38bdf8' : '#e2e8f0',
+                color: activeTab === 'checkin' ? '#38bdf8' : '#e2e8f0',
                 textTransform: 'none',
+                fontWeight: activeTab === 'checkin' ? 700 : 500
+              }}
+              onClick={() => {
+                if (setView) setView('events');
+                if (setActiveTab) setActiveTab('checkin');
+              }}
+            >
+              📋 {t('header.nav.checkin', 'Check-in Desk')}
+            </Button>
+
+            <Button
+              sx={{
+                color: activeTab === 'fallbackDemo' ? '#38bdf8' : '#e2e8f0',
+                textTransform: 'none',
+                fontWeight: activeTab === 'fallbackDemo' ? 700 : 500
               }}
               onClick={() => {
                 if (setView) setView('events');
@@ -232,7 +145,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
             >
               <Box sx={{ textAlign: 'left' }}>
                 <Typography variant="caption" sx={{ display: 'block', lineHeight: 1, fontSize: '0.75rem', color: '#cbd5e1' }}>
-                  {t('activeTimezone')} {isOverridden ? `(${t('override')})` : `(${t('detected')})`}
+                  {t('activeTimezone', 'Timezone')} {isOverridden ? `(${t('override', 'override')})` : `(${t('detected', 'detected')})`}
                 </Typography>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
                   {activeTimezone} • {offsetLabel}
@@ -294,7 +207,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
               </>
             )}
 
-            {/* Register Event Button (visible for all) */}
+            {/* Register Event Button */}
             {onOpenRegisterModal && (
               <Button
                 variant="outlined"
@@ -312,7 +225,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
               </Button>
             )}
 
-            {/* Role Switcher (organizer toggle for demo) */}
+            {/* Role Switcher */}
             <Button
               onClick={toggleRole}
               color="inherit"
@@ -330,10 +243,10 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
             >
               <Box sx={{ textAlign: 'left' }}>
                 <Typography variant="caption" sx={{ display: 'block', lineHeight: 1, fontSize: '0.75rem', color: '#cbd5e1' }}>
-                  Role (Click to Toggle)
+                  Role (Toggle)
                 </Typography>
                 <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                  {role === 'organizer' ? t('roleOrganizer') : t('roleAttendee')}
+                  {role === 'organizer' ? t('roleOrganizer', 'Organizer') : t('roleAttendee', 'Attendee')}
                 </Typography>
               </Box>
             </Button>
@@ -352,7 +265,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
                   boxShadow: 2
                 }}
               >
-                {t('createEventBtn')}
+                {t('createEventBtn', '+ Create Event')}
               </Button>
             )}
           </Box>

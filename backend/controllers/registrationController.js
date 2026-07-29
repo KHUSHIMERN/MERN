@@ -1,12 +1,14 @@
-import { isConnectedToMongoDB } from '../config/db.js';
-import Registration from '../models/Registration.js';
-import { memoryRegistrations } from '../data/seedEvents.js';
+const connectDB = require('../config/db.js');
+const Registration = require('../models/Registration.js');
+const { memoryRegistrations } = require('../data/seedEvents.js');
+
+const isConnectedToMongoDB = () => connectDB.isConnectedToMongoDB;
 
 /**
  * POST /api/registrations
  * Submit a registration for an event.
  */
-export const registerForEvent = async (req, res, next) => {
+exports.registerForEvent = async (req, res, next) => {
   try {
     const { eventId, fullName, email, ticketType, attendees, notes, agreeTerms } = req.body;
 
@@ -30,7 +32,7 @@ export const registerForEvent = async (req, res, next) => {
       createdAt: new Date().toISOString()
     };
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const dbRegistration = await Registration.create(regRecord);
       return res.status(201).json({
         success: true,
@@ -39,14 +41,15 @@ export const registerForEvent = async (req, res, next) => {
       });
     }
 
-    memoryRegistrations.push(regRecord);
+    if (memoryRegistrations) memoryRegistrations.push(regRecord);
     return res.status(201).json({
       success: true,
       message: 'Registration successful! Details sent to your email.',
       data: regRecord
     });
   } catch (error) {
-    next(error);
+    if (next) return next(error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -54,15 +57,16 @@ export const registerForEvent = async (req, res, next) => {
  * GET /api/registrations
  * Retrieve all registrations.
  */
-export const getRegistrations = async (req, res, next) => {
+exports.getRegistrations = async (req, res, next) => {
   try {
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const records = await Registration.find({}).sort({ createdAt: -1 });
       return res.json({ success: true, count: records.length, data: records });
     }
 
-    return res.json({ success: true, count: memoryRegistrations.length, data: memoryRegistrations });
+    return res.json({ success: true, count: (memoryRegistrations || []).length, data: memoryRegistrations || [] });
   } catch (error) {
-    next(error);
+    if (next) return next(error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };

@@ -27,9 +27,13 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
     if (!user || !user.city) return;
     setLoading(true);
     try {
+      const token = localStorage.getItem('cc_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/ai/recommendations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           userId: user._id,
           userCity: user.city,
@@ -74,8 +78,9 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
       </Typography>
 
       <Grid container spacing={2}>
-        {recommendations.map(({ event, matchScore, recommendationReason }) => {
+        {recommendations.map(({ event, matchScore, recommendationReason, reason }) => {
           if (!event) return null;
+          const reasonText = recommendationReason || reason || 'Popular community event in your region';
           const titleText = lang === 'hi' && event.title_hi ? event.title_hi : event.title;
           const { formattedDate, formattedTime, timezoneLabel } = formatEventDateTime(
             event.startDate || event.date,
@@ -121,7 +126,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
                       Why Recommended:
                     </Typography>
                     <Typography variant="caption" sx={{ color: '#475569' }}>
-                      {recommendationReason}
+                      {reasonText}
                     </Typography>
                   </Box>
                 </CardContent>

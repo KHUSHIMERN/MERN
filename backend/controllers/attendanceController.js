@@ -1,22 +1,24 @@
-import { isConnectedToMongoDB } from '../config/db.js';
-import Registration from '../models/Registration.js';
-import AuditLog from '../models/AuditLog.js';
-import { memoryRegistrations, memoryAuditLogs } from '../data/seedEvents.js';
+const connectDB = require('../config/db.js');
+const Registration = require('../models/Registration.js');
+const AuditLog = require('../models/AuditLog.js');
+const { memoryRegistrations, memoryAuditLogs } = require('../data/seedEvents.js');
+
+const isConnectedToMongoDB = () => connectDB.isConnectedToMongoDB;
 
 /**
  * Helper to sync seed data to MongoDB if collection is empty
  */
 const ensureMongoSeeded = async (eventId) => {
-  if (!isConnectedToMongoDB) return;
+  if (!isConnectedToMongoDB()) return;
   try {
     const count = await Registration.countDocuments({ eventId });
-    if (count === 0) {
+    if (count === 0 && Array.isArray(memoryRegistrations)) {
       const defaultForEvent = memoryRegistrations.filter((r) => r.eventId === eventId);
       if (defaultForEvent.length > 0) {
         await Registration.insertMany(
           defaultForEvent.map(({ id, ...rest }) => ({
             ...rest,
-            _id: id.startsWith('reg-') ? undefined : id
+            _id: id && id.startsWith('reg-') ? undefined : id
           }))
         );
       }
@@ -30,7 +32,7 @@ const ensureMongoSeeded = async (eventId) => {
  * GET /api/events/:id/attendance
  * Fetch attendance list with search, filtering (rsvpStatus, attendanceStatus), pagination & summary.
  */
-export const getEventAttendance = async (req, res, next) => {
+exports.getEventAttendance = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
     const {
@@ -46,7 +48,7 @@ export const getEventAttendance = async (req, res, next) => {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.max(1, parseInt(limit, 10) || 10);
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       await ensureMongoSeeded(eventId);
 
       // Compute overall summary stats for the event
@@ -105,9 +107,9 @@ export const getEventAttendance = async (req, res, next) => {
     }
 
     // In-memory Fallback Store
-    let allRecords = memoryRegistrations.filter((r) => r.eventId === eventId);
+    let allRecords = (memoryRegistrations || []).filter((r) => r.eventId === eventId);
     if (allRecords.length === 0 && (eventId === 'evt-1' || eventId === 'evt-2')) {
-      allRecords = memoryRegistrations;
+      allRecords = memoryRegistrations || [];
     }
 
     const summary = {
@@ -170,7 +172,8 @@ export const getEventAttendance = async (req, res, next) => {
       data: paginatedData
     });
   } catch (error) {
-    next(error);
+    if (next) return next(error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -179,7 +182,7 @@ export const getEventAttendance = async (req, res, next) => {
  * Update single or bulk attendance status (statusPresent: true/false).
  * Persists checkInAt timestamp, markedBy, and records audit logs.
  */
-export const updateEventAttendance = async (req, res, next) => {
+exports.updateEventAttendance = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
     const { registrationId, statusPresent, updates, registrationIds } = req.body;
@@ -226,7 +229,7 @@ export const updateEventAttendance = async (req, res, next) => {
     const auditEntries = [];
     const now = new Date();
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       for (const item of itemsToUpdate) {
         const checkInAtValue = item.statusPresent ? now : null;
 
@@ -273,7 +276,7 @@ export const updateEventAttendance = async (req, res, next) => {
 
     // In-Memory Update & Audit Logging
     for (const item of itemsToUpdate) {
-      const idx = memoryRegistrations.findIndex(
+      const idx = (memoryRegistrations || []).findIndex(
         (r) => r.id === item.registrationId || r._id === item.registrationId
       );
 
@@ -298,7 +301,7 @@ export const updateEventAttendance = async (req, res, next) => {
           userRole: 'organizer',
           timestamp: now.toISOString()
         };
-        memoryAuditLogs.unshift(auditItem);
+        if (memoryAuditLogs) memoryAuditLogs.unshift(auditItem);
         auditEntries.push(auditItem);
       }
     }
@@ -311,7 +314,8 @@ export const updateEventAttendance = async (req, res, next) => {
       auditLogs: auditEntries
     });
   } catch (error) {
-    next(error);
+    if (next) return next(error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -319,14 +323,14 @@ export const updateEventAttendance = async (req, res, next) => {
  * GET /api/events/:id/attendance/export
  * Streams CSV file of attendance data for an event.
  */
-export const exportEventAttendance = async (req, res, next) => {
+exports.exportEventAttendance = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
     const { search = '', rsvpStatus = 'all', attendanceStatus = 'all' } = req.query;
 
     let records = [];
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       await ensureMongoSeeded(eventId);
       const query = { eventId };
 
@@ -346,9 +350,9 @@ export const exportEventAttendance = async (req, res, next) => {
 
       records = await Registration.find(query).sort({ fullName: 1 });
     } else {
-      records = memoryRegistrations.filter((r) => r.eventId === eventId);
+      records = (memoryRegistrations || []).filter((r) => r.eventId === eventId);
       if (records.length === 0 && (eventId === 'evt-1' || eventId === 'evt-2')) {
-        records = memoryRegistrations;
+        records = memoryRegistrations || [];
       }
 
       if (search.trim()) {
@@ -426,7 +430,8 @@ export const exportEventAttendance = async (req, res, next) => {
 
     return res.status(200).send(csvContent);
   } catch (error) {
-    next(error);
+    if (next) return next(error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -434,18 +439,19 @@ export const exportEventAttendance = async (req, res, next) => {
  * GET /api/events/:id/attendance/audit-logs
  * Fetch audit logs for an event.
  */
-export const getAttendanceAuditLogs = async (req, res, next) => {
+exports.getAttendanceAuditLogs = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const logs = await AuditLog.find({ eventId }).sort({ createdAt: -1 }).limit(50);
       return res.json({ success: true, count: logs.length, data: logs });
     }
 
-    const logs = memoryAuditLogs.filter((l) => l.eventId === eventId || !l.eventId);
+    const logs = (memoryAuditLogs || []).filter((l) => l.eventId === eventId || !l.eventId);
     return res.json({ success: true, count: logs.length, data: logs });
   } catch (error) {
-    next(error);
+    if (next) return next(error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };

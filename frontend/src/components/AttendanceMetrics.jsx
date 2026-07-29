@@ -111,6 +111,10 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
     setLoading(true);
     setError(null);
     try {
+      const token = localStorage.getItem('cc_token');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       // Try multiple endpoint patterns for robustness
       const endpoints = [
         `/api/organizer/${organizerId}/attendance-metrics?limit=${limit}`,
@@ -123,7 +127,7 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
 
       for (const endpoint of endpoints) {
         try {
-          response = await fetch(endpoint);
+          response = await fetch(endpoint, { headers });
           if (response.ok) {
             data = await response.json();
             if (data && data.success && Array.isArray(data.data)) {
@@ -192,6 +196,10 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
 
   const handleExportCSV = async () => {
     try {
+      const token = localStorage.getItem('cc_token');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const exportEndpoints = [
         `/api/organizer/${organizerId}/attendance-metrics/export?limit=${limit}`,
         `/organizer/${organizerId}/attendance-metrics/export?limit=${limit}`,
@@ -201,7 +209,7 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
       let downloaded = false;
       for (const endpoint of exportEndpoints) {
         try {
-          const response = await fetch(endpoint);
+          const response = await fetch(endpoint, { headers });
           if (response.ok) {
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);

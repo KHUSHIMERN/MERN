@@ -91,6 +91,18 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
     setSelectedEvent(found || events[0] || null);
   }, [events, selectedEventId]);
 
+  const getAuthHeaders = (role = userRole) => {
+    const token = localStorage.getItem('cc_token');
+    const h = {
+      'Content-Type': 'application/json',
+      'X-User-Role': role,
+      'X-User-Name': 'Organizer Admin',
+      'X-User-Email': 'organizer@eventpulse.org'
+    };
+    if (token) h['Authorization'] = `Bearer ${token}`;
+    return h;
+  };
+
   // 2. Fetch Attendance Data from API
   const fetchAttendance = useCallback(async () => {
     if (!selectedEventId) return;
@@ -110,12 +122,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
       });
 
       const res = await fetch(`/api/events/${selectedEventId}/attendance?${queryParams.toString()}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-Role': userRole,
-          'X-User-Name': 'Organizer Admin',
-          'X-User-Email': 'organizer@eventpulse.org'
-        }
+        headers: getAuthHeaders()
       });
 
       if (res.status === 403) {
@@ -153,10 +160,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
     if (!selectedEventId || userRole !== 'organizer') return;
     try {
       const res = await fetch(`/api/events/${selectedEventId}/attendance/audit-logs`, {
-        headers: {
-          'X-User-Role': userRole,
-          'X-User-Name': 'Organizer Admin'
-        }
+        headers: getAuthHeaders()
       });
       if (res.ok) {
         const json = await res.json();
@@ -237,12 +241,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
     try {
       const res = await fetch(`/api/events/${selectedEventId}/attendance`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-Role': userRole,
-          'X-User-Name': 'Organizer Admin',
-          'X-User-Email': 'organizer@eventpulse.org'
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           registrationId: regId,
           statusPresent: nextStatus
@@ -291,12 +290,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
     try {
       const res = await fetch(`/api/events/${selectedEventId}/attendance`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-Role': userRole,
-          'X-User-Name': 'Organizer Admin',
-          'X-User-Email': 'organizer@eventpulse.org'
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           registrationIds: selectedRegIds,
           statusPresent: targetStatus
@@ -337,12 +331,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
     try {
       const res = await fetch(`/api/events/${selectedEventId}/attendance`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-Role': userRole,
-          'X-User-Name': 'Organizer Admin',
-          'X-User-Email': 'organizer@eventpulse.org'
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           registrationIds: pageIds,
           statusPresent: true
@@ -381,10 +370,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
       });
 
       const res = await fetch(`/api/events/${selectedEventId}/attendance/export?${queryParams.toString()}`, {
-        headers: {
-          'X-User-Role': userRole,
-          'X-User-Name': 'Organizer Admin'
-        }
+        headers: getAuthHeaders()
       });
 
       if (res.status === 403) {

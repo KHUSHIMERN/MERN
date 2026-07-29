@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Mail, Lock, LogIn, AlertCircle, CheckCircle } from 'lucide-react';
+import { Mail, Lock, LogIn, AlertCircle, CheckCircle, Send } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-export default function LoginForm({ onSwitchToRegister }) {
+export default function LoginForm({ onSwitchToRegister, onLoginSuccess }) {
+  const { login, resendVerification } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -10,18 +12,24 @@ export default function LoginForm({ onSwitchToRegister }) {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState('');
   const [apiSuccess, setApiSuccess] = useState('');
+  const [isUnverified, setIsUnverified] = useState(false);
+  const [resendStatus, setResendStatus] = useState('');
   const [userProfile, setUserProfile] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     setApiError('');
+    setIsUnverified(false);
+    setResendStatus('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setApiError('');
     setApiSuccess('');
+    setIsUnverified(false);
+    setResendStatus('');
 
     if (!formData.email || !formData.password) {
       setApiError('Please enter both email and password.');
@@ -31,28 +39,36 @@ export default function LoginForm({ onSwitchToRegister }) {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email.trim(),
-          password: formData.password,
-        }),
-      });
+      const result = await login(formData.email.trim(), formData.password);
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setApiError(data.message || 'Login failed.');
+      if (!result.success) {
+        setApiError(result.message || 'Login failed.');
+        if (result.isUnverified) {
+          setIsUnverified(true);
+        }
       } else {
-        setApiSuccess(`Welcome back, ${data.user.name}! Access granted.`);
-        setUserProfile(data.user);
+        setApiSuccess(`Welcome back, ${result.user.name}! Access granted.`);
+        setUserProfile(result.user);
+        if (onLoginSuccess) {
+          setTimeout(() => onLoginSuccess(result.user), 1000);
+        }
       }
     } catch (err) {
       console.error('[Login submit error]:', err);
       setApiError('Unable to connect to backend server.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!formData.email) return;
+    setResendStatus('Sending...');
+    const res = await resendVerification(formData.email.trim());
+    if (res.success) {
+      setResendStatus('Verification email sent! Check your inbox or simulated link.');
+    } else {
+      setResendStatus(res.message || 'Failed to resend verification.');
     }
   };
 
@@ -64,9 +80,24 @@ export default function LoginForm({ onSwitchToRegister }) {
       </div>
 
       {apiError && (
-        <div className="alert-box error">
-          <AlertCircle size={20} style={{ flexShrink: 0 }} />
-          <div>{apiError}</div>
+        <div className="alert-box error" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={20} style={{ flexShrink: 0 }} />
+            <div>{apiError}</div>
+          </div>
+          {isUnverified && (
+            <div style={{ marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleResend}
+                style={{ fontSize: '0.8rem', padding: '4px 10px', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)' }}
+              >
+                <Send size={12} /> Resend Verification Link
+              </button>
+              {resendStatus && <div style={{ fontSize: '0.8rem', marginTop: '6px', color: '#f87171' }}>{resendStatus}</div>}
+            </div>
+          )}
         </div>
       )}
 
@@ -96,7 +127,7 @@ export default function LoginForm({ onSwitchToRegister }) {
               type="email"
               name="email"
               className="form-input"
-              placeholder="rahul@example.com"
+              placeholder="resident@indore.org"
               value={formData.email}
               onChange={handleChange}
               required

@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { TimezoneProvider } from './context/TimezoneContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
-import { useAuth } from './context/AuthContext';
 import RegisterForm from './components/RegisterForm';
 import LoginForm from './components/LoginForm';
 import ProfilePage from './components/ProfilePage';
@@ -19,13 +18,8 @@ import FallbackTestDemo from './components/FallbackTestDemo';
 import Footer from './components/Footer';
 import './App.css';
 
-function AppContent() {
-  const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
-// MUI Theme — rem-based typography so all sizes scale with browser zoom (WCAG 1.4.4)
 const theme = createTheme({
   typography: {
-    // Base font size set in rem units so all elements scale dynamically with browser zoom (WCAG 1.4.4)
     htmlFontSize: 16,
     fontFamily: '"Plus Jakarta Sans", "Roboto", "Helvetica", "Arial", sans-serif',
     h1: { fontSize: 'var(--font-size-4xl, 2.25rem)' },
@@ -45,17 +39,15 @@ const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         html: {
-          fontSize: '100%' // Allows root font-size to scale seamlessly with browser zoom & font settings
+          fontSize: '100%'
         }
       }
     }
   },
   palette: {
-    // primary.main: #1d4ed8 — contrast 5.11:1 on white (WCAG AA ✅)
     primary: {
       main: '#1d4ed8'
     },
-    // secondary.main: #374151 — contrast 7.23:1 on white (WCAG AA ✅)
     secondary: {
       main: '#374151'
     },
@@ -65,14 +57,11 @@ const theme = createTheme({
   }
 });
 
-/**
- * AppContent — inner layout component with all page sections.
- * Wrapped by I18nProvider (react-i18next) and MUI ThemeProvider.
- */
 function AppContent() {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [view, setView] = useState('events'); // 'events' | 'register' | 'login' | 'profile' | 'admin-requests'
-  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'fallbackDemo'
+  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedEventForModal, setSelectedEventForModal] = useState(null);
 
@@ -100,17 +89,11 @@ function AppContent() {
         {t('app.skipToContent', 'Skip to main content')}
       </a>
 
-      {/* Global Header with Brand & Language Selector */}
-      {/* Global Header with Brand, Auth, Language Selector, Timezone & Role Controls */}
+      {/* Global Header */}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenRegisterModal={() => handleOpenRegisterModal()}
-      />
-
-      {/* Main View Area */}
-      <main id="main-content" tabIndex={-1} className="main-content">
-        {activeTab === 'events' && (
         user={user}
         logout={logout}
         view={view}
@@ -118,7 +101,7 @@ function AppContent() {
       />
 
       {/* Main View Area */}
-      <main className="main-content">
+      <main id="main-content" tabIndex={-1} className="main-content">
         {view === 'register' && (
           <div className="auth-container-wrapper">
             <RegisterForm onSwitchToLogin={() => setView('login')} />
@@ -127,12 +110,15 @@ function AppContent() {
 
         {view === 'login' && (
           <div className="auth-container-wrapper">
-            <LoginForm onSwitchToRegister={() => setView('register')} />
+            <LoginForm
+              onSwitchToRegister={() => setView('register')}
+              onLoginSuccess={() => setView('events')}
+            />
           </div>
         )}
 
         {view === 'profile' && (
-          <ProfilePage onNavigateHome={() => setView(user ? 'profile' : 'login')} />
+          <ProfilePage onNavigateHome={() => setView('events')} />
         )}
 
         {view === 'admin-requests' && (
@@ -146,24 +132,16 @@ function AppContent() {
               onRegister={() => handleOpenRegisterModal()}
             />
 
-            <EventList
-              onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
-              onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
-            />
-          </>
-        )}
-
-        {activeTab === 'checkin' && (
-          <OrganizerCheckIn
-            onSelectEventForRegister={(evt) => handleOpenRegisterModal(evt)}
-          />
-        )}
-
-        {activeTab === 'fallbackDemo' && <FallbackTestDemo />}
             {activeTab === 'events' && (
               <EventList
                 onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
                 onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+              />
+            )}
+
+            {activeTab === 'checkin' && (
+              <OrganizerCheckIn
+                onSelectEventForRegister={(evt) => handleOpenRegisterModal(evt)}
               />
             )}
 
@@ -177,6 +155,7 @@ function AppContent() {
         <EventRegistrationForm
           selectedEvent={selectedEventForModal}
           onClose={handleCloseRegisterModal}
+          onNavigateProfile={() => setView('profile')}
         />
       )}
 
@@ -186,14 +165,6 @@ function AppContent() {
   );
 }
 
-export function App() {
-  return (
-    <I18nProvider>
-      <AppContent />
-/**
- * App — root component.
- * Provides: I18nProvider (react-i18next) → MUI ThemeProvider → Context providers → AppContent
- */
 export function App() {
   return (
     <I18nProvider>

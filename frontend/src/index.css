@@ -1,11 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
-:root {
 /* ============================================================
    Global Design System Tokens — WCAG 1.4.4 Scalable Font Sizes
    ============================================================ */
 
-/* Font-size scale in rem units (scales with browser zoom & user font preferences) */
 :root {
   --font-size-xs: 0.75rem;   /* 12px */
   --font-size-sm: 0.875rem;  /* 14px */
@@ -17,27 +15,18 @@
   --font-size-4xl: 2.25rem;  /* 36px */
   --font-size-5xl: 3.75rem;  /* 60px */
 
-  /* ── Color Design Tokens ── */
+  /* Color Design Tokens */
   --primary: #6366f1;
   --primary-hover: #4f46e5;
   --primary-light: rgba(99, 102, 241, 0.12);
   --secondary: #0ea5e9;
   --accent: #ec4899;
-  
 
   --bg-primary: #0b0f19;
   --bg-main: #0f172a;
   --bg-card: rgba(30, 41, 59, 0.7);
   --bg-card-hover: rgba(30, 41, 59, 0.9);
   --bg-glass: rgba(15, 23, 42, 0.85);
-  
-  --border-color: rgba(255, 255, 255, 0.1);
-  --border-highlight: rgba(99, 102, 241, 0.4);
-  
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
-  
   --bg-input: rgba(15, 23, 42, 0.8);
 
   --border-color: rgba(255, 255, 255, 0.1);
@@ -63,27 +52,19 @@
   --radius-md: 12px;
   --radius-lg: 20px;
   --radius-full: 9999px;
-  
-  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
-  --glow-primary: 0 0 25px rgba(99, 102, 241, 0.35);
-
 
   --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
   --shadow-glow: 0 12px 40px rgba(99, 102, 241, 0.25);
   --glow-primary: 0 0 25px rgba(99, 102, 241, 0.35);
 
-  /* ── Font Families ── */
+  /* Font Families */
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-heading: 'Space Grotesk', system-ui, -apple-system, sans-serif;
 }
 
-* {
-  box-sizing: border-box;
-/* Ensure root font-size scales with browser zoom & default font preferences (WCAG 1.4.4) */
 html {
-  font-size: 100%; /* 1rem = 16px by default, scales dynamically when zoomed or base font changed */
+  font-size: 100%;
   box-sizing: border-box;
 }
 
@@ -100,11 +81,8 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
-  font-size: var(--font-size-base);
-  line-height: 1.6;
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-size: var(--font-size-base);
 }
 
 .auth-container-wrapper {
@@ -366,7 +344,6 @@ button {
   background: none;
 }
 
-/* Screen reader utility */
 /* Screen reader utility — WCAG 2.4.3 */
 .sr-only {
   position: absolute;

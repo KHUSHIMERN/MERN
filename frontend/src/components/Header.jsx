@@ -39,7 +39,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
           </button>
           <button
             type="button"
-            className="nav-link"
+            className="nav-link nav-link-highlight"
             onClick={onOpenRegisterModal}
           >
             + {t('header.nav.register', 'Register Event')}

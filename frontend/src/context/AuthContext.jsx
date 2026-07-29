@@ -108,6 +108,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Toggle role for local/demo purposes
+  const toggleRole = () => {
+    setUser(prev => prev ? ({
+      ...prev,
+      role: prev.role === 'attendee' ? 'organizer' : 'attendee'
+    }) : prev);
+  };
+
+  const updateUserCity = (city) => {
+    setUser(prev => prev ? { ...prev, city } : prev);
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -120,6 +132,7 @@ export const AuthProvider = ({ children }) => {
         user,
         token,
         loading,
+        role: user?.role || null,
         login,
         register,
         resendVerification,
@@ -127,6 +140,8 @@ export const AuthProvider = ({ children }) => {
         requestOrganizerRole,
         logout,
         fetchProfile,
+        toggleRole,
+        updateUserCity,
       }}
     >
       {children}
@@ -134,4 +149,12 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}
+
+export default AuthProvider;

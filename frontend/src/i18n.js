@@ -34,7 +34,7 @@ i18n
     },
 
     react: {
-      useSuspense: true,
+      useSuspense: false, // Prevents blank screen freezes during translation bundle fetching
     },
   });
 

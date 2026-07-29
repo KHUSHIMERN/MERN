@@ -4,7 +4,7 @@ const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, 'Name is required'],
+      required: [true, 'User name is required'],
       trim: true,
     },
     email: {
@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema(
       trim: true,
       match: [/\S+@\S+\.\S+/, 'Please provide a valid email address'],
     },
+    // Authentication fields (QA)
     password: {
       type: String,
       required: [true, 'Password is required'],
@@ -22,9 +23,10 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['resident', 'organizer', 'admin'],
-      default: 'resident',
+      enum: ['attendee', 'resident', 'organizer', 'admin'],
+      default: 'attendee',
     },
+    // Email verification fields (QA)
     isVerified: {
       type: Boolean,
       default: false,
@@ -37,23 +39,49 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    city: {
+      type: String,
+      default: 'Jaipur',
+    },
     interests: {
       type: [String],
       default: ['Career & Jobs', 'Health & Wellness', 'Skill Workshops'],
     },
-    city: {
+    // IANA timezone preference (DEV-KHUSHI)
+    preferredTimezone: {
       type: String,
-      default: 'Indore',
+      default: null,
+      validate: {
+        validator: function (v) {
+          if (!v) return true;
+          try {
+            Intl.DateTimeFormat(undefined, { timeZone: v });
+            return true;
+          } catch (e) {
+            return false;
+          }
+        },
+        message: props => `${props.value} is not a valid IANA timezone identifier`,
+      },
     },
+    // Language preference (DEV-KHUSHI)
+    preferredLanguage: {
+      type: String,
+      enum: ['en', 'hi'],
+      default: 'en',
+    },
+    // Language field (QA alias)
     language: {
       type: String,
       default: 'en',
     },
+    // Contact info (QA)
     contact: {
       type: String,
       default: '',
       trim: true,
     },
+    // Organizer role request workflow (QA)
     organizerRoleRequest: {
       status: {
         type: String,
@@ -90,7 +118,7 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Method to sanitize user output (exclude password and token)
+// Method to sanitize user output (exclude password and token) — QA
 userSchema.methods.toSafeObject = function () {
   const user = this.toObject();
   delete user.password;

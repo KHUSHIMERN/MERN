@@ -402,5 +402,35 @@ describe('Role-Based Authorization & RSVP System Integration Tests', () => {
     expect(notification.payload.message).toContain('promoted');
   });
 
+  test('Test requireRole allows organizer to access organizer endpoint', async () => {
+    const organizer = await User.create({ name: 'Organizer User', email: 'org_user@test.com', role: 'organizer', password: 'password' });
+    const token = generateToken(organizer);
+
+    const response = await request(app)
+      .get('/api/organizer/events')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.message).toContain('Access granted to organizer resources');
+  });
+
+  test('Test requireRole blocks resident from organizer endpoint and admin-only endpoint', async () => {
+    const resident = await User.create({ name: 'Resident User', email: 'res_user@test.com', role: 'resident', password: 'password' });
+    const token = generateToken(resident);
+
+    // Blocked from organizer endpoint
+    const orgResponse = await request(app)
+      .get('/api/organizer/events')
+      .set('Authorization', `Bearer ${token}`);
+    expect(orgResponse.status).toBe(403);
+
+    // Blocked from admin endpoint
+    const adminResponse = await request(app)
+      .get('/api/admin/users')
+      .set('Authorization', `Bearer ${token}`);
+    expect(adminResponse.status).toBe(403);
+  });
+
 });
+
 

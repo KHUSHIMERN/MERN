@@ -1,9 +1,9 @@
-const connectDB = require('../config/db.js');
-const Registration = require('../models/Registration.js');
-const AuditLog = require('../models/AuditLog.js');
-const { memoryRegistrations, memoryAuditLogs } = require('../data/seedEvents.js');
+const connectDB = require('../config/db');
+const Registration = require('../models/Registration');
+const AuditLog = require('../models/AuditLog');
+const { memoryRegistrations, memoryAuditLogs } = require('../data/seedEvents');
 
-const isConnectedToMongoDB = () => connectDB.isConnectedToMongoDB;
+const isConnectedToMongoDB = () => Boolean(connectDB.isConnectedToMongoDB);
 
 /**
  * Helper to sync seed data to MongoDB if collection is empty
@@ -32,7 +32,7 @@ const ensureMongoSeeded = async (eventId) => {
  * GET /api/events/:id/attendance
  * Fetch attendance list with search, filtering (rsvpStatus, attendanceStatus), pagination & summary.
  */
-exports.getEventAttendance = async (req, res, next) => {
+const getEventAttendance = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
     const {
@@ -182,7 +182,7 @@ exports.getEventAttendance = async (req, res, next) => {
  * Update single or bulk attendance status (statusPresent: true/false).
  * Persists checkInAt timestamp, markedBy, and records audit logs.
  */
-exports.updateEventAttendance = async (req, res, next) => {
+const updateEventAttendance = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
     const { registrationId, statusPresent, updates, registrationIds } = req.body;
@@ -323,7 +323,7 @@ exports.updateEventAttendance = async (req, res, next) => {
  * GET /api/events/:id/attendance/export
  * Streams CSV file of attendance data for an event.
  */
-exports.exportEventAttendance = async (req, res, next) => {
+const exportEventAttendance = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
     const { search = '', rsvpStatus = 'all', attendanceStatus = 'all' } = req.query;
@@ -439,7 +439,7 @@ exports.exportEventAttendance = async (req, res, next) => {
  * GET /api/events/:id/attendance/audit-logs
  * Fetch audit logs for an event.
  */
-exports.getAttendanceAuditLogs = async (req, res, next) => {
+const getAttendanceAuditLogs = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
 
@@ -454,4 +454,11 @@ exports.getAttendanceAuditLogs = async (req, res, next) => {
     if (next) return next(error);
     return res.status(500).json({ success: false, message: error.message });
   }
+};
+
+module.exports = {
+  getEventAttendance,
+  updateEventAttendance,
+  exportEventAttendance,
+  getAttendanceAuditLogs
 };

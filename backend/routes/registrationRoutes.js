@@ -1,5 +1,5 @@
 const express = require('express');
-const { registerForEvent, getRegistrations } = require('../controllers/registrationController.js');
+const { registerForEvent, getRegistrations } = require('../controllers/registrationController');
 
 const router = express.Router();
 

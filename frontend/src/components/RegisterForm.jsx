@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { User, Mail, Lock, Shield, UserCheck, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-export default function RegisterForm({ onSwitchToLogin }) {
+export default function RegisterForm({ onSwitchToLogin, hideCardWrapper = false }) {
+  const { register } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -19,7 +21,6 @@ export default function RegisterForm({ onSwitchToLogin }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear field-level error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
     }
@@ -67,28 +68,22 @@ export default function RegisterForm({ onSwitchToLogin }) {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name.trim(),
-          email: formData.email.trim(),
-          password: formData.password,
-          role: formData.role,
-        }),
+      const result = await register({
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        role: formData.role,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setApiError(data.message || 'Registration failed. Please try again.');
+      if (!result.success) {
+        setApiError(result.message || 'Registration failed. Please try again.');
       } else {
-        setApiSuccess(data.message || 'Registration successful!');
-        const link = data.verificationLink || data.backendVerifyLink || (data.data && data.data.verificationLink);
-        if (link) {
-          setVerificationLink(link);
+        const responseData = result.data || {};
+        setApiSuccess(responseData.message || 'Registration successful!');
+        if (responseData.verificationLink || responseData.backendVerifyLink) {
+          setVerificationLink(responseData.verificationLink || responseData.backendVerifyLink);
         }
-        // Reset sensitive form fields
         setFormData({
           name: '',
           email: '',
@@ -105,8 +100,8 @@ export default function RegisterForm({ onSwitchToLogin }) {
     }
   };
 
-  return (
-    <div className="auth-card">
+  const content = (
+    <>
       <div className="auth-header">
         <span className="auth-badge">
           <UserCheck size={14} /> Tier 2-4 Community Hub
@@ -129,13 +124,23 @@ export default function RegisterForm({ onSwitchToLogin }) {
             <strong>Registration Received!</strong>
             <p style={{ marginTop: '4px' }}>{apiSuccess}</p>
             {verificationLink && (
-              <div className="verify-link-preview">
-                <strong>Simulated Dev Email Link:</strong>
-                <a href={verificationLink} target="_blank" rel="noreferrer">
-                  Click here to verify email
+              <div className="verify-link-preview" style={{ marginTop: '10px', padding: '10px', background: 'rgba(16, 185, 129, 0.15)', borderRadius: '8px' }}>
+                <strong style={{ display: 'block', fontSize: '0.85rem' }}>📧 Simulated Dev Email Link:</strong>
+                <a href={verificationLink} target="_blank" rel="noreferrer" style={{ color: '#34d399', fontWeight: 'bold', wordBreak: 'break-all' }}>
+                  Click here to verify email ({verificationLink})
                 </a>
               </div>
             )}
+            <div style={{ marginTop: '12px' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={onSwitchToLogin}
+                style={{ fontSize: '0.85rem', padding: '6px 12px' }}
+              >
+                Go to Sign In
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -259,6 +264,13 @@ export default function RegisterForm({ onSwitchToLogin }) {
           Sign In
         </button>
       </div>
-    </div>
+    </>
   );
+
+  if (hideCardWrapper) {
+    return <div className="auth-form-inner">{content}</div>;
+  }
+
+  return <div className="auth-card">{content}</div>;
 }
+

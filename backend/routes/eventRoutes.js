@@ -26,17 +26,15 @@ const { requireOrganizer } = require('../middleware/authRole');
 router.get('/', getEvents);
 router.post('/', createEvent);
 router.get('/search', searchEvents);
+router.get('/organizer/:id/attendance-metrics/export', exportOrganizerAttendanceMetricsCSV);
+router.get('/organizer/:id/attendance-metrics', getOrganizerAttendanceMetrics);
 router.get('/:id', getEventById);
 router.put('/:id', updateEvent);
 router.delete('/:id', deleteEvent);
 router.patch('/:id/publish', publishEvent);
 router.post('/:id/rsvp', rsvpEvent);
 
-// Organizer attendance metrics endpoints (mounted under event routes or organizer routes)
-router.get('/organizer/:id/attendance-metrics/export', exportOrganizerAttendanceMetricsCSV);
-router.get('/organizer/:id/attendance-metrics', getOrganizerAttendanceMetrics);
-
-// Attendance Tracking & Check-in Endpoints (Protected by requireOrganizer RBAC)
+// Organizer attendance metrics and check-in endpoints
 router.get('/:id/attendance', requireOrganizer, getEventAttendance);
 router.patch('/:id/attendance', requireOrganizer, updateEventAttendance);
 router.get('/:id/attendance/export', requireOrganizer, exportEventAttendance);

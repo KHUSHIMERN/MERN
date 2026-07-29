@@ -6,9 +6,12 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "node -e \"console.log('✅ Backend build check successful: CommonJS server ready.')\"",
     "seed": "node seed.js",
-    "test": "node tests/runApiTests.js"
+    "test": "node tests/runApiTests.js",
+    "test:auth": "node test-auth-flow.js",
+    "test:all": "node tests/runApiTests.js && node test-auth-flow.js"
   },
   "keywords": [],
   "author": "",

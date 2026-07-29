@@ -1,23 +1,50 @@
 const mongoose = require('mongoose');
-const connectDB = require('../config/db.js');
-const Event = require('../models/Event.js');
-const { INITIAL_EVENTS } = require('../data/seedEvents.js');
+const connectDB = require('../config/db');
+const Event = require('../models/Event');
+const { INITIAL_EVENTS } = require('../data/seedEvents');
 
-const isConnectedToMongoDB = () => connectDB.isConnectedToMongoDB;
+const isConnectedToMongoDB = () => Boolean(connectDB.isConnectedToMongoDB);
+
+const getCategoryMatchPatterns = (cat) => {
+  if (!cat || String(cat).toLowerCase() === 'all') return [];
+  const c = String(cat).toLowerCase();
+  if (c.includes('career') || c.includes('job') || c.includes('tech')) {
+    return ['tech', 'career', 'job', 'Career & Jobs', 'Tech & AI'];
+  }
+  if (c.includes('workshop') || c.includes('skill')) {
+    return ['workshop', 'skill', 'Skill Workshops', 'Workshops'];
+  }
+  if (c.includes('culture') || c.includes('cultural') || c.includes('festival')) {
+    return ['culture', 'cultural', 'festival', 'Cultural Festivals', 'Culture & Heritage'];
+  }
+  if (c.includes('charity') || c.includes('civic') || c.includes('community')) {
+    return ['charity', 'civic', 'community', 'Civic & Community', 'Charity & Volunteer'];
+  }
+  if (c.includes('health') || c.includes('wellness') || c.includes('sport') || c.includes('fitness')) {
+    return ['health', 'wellness', 'sports', 'marathon', 'fitness', 'Health & Wellness', 'charity'];
+  }
+  return [cat];
+};
 
 /**
  * GET /api/events
  * Fetch all events with category, tags, date range, published, and search filter support.
  */
-exports.getEvents = async (req, res, next) => {
+const getEvents = async (req, res, next) => {
   try {
     const { category, tags, published, startDate, endDate, search, city } = req.query;
 
     if (isConnectedToMongoDB()) {
       const query = {};
 
-      if (category && category !== 'all') {
-        query.category = category;
+      if (category && String(category).toLowerCase() !== 'all') {
+        const patterns = getCategoryMatchPatterns(category);
+        const regexList = patterns.map((p) => new RegExp(p, 'i'));
+        query.$or = [
+          { category: { $in: regexList } },
+          { title: { $in: regexList } },
+          { tags: { $in: regexList } }
+        ];
       }
 
       if (city && city !== 'all') {
@@ -48,13 +75,19 @@ exports.getEvents = async (req, res, next) => {
 
       if (search && search.trim()) {
         const regex = new RegExp(search.trim(), 'i');
-        query.$or = [
+        const searchCond = [
           { title: regex },
           { description: regex },
           { 'location.placeName': regex },
           { location: regex },
           { city: regex }
         ];
+        if (query.$or) {
+          query.$and = [{ $or: query.$or }, { $or: searchCond }];
+          delete query.$or;
+        } else {
+          query.$or = searchCond;
+        }
       }
 
       const events = await Event.find(query).sort({ startDate: 1, createdAt: -1 });
@@ -64,8 +97,17 @@ exports.getEvents = async (req, res, next) => {
     // In-memory fallback store mode
     let results = [...(INITIAL_EVENTS || [])];
 
-    if (category && category !== 'all') {
-      results = results.filter((e) => e.category === category);
+    if (category && String(category).toLowerCase() !== 'all') {
+      const patterns = getCategoryMatchPatterns(category);
+      const regexes = patterns.map((p) => new RegExp(p, 'i'));
+      results = results.filter((e) =>
+        regexes.some(
+          (r) =>
+            r.test(e.category) ||
+            r.test(e.title) ||
+            (Array.isArray(e.tags) && e.tags.some((t) => r.test(t)))
+        )
+      );
     }
 
     if (city && city !== 'all') {
@@ -125,7 +167,7 @@ exports.getEvents = async (req, res, next) => {
  * GET /api/events/search?q=<query>
  * Dedicated keyword search endpoint matching title, description, or tags (case-insensitive).
  */
-exports.searchEvents = async (req, res, next) => {
+const searchEvents = async (req, res, next) => {
   try {
     const q = req.query.q || req.query.search || req.query.query || '';
     const queryTerm = String(q).trim();
@@ -179,7 +221,7 @@ exports.searchEvents = async (req, res, next) => {
  * GET /api/events/:id
  * Fetch single event by ID or itemKey.
  */
-exports.getEventById = async (req, res, next) => {
+const getEventById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -213,7 +255,7 @@ exports.getEventById = async (req, res, next) => {
  * POST /api/events
  * Create a new event with input validation (required fields & date range sanity).
  */
-exports.createEvent = async (req, res, next) => {
+const createEvent = async (req, res, next) => {
   try {
     const {
       title,
@@ -349,7 +391,7 @@ exports.createEvent = async (req, res, next) => {
  * PUT /api/events/:id
  * Full update of an event by ID with validation.
  */
-exports.updateEvent = async (req, res, next) => {
+const updateEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
     const updatePayload = { ...req.body };
@@ -436,7 +478,7 @@ exports.updateEvent = async (req, res, next) => {
  * DELETE /api/events/:id
  * Delete event by ID.
  */
-exports.deleteEvent = async (req, res, next) => {
+const deleteEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -475,7 +517,7 @@ exports.deleteEvent = async (req, res, next) => {
  * Change published boolean status and update updatedAt.
  * Ensures ONLY the published field (and updatedAt timestamp) is mutated.
  */
-exports.publishEvent = async (req, res, next) => {
+const publishEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { published, isPublished } = req.body || {};
@@ -555,7 +597,7 @@ exports.publishEvent = async (req, res, next) => {
  * POST /api/events/:id/rsvp
  * RSVP for an event.
  */
-exports.rsvpEvent = async (req, res, next) => {
+const rsvpEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
     const User = require('../models/User.js');
@@ -635,7 +677,7 @@ exports.rsvpEvent = async (req, res, next) => {
  * GET /organizer/:id/attendance-metrics
  * Get attendance metrics for an organizer (Task 1 of Story 3)
  */
-exports.getOrganizerAttendanceMetrics = async (req, res, next) => {
+const getOrganizerAttendanceMetrics = async (req, res, next) => {
   try {
     const { id } = req.params;
     const limitVal = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 6;
@@ -782,7 +824,7 @@ exports.getOrganizerAttendanceMetrics = async (req, res, next) => {
  * GET /organizer/:id/attendance-metrics/export
  * Export attendance metrics as CSV (Task 3 of Story 3)
  */
-exports.exportOrganizerAttendanceMetricsCSV = async (req, res, next) => {
+const exportOrganizerAttendanceMetricsCSV = async (req, res, next) => {
   try {
     const { id } = req.params;
     const limitVal = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 5;
@@ -853,4 +895,16 @@ exports.exportOrganizerAttendanceMetricsCSV = async (req, res, next) => {
     if (next) return next(error);
     return res.status(500).json({ success: false, message: error.message });
   }
+};
+module.exports = {
+  getEvents,
+  searchEvents,
+  getEventById,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  publishEvent,
+  rsvpEvent,
+  getOrganizerAttendanceMetrics,
+  exportOrganizerAttendanceMetricsCSV
 };

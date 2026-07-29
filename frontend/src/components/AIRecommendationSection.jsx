@@ -110,7 +110,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: '#475569', mb: 1 }}>
                     <LocationOnIcon fontSize="small" aria-hidden="true" />
                     <Typography variant="caption" noWrap sx={{ fontWeight: 600 }}>
-                      {event.location}
+                      {typeof event.location === 'object' && event.location !== null ? (event.location.placeName || 'Online') : (event.location || 'Online')}
                     </Typography>
                   </Box>
 

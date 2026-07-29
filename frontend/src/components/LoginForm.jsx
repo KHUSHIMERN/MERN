@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Mail, Lock, LogIn, AlertCircle, CheckCircle } from 'lucide-react';
+import { Mail, Lock, LogIn, AlertCircle, CheckCircle, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export default function LoginForm({ onSwitchToRegister, onLoginSuccess }) {
-  const { login } = useAuth();
+export default function LoginForm({ onSwitchToRegister, onLoginSuccess, hideCardWrapper = false }) {
+  const { login, resendVerification } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -12,18 +12,24 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState('');
   const [apiSuccess, setApiSuccess] = useState('');
+  const [isUnverified, setIsUnverified] = useState(false);
+  const [resendStatus, setResendStatus] = useState('');
   const [userProfile, setUserProfile] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     setApiError('');
+    setIsUnverified(false);
+    setResendStatus('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setApiError('');
     setApiSuccess('');
+    setIsUnverified(false);
+    setResendStatus('');
 
     if (!formData.email || !formData.password) {
       setApiError('Please enter both email and password.');
@@ -37,6 +43,9 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess }) {
 
       if (!result.success) {
         setApiError(result.message || 'Login failed.');
+        if (result.isUnverified) {
+          setIsUnverified(true);
+        }
       } else {
         setApiSuccess(`Welcome back, ${result.user.name}! Access granted.`);
         setUserProfile(result.user);
@@ -52,17 +61,43 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess }) {
     }
   };
 
-  return (
-    <div className="auth-card">
+  const handleResend = async () => {
+    if (!formData.email) return;
+    setResendStatus('Sending...');
+    const res = await resendVerification(formData.email.trim());
+    if (res.success) {
+      setResendStatus('Verification email sent! Check your inbox or simulated link.');
+    } else {
+      setResendStatus(res.message || 'Failed to resend verification.');
+    }
+  };
+
+  const content = (
+    <>
       <div className="auth-header">
         <h1 className="auth-title">Welcome Back</h1>
         <p className="auth-subtitle">Sign in to your Community Portal account</p>
       </div>
 
       {apiError && (
-        <div className="alert-box error">
-          <AlertCircle size={20} style={{ flexShrink: 0 }} />
-          <div>{apiError}</div>
+        <div className="alert-box error" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={20} style={{ flexShrink: 0 }} />
+            <div>{apiError}</div>
+          </div>
+          {isUnverified && (
+            <div style={{ marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleResend}
+                style={{ fontSize: '0.8rem', padding: '4px 10px', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)' }}
+              >
+                <Send size={12} /> Resend Verification Link
+              </button>
+              {resendStatus && <div style={{ fontSize: '0.8rem', marginTop: '6px', color: '#f87171' }}>{resendStatus}</div>}
+            </div>
+          )}
         </div>
       )}
 
@@ -92,7 +127,7 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess }) {
               type="email"
               name="email"
               className="form-input"
-              placeholder="rahul@example.com"
+              placeholder="resident@indore.org"
               value={formData.email}
               onChange={handleChange}
               required
@@ -130,6 +165,13 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess }) {
           Register Now
         </button>
       </div>
-    </div>
+    </>
   );
+
+  if (hideCardWrapper) {
+    return <div className="auth-form-inner">{content}</div>;
+  }
+
+  return <div className="auth-card">{content}</div>;
 }
+

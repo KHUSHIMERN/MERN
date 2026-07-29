@@ -16,7 +16,6 @@ const eventSchema = new mongoose.Schema(
       required: [true, 'Event title is required'],
       trim: true,
     },
-    // Hindi localization field
     title_hi: {
       type: String,
       trim: true,
@@ -26,7 +25,6 @@ const eventSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
-    // Hindi localization field
     description_hi: {
       type: String,
       trim: true,
@@ -34,21 +32,6 @@ const eventSchema = new mongoose.Schema(
     category: {
       type: String,
       required: [true, 'Category is required'],
-      enum: [
-        'Career & Jobs',
-        'Health & Wellness',
-        'Cultural Festivals',
-        'Skill Workshops',
-        'Civic & Community',
-        'Sports & Youth',
-        'career',
-        'health',
-        'culture',
-        'workshop',
-        'charity',
-        'general',
-        'tech',
-      ],
       default: 'general',
     },
     location: {
@@ -80,21 +63,8 @@ const eventSchema = new mongoose.Schema(
     },
     timezone: {
       type: String,
-      required: false,
       default: 'Asia/Kolkata',
       trim: true,
-      validate: {
-        validator: function (v) {
-          if (!v) return true;
-          try {
-            Intl.DateTimeFormat(undefined, { timeZone: v });
-            return true;
-          } catch (err) {
-            return false;
-          }
-        },
-        message: props => `${props.value} is not a valid IANA timezone identifier`,
-      },
     },
     organizer: {
       type: mongoose.Schema.Types.ObjectId,
@@ -239,4 +209,3 @@ if (mongoose.connection) {
 }
 
 module.exports = Event;
-

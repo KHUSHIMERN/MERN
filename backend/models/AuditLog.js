@@ -14,12 +14,15 @@ const auditLogSchema = new mongoose.Schema(
     },
     attendeeName: {
       type: String,
+      default: '',
     },
     attendeeEmail: {
       type: String,
+      default: '',
     },
     statusPresent: {
       type: Boolean,
+      default: false,
     },
     checkInAt: {
       type: Date,

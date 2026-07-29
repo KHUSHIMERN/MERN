@@ -1,8 +1,3 @@
-/**
- * Role-Based Access Control Middleware for Organizer Endpoints
- * Verifies that the requesting user has the 'organizer' role.
- * Role can be supplied via header 'x-user-role', query param 'role', or request body 'role'.
- */
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { JWT_SECRET } = require('./auth');
@@ -34,7 +29,6 @@ const requireOrganizer = async (req, res, next) => {
     });
   }
 
-  // Extract organizer identity details for audit logging
   const performerName =
     (req.user && req.user.name) ||
     req.headers['x-user-name'] ||
@@ -57,4 +51,3 @@ const requireOrganizer = async (req, res, next) => {
 };
 
 module.exports = { requireOrganizer };
-module.exports.requireOrganizer = requireOrganizer;

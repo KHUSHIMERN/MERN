@@ -1,8 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const fs = require('fs');
 const connectDB = require('./config/db');
-const seedData = require('./seed');
 
 dotenv.config();
 
@@ -16,15 +16,31 @@ app.use(express.urlencoded({ extended: true }));
 
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/users', require('./routes/userRoutes'));
-app.use('/api/events', require('./routes/eventRoutes'));
-app.use('/api/ai', require('./routes/aiRoutes'));
-app.use('/api/roles', require('./routes/roleRoutes'));
-app.use('/api/admin', require('./routes/adminRoutes'));
-app.use('/api/recommendations', require('./routes/recommendations'));
-app.use('/api/registrations', require('./routes/registrationRoutes'));
-app.use('/organizer', require('./routes/organizerRoutes'));
-app.use('/api/organizer', require('./routes/organizerRoutes'));
+if (fs.existsSync('./routes/userRoutes.js')) {
+  app.use('/api/users', require('./routes/userRoutes'));
+}
+if (fs.existsSync('./routes/eventRoutes.js')) {
+  app.use('/api/events', require('./routes/eventRoutes'));
+}
+if (fs.existsSync('./routes/aiRoutes.js')) {
+  app.use('/api/ai', require('./routes/aiRoutes'));
+}
+if (fs.existsSync('./routes/roleRoutes.js')) {
+  app.use('/api/roles', require('./routes/roleRoutes'));
+}
+if (fs.existsSync('./routes/adminRoutes.js')) {
+  app.use('/api/admin', require('./routes/adminRoutes'));
+}
+if (fs.existsSync('./routes/recommendations.js')) {
+  app.use('/api/recommendations', require('./routes/recommendations'));
+}
+if (fs.existsSync('./routes/organizerRoutes.js')) {
+  app.use('/organizer', require('./routes/organizerRoutes'));
+  app.use('/api/organizer', require('./routes/organizerRoutes'));
+}
+if (fs.existsSync('./routes/registrationRoutes.js')) {
+  app.use('/api/registrations', require('./routes/registrationRoutes'));
+}
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
@@ -62,8 +78,11 @@ if (require.main === module && process.env.NODE_ENV !== 'test') {
   const startServer = async () => {
     try {
       await connectDB();
-      if (typeof seedData === 'function') {
-        await seedData();
+      if (fs.existsSync('./seed.js')) {
+        const seedData = require('./seed');
+        if (typeof seedData === 'function') {
+          await seedData();
+        }
       }
       app.listen(PORT, () => {
         console.log(`✨ Server running in ${process.env.NODE_ENV || 'development'} mode on http://localhost:${PORT}`);

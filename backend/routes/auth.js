@@ -86,6 +86,7 @@ router.post('/register', async (req, res) => {
     const emailInfo = await sendVerificationEmail(user.email, user.name, verificationToken, originUrl);
 
     return res.status(201).json({
+      success: true,
       message: 'Registration successful! An email verification link has been generated.',
       user: user.toSafeObject(),
       verificationToken: user.verificationToken,

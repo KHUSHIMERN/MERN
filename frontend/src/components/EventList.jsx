@@ -85,6 +85,21 @@ const mockFallbackEvents = [
     attendeesCount: 420,
     imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
     imageUrlAlt: 'Folk dancers performing in traditional colorful attire on stage at Patna cultural festival'
+  },
+  {
+    _id: '6',
+    title: 'Swachh City E-Waste Recycling & Civic Drive',
+    description: 'Bring your broken electronics, plastic waste, and old batteries for safe recycling. Earn eco-reward points.',
+    category: 'civic',
+    location: 'Smart City Park, TT Nagar, Bhopal, MP',
+    startDate: '2026-08-12T08:00:00+05:30',
+    endDate: '2026-08-12T12:00:00+05:30',
+    timezone: 'Asia/Kolkata',
+    organizer: 'Green Bhopal Action Club',
+    capacity: 200,
+    attendeesCount: 45,
+    imageUrl: 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=600',
+    imageUrlAlt: 'Civic awareness banner and recycling bin setup in Bhopal park'
   }
 ];
 
@@ -118,7 +133,12 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
       const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
-        setEvents(json.events || json.data || []);
+        const apiData = json.events || json.data || [];
+        if (apiData.length > 0) {
+          setEvents(apiData);
+        } else {
+          setEvents(mockFallbackEvents);
+        }
       } else {
         setEvents(mockFallbackEvents);
       }
@@ -129,15 +149,30 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
     }
   };
 
+  const matchCategory = (eventCategory, selectedCategory) => {
+    if (!selectedCategory || selectedCategory === 'all') return true;
+    if (!eventCategory) return false;
+    const cat = eventCategory.toLowerCase().trim();
+    const sel = selectedCategory.toLowerCase().trim();
+    if (cat === sel) return true;
+    if (sel === 'career' && cat.includes('career')) return true;
+    if (sel === 'workshop' && (cat.includes('workshop') || cat.includes('skill'))) return true;
+    if (sel === 'health' && cat.includes('health')) return true;
+    if (sel === 'culture' && (cat.includes('culture') || cat.includes('festival') || cat.includes('art'))) return true;
+    if (sel === 'civic' && cat.includes('civic')) return true;
+    return cat.includes(sel);
+  };
+
   const filteredEvents = events.filter(e => {
     if (!e) return false;
-    if (category !== 'all' && e.category !== category) return false;
+    if (!matchCategory(e.category, category)) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
         (e.title || '').toLowerCase().includes(q) ||
         (e.description || '').toLowerCase().includes(q) ||
-        (e.location || '').toLowerCase().includes(q)
+        (e.location || '').toLowerCase().includes(q) ||
+        (e.city || '').toLowerCase().includes(q)
       );
     }
     return true;
@@ -234,9 +269,20 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
         </Box>
       ) : filteredEvents.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 8 }}>
-          <Typography variant="h6" component="p" color="text.secondary">
+          <Typography variant="h6" component="p" color="text.secondary" sx={{ mb: 2 }}>
             No events found matching your filter criteria.
           </Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => {
+              setCategory('all');
+              setSearch('');
+            }}
+            sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 700 }}
+          >
+            Show All Events
+          </Button>
         </Box>
       ) : (
         <Grid container spacing={3}>

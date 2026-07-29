@@ -10,7 +10,20 @@ exports.getEvents = async (req, res) => {
     let query = {};
 
     if (category && category !== 'all') {
-      query.category = category;
+      const catLower = category.toLowerCase().trim();
+      const categoryPatterns = {
+        career: /career/i,
+        workshop: /(workshop|skill)/i,
+        health: /health/i,
+        culture: /(culture|festival|art)/i,
+        civic: /civic/i,
+        general: /general/i,
+      };
+      if (categoryPatterns[catLower]) {
+        query.category = categoryPatterns[catLower];
+      } else {
+        query.category = { $regex: category, $options: 'i' };
+      }
     }
 
     if (city && city !== 'all') {

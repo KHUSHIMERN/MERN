@@ -108,6 +108,16 @@ export const AuthProvider = ({ children }) => {
     setUser(prev => prev ? { ...prev, city } : prev);
   };
 
+  const setAuthData = (jwtToken, userData) => {
+    if (jwtToken) {
+      localStorage.setItem('cc_token', jwtToken);
+      setToken(jwtToken);
+    }
+    if (userData) {
+      setUser(userData);
+    }
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -129,6 +139,9 @@ export const AuthProvider = ({ children }) => {
         fetchProfile,
         toggleRole,
         updateUserCity,
+        setUser,
+        setToken,
+        setAuthData,
       }}
     >
       {children}

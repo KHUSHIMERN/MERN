@@ -111,7 +111,10 @@ function AppContent() {
 
         {view === 'login' && (
           <div className="auth-container-wrapper">
-            <LoginForm onSwitchToRegister={() => setView('register')} />
+            <LoginForm
+              onSwitchToRegister={() => setView('register')}
+              onLoginSuccess={() => setView('events')}
+            />
           </div>
         )}
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { TimezoneProvider } from './context/TimezoneContext';
 import { AuthProvider } from './context/AuthContext';
@@ -12,11 +13,15 @@ import I18nProvider from './components/I18nProvider';
 import Header from './components/Header';
 import HeroSection from './components/HeroSection';
 import EventList from './components/EventList';
+import OrganizerCheckIn from './components/OrganizerCheckIn';
 import EventRegistrationForm from './components/EventRegistrationForm';
 import FallbackTestDemo from './components/FallbackTestDemo';
 import Footer from './components/Footer';
 import './App.css';
 
+function AppContent() {
+  const { t } = useTranslation();
+  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
 // MUI Theme — rem-based typography so all sizes scale with browser zoom (WCAG 1.4.4)
 const theme = createTheme({
   typography: {
@@ -90,11 +95,22 @@ function AppContent() {
 
   return (
     <div className="app-layout">
+      {/* Skip-to-Content Link for Keyboard Accessibility */}
+      <a href="#main-content" className="skip-to-content-link">
+        {t('app.skipToContent', 'Skip to main content')}
+      </a>
+
+      {/* Global Header with Brand & Language Selector */}
       {/* Global Header with Brand, Auth, Language Selector, Timezone & Role Controls */}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenRegisterModal={() => handleOpenRegisterModal()}
+      />
+
+      {/* Main View Area */}
+      <main id="main-content" tabIndex={-1} className="main-content">
+        {activeTab === 'events' && (
         user={user}
         logout={logout}
         view={view}
@@ -130,6 +146,20 @@ function AppContent() {
               onRegister={() => handleOpenRegisterModal()}
             />
 
+            <EventList
+              onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
+              onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+            />
+          </>
+        )}
+
+        {activeTab === 'checkin' && (
+          <OrganizerCheckIn
+            onSelectEventForRegister={(evt) => handleOpenRegisterModal(evt)}
+          />
+        )}
+
+        {activeTab === 'fallbackDemo' && <FallbackTestDemo />}
             {activeTab === 'events' && (
               <EventList
                 onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
@@ -156,6 +186,10 @@ function AppContent() {
   );
 }
 
+export function App() {
+  return (
+    <I18nProvider>
+      <AppContent />
 /**
  * App — root component.
  * Provides: I18nProvider (react-i18next) → MUI ThemeProvider → Context providers → AppContent

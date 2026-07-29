@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+
+export function EventRegistrationForm({ selectedEvent, onClose }) {
+  const { t } = useTranslation();
+  const modalRef = useFocusTrap(true, onClose);
 
 export function EventRegistrationForm({ selectedEvent, onClose }) {
   const { t } = useTranslation();
@@ -45,6 +50,20 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
   };
 
   return (
+    <div className="modal-backdrop" onClick={onClose} role="presentation">
+      <div
+        className="modal-container"
+        onClick={(e) => e.stopPropagation()}
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title-heading"
+      >
+        <div className="modal-header">
+          <div>
+            <h2 className="modal-title" id="modal-title-heading">
+              {t('form.title', 'Register for Event')}
+            </h2>
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-container" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -56,6 +75,12 @@ export function EventRegistrationForm({ selectedEvent, onClose }) {
               </p>
             )}
           </div>
+          <button
+            type="button"
+            className="close-modal-btn"
+            onClick={onClose}
+            aria-label={t('form.closeModal', 'Close modal')}
+          >
           <button type="button" className="close-modal-btn" onClick={onClose}>
             ✕
           </button>

@@ -130,13 +130,14 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
   };
 
   const filteredEvents = events.filter(e => {
+    if (!e) return false;
     if (category !== 'all' && e.category !== category) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
-        e.title.toLowerCase().includes(q) ||
-        e.description.toLowerCase().includes(q) ||
-        e.location.toLowerCase().includes(q)
+        (e.title || '').toLowerCase().includes(q) ||
+        (e.description || '').toLowerCase().includes(q) ||
+        (e.location || '').toLowerCase().includes(q)
       );
     }
     return true;

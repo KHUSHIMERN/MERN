@@ -16,10 +16,15 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchRecommendations();
-  }, [user.city]);
+    if (user && user.city) {
+      fetchRecommendations();
+    } else {
+      setRecommendations([]);
+    }
+  }, [user?.city]);
 
   const fetchRecommendations = async () => {
+    if (!user || !user.city) return;
     setLoading(true);
     try {
       const res = await fetch('/api/ai/recommendations', {
@@ -28,7 +33,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
         body: JSON.stringify({
           userId: user._id,
           userCity: user.city,
-          userInterests: user.interests
+          userInterests: user.interests || []
         })
       });
 
@@ -43,7 +48,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
     }
   };
 
-  if (!recommendations || recommendations.length === 0) return null;
+  if (!user || !user.city || !recommendations || recommendations.length === 0) return null;
 
   return (
     <Box

@@ -17,7 +17,7 @@ const requireAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     // Fetch user from DB to verify they still exist
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).select('name email role isVerified');
     if (!user) {
       return res.status(401).json({ message: 'Authentication failed: User not found' });
     }

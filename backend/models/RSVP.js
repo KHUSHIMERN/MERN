@@ -13,16 +13,27 @@ const RSVPSchema = new mongoose.Schema({
     ref: 'Event',
     required: true
   },
-  // Status of registration: 'confirmed' or 'waitlist'
   status: {
     type: String,
-    enum: ['confirmed', 'waitlist'],
+    enum: ['pending', 'confirmed', 'waitlist', 'cancelled'],
     required: true,
-    default: 'confirmed'
+    default: 'pending'
   },
-  // Time when user was promoted from waitlist to confirmed
+  confirmedAt: {
+    type: Date,
+    default: null
+  },
+  waitlistedAt: {
+    type: Date,
+    default: null
+  },
   promotedAt: {
-    type: Date
+    type: Date,
+    default: null
+  },
+  cancelledAt: {
+    type: Date,
+    default: null
   }
 }, {
   // Automatically manages 'createdAt' and 'updatedAt' timestamps
@@ -37,7 +48,7 @@ RSVPSchema.index({ eventId: 1, status: 1 });
 
 // 2. Compound index on eventId + createdAt
 // Crucial for waitlist operations to fetch waitlisted users in chronological (FIFO) order.
-RSVPSchema.index({ eventId: 1, createdAt: 1 });
+RSVPSchema.index({ eventId: 1, status: 1, waitlistedAt: 1, createdAt: 1 });
 
 // 3. Unique compound index on eventId + userId
 // Prevents duplicate RSVP entries for the same event by the same user.

@@ -41,6 +41,23 @@ const auth = async (req, res, next) => {
   }
 };
 
+const optionalAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return next();
+  try {
+    const decoded = jwt.verify(authHeader.slice(7), JWT_SECRET);
+    if (decoded.type && decoded.type !== 'access') return next();
+    const user = await User.findById(decoded.id);
+    if (user) {
+      req.user = user;
+      req.user.normalizedRole = normalizeRole(user.role);
+    }
+  } catch {
+    // Public event reads remain available when an optional token is invalid.
+  }
+  return next();
+};
+
 // Middleware to block unverified users from protected routes
 const requireVerified = (req, res, next) => {
   if (!req.user) {
@@ -82,6 +99,7 @@ const requireRole = (...roles) => {
 module.exports = {
   auth,
   requireAuth: auth,
+  optionalAuth,
   requireVerified,
   requireRole,
   normalizeRole,

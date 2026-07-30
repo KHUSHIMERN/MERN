@@ -3,277 +3,300 @@ const RSVP = require('../models/RSVP');
 const Event = require('../models/Event');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const {
+  migrateLegacyRsvpsForEvent,
+  reconcileEventCaches,
+  waitlistPosition,
+} = require('../services/rsvpService');
 
-// Create RSVP or join waitlist
-const rsvpEvent = async (req, res) => {
+const validEventId = (id) => mongoose.Types.ObjectId.isValid(id);
+const activeStatuses = ['confirmed', 'waitlist'];
+
+const claimRegistrationRecord = async (eventId, userId) => {
+  const now = new Date();
+  let record = await RSVP.findOneAndUpdate(
+    { eventId, userId, status: 'cancelled' },
+    {
+      $set: {
+        status: 'pending',
+        confirmedAt: null,
+        waitlistedAt: null,
+        promotedAt: null,
+        cancelledAt: null,
+      },
+    },
+    { returnDocument: 'after' }
+  );
+  if (record) return record;
+
   try {
-    const { id } = req.params;
-
-    // Validate if event ID is a valid MongoDB ObjectId
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-
-    // Validate user authentication in the controller
-    if (!req.user) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    const userId = req.user._id;
-
-    // Validate user role - restrict RSVP to 'resident' (or allow others for demo, but check role)
-    if (!['resident', 'attendee'].includes(req.user.role)) {
-      return res.status(403).json({ 
-        message: 'Only residents can RSVP for events.' 
-      });
-    }
-
-    // 1. Check if event exists
-    const event = await Event.findById(id);
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-
-    // 2. Check if user already RSVP'd
-    const existingRSVP = await RSVP.findOne({ eventId: id, userId });
-    if (existingRSVP) {
-      return res.status(400).json({ 
-        message: 'You have already registered for this event.',
-        status: existingRSVP.status 
-      });
-    }
-
-    // 3. Count confirmed RSVPs
-    const confirmedCount = await RSVP.countDocuments({ eventId: id, status: 'confirmed' });
-
-    let status = 'confirmed';
-    if (confirmedCount >= event.capacity) {
-      status = 'waitlist';
-    }
-
-    // 4. Save RSVP
-    const newRSVP = new RSVP({
-      userId,
-      eventId: id,
-      status
-    });
-    await newRSVP.save();
-
-    // Keep DEV-KHUSHI's existing profile/event UI fields synchronized.
-    await User.findByIdAndUpdate(userId, { $addToSet: { rsvpedEvents: event._id } });
-    await Event.findByIdAndUpdate(id, {
-      $inc: status === 'confirmed'
-        ? { attendeesCount: 1 }
-        : { waitlistCount: 1 },
-      $addToSet: status === 'confirmed'
-        ? { rsvpedUsers: userId }
-        : { waitlistUsers: userId }
-    });
-
-    if (status === 'confirmed') {
-      return res.status(201).json({
-        message: 'RSVP confirmed successfully!',
-        rsvp: newRSVP,
-        status: 'confirmed'
-      });
-    } else {
-      // Calculate waitlist position (1-based index)
-      const waitlistPosition = await RSVP.countDocuments({
-        eventId: id,
-        status: 'waitlist',
-        createdAt: { $lte: newRSVP.createdAt }
-      });
-
-      return res.status(201).json({
-        message: 'Event is at capacity. Added to the waitlist.',
-        rsvp: newRSVP,
-        status: 'waitlist',
-        waitlistPosition
-      });
-    }
-
+    record = await RSVP.create({ eventId, userId, status: 'pending', createdAt: now });
+    return record;
   } catch (error) {
+    if (error.code !== 11000) throw error;
+    return null;
+  }
+};
+
+const rsvpEvent = async (req, res) => {
+  const { id } = req.params;
+  if (!validEventId(id)) return res.status(404).json({ message: 'Event not found' });
+  if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+  if (!['resident', 'attendee'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'Only residents can RSVP for events.' });
+  }
+
+  let record = null;
+  try {
+    const event = await Event.findById(id);
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    await migrateLegacyRsvpsForEvent(event);
+    const existing = await RSVP.findOne({ eventId: id, userId: req.user._id });
+    if (existing && activeStatuses.includes(existing.status)) {
+      return res.status(409).json({
+        message: 'You have already registered for this event.',
+        status: existing.status,
+        waitlistPosition: await waitlistPosition(existing),
+      });
+    }
+
+    record = await claimRegistrationRecord(event._id, req.user._id);
+    if (!record) {
+      const concurrent = await RSVP.findOne({ eventId: id, userId: req.user._id });
+      return res.status(409).json({
+        message: 'You have already registered for this event.',
+        status: concurrent?.status,
+      });
+    }
+
+    const reservedEvent = await Event.findOneAndUpdate(
+      {
+        _id: event._id,
+        $expr: {
+          $lt: [
+            { $ifNull: ['$attendeesCount', 0] },
+            { $ifNull: ['$capacity', 100] },
+          ],
+        },
+      },
+      {
+        $inc: { attendeesCount: 1 },
+        $addToSet: { rsvpedUsers: req.user._id },
+        $pull: { waitlistUsers: req.user._id },
+      },
+      { returnDocument: 'after' }
+    );
+
+    const now = new Date();
+    if (reservedEvent) {
+      record = await RSVP.findOneAndUpdate(
+        { _id: record._id, status: 'pending' },
+        { $set: { status: 'confirmed', confirmedAt: now, waitlistedAt: null } },
+        { returnDocument: 'after' }
+      );
+      if (!record) {
+        await Event.findByIdAndUpdate(event._id, {
+          $inc: { attendeesCount: -1 },
+          $pull: { rsvpedUsers: req.user._id },
+        });
+        throw new Error('Registration state changed during capacity allocation.');
+      }
+    } else {
+      await Event.findByIdAndUpdate(event._id, {
+        $inc: { waitlistCount: 1 },
+        $addToSet: { waitlistUsers: req.user._id },
+      });
+      record = await RSVP.findOneAndUpdate(
+        { _id: record._id, status: 'pending' },
+        { $set: { status: 'waitlist', waitlistedAt: now, confirmedAt: null } },
+        { returnDocument: 'after' }
+      );
+      if (!record) {
+        await Event.findByIdAndUpdate(event._id, {
+          $inc: { waitlistCount: -1 },
+          $pull: { waitlistUsers: req.user._id },
+        });
+        throw new Error('Registration state changed during waitlist allocation.');
+      }
+    }
+
+    await User.findByIdAndUpdate(req.user._id, { $addToSet: { rsvpedEvents: event._id } });
+    const position = await waitlistPosition(record);
+    return res.status(201).json({
+      message: record.status === 'confirmed'
+        ? 'RSVP confirmed successfully!'
+        : 'Event is at capacity. Added to the waitlist.',
+      rsvp: record,
+      status: record.status,
+      waitlistPosition: position,
+    });
+  } catch (error) {
+    if (record?.status === 'pending') {
+      await RSVP.updateOne(
+        { _id: record._id, status: 'pending' },
+        { $set: { status: 'cancelled', cancelledAt: new Date() } }
+      );
+    }
     console.error('RSVP Error:', error);
     return res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
 
-// Cancel RSVP and promote waitlisted user
 const cancelRSVP = async (req, res) => {
+  const { id } = req.params;
+  if (!validEventId(id)) return res.status(404).json({ message: 'Event not found' });
+  if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+  if (!['resident', 'attendee'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'Only residents can cancel RSVPs.' });
+  }
+
   try {
-    const { id } = req.params;
-
-    // Validate if event ID is a valid MongoDB ObjectId
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-
-    // Validate user authentication in the controller
-    if (!req.user) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    const userId = req.user._id;
-
-    // Validate user role - restrict RSVP cancel to 'resident'
-    if (!['resident', 'attendee'].includes(req.user.role)) {
-      return res.status(403).json({ 
-        message: 'Only residents can cancel RSVPs.' 
-      });
-    }
-
-    // Check if event exists
     const event = await Event.findById(id);
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+    await migrateLegacyRsvpsForEvent(event);
+
+    const cancelled = await RSVP.findOneAndUpdate(
+      { eventId: id, userId: req.user._id, status: { $in: activeStatuses } },
+      { $set: { status: 'cancelled', cancelledAt: new Date() } },
+      { returnDocument: 'before' }
+    );
+    if (!cancelled) {
+      return res.status(404).json({ message: 'No active registration found for this event.' });
     }
 
-    // Atomically find and delete the RSVP entry
-    const deletedRSVP = await RSVP.findOneAndDelete({ eventId: id, userId });
-    if (!deletedRSVP) {
-      return res.status(404).json({ message: 'No registration record found for this event.' });
-    }
+    await User.findByIdAndUpdate(req.user._id, { $pull: { rsvpedEvents: event._id } });
+    let promoted = null;
 
-    const previousStatus = deletedRSVP.status;
-    let slotFreed = false;
-    let promotedUser = null;
+    if (cancelled.status === 'confirmed') {
+      await Event.findByIdAndUpdate(event._id, {
+        $inc: { attendeesCount: -1 },
+        $pull: { rsvpedUsers: req.user._id },
+      });
 
-    await User.findByIdAndUpdate(userId, { $pull: { rsvpedEvents: event._id } });
-    await Event.findByIdAndUpdate(id, {
-      $inc: previousStatus === 'confirmed'
-        ? { attendeesCount: -1 }
-        : { waitlistCount: -1 },
-      $pull: previousStatus === 'confirmed'
-        ? { rsvpedUsers: userId }
-        : { waitlistUsers: userId }
-    });
-
-    // If a confirmed user cancels, check if we need to promote a waitlisted user
-    if (previousStatus === 'confirmed') {
-      slotFreed = true;
-      // Atomically find, update the oldest waitlisted user, and set promotedAt
-      const oldestWaitlisted = await RSVP.findOneAndUpdate(
+      promoted = await RSVP.findOneAndUpdate(
         { eventId: id, status: 'waitlist' },
-        { status: 'confirmed', promotedAt: new Date() },
-        { sort: { createdAt: 1 }, new: true }
+        {
+          $set: {
+            status: 'confirmed',
+            confirmedAt: new Date(),
+            promotedAt: new Date(),
+          },
+        },
+        {
+          sort: { waitlistedAt: 1, createdAt: 1, _id: 1 },
+          returnDocument: 'after',
+        }
       );
-      
-      if (oldestWaitlisted) {
-        // Fetch user details for the promoted user response
-        promotedUser = await User.findById(oldestWaitlisted.userId).select('name email');
 
-        await User.findByIdAndUpdate(oldestWaitlisted.userId, {
-          $addToSet: { rsvpedEvents: event._id }
-        });
-        await Event.findByIdAndUpdate(id, {
+      if (promoted) {
+        await Event.findByIdAndUpdate(event._id, {
           $inc: { attendeesCount: 1, waitlistCount: -1 },
-          $pull: { waitlistUsers: oldestWaitlisted.userId },
-          $addToSet: { rsvpedUsers: oldestWaitlisted.userId }
+          $pull: { waitlistUsers: promoted.userId },
+          $addToSet: { rsvpedUsers: promoted.userId },
         });
-
-        // Create a notification placeholder for the promoted user
+        await User.findByIdAndUpdate(promoted.userId, {
+          $addToSet: { rsvpedEvents: event._id },
+        });
         await Notification.create({
-          userId: oldestWaitlisted.userId,
-          eventId: id,
+          userId: promoted.userId,
+          eventId: event._id,
           type: 'promoted_from_waitlist',
           payload: {
             status: 'confirmed',
-            message: `Congratulations! You have been promoted to confirmed status for the event: ${event.title}.`
-          }
+            message: `Congratulations! You have been promoted to confirmed status for ${event.title}.`,
+          },
         });
       }
+    } else {
+      await Event.findByIdAndUpdate(event._id, {
+        $inc: { waitlistCount: -1 },
+        $pull: { waitlistUsers: req.user._id },
+      });
     }
+
+    await reconcileEventCaches(event._id);
+    const promotedUser = promoted
+      ? await User.findById(promoted.userId).select('name email').lean()
+      : null;
 
     return res.status(200).json({
       message: 'Registration successfully cancelled.',
-      slotFreed,
-      promotedUser: promotedUser ? { id: promotedUser._id, name: promotedUser.name, email: promotedUser.email } : null
+      previousStatus: cancelled.status,
+      slotFreed: cancelled.status === 'confirmed',
+      promotedUser: promotedUser ? {
+        id: promotedUser._id,
+        name: promotedUser.name,
+        email: promotedUser.email,
+      } : null,
     });
-
   } catch (error) {
     console.error('Cancel RSVP Error:', error);
     return res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
 
-// Get event RSVPs and waitlist positions
+const getCurrentUserRsvp = async (req, res) => {
+  const { id } = req.params;
+  if (!validEventId(id)) return res.status(404).json({ message: 'Event not found' });
+  const record = await RSVP.findOne({
+    eventId: id,
+    userId: req.user._id,
+    status: { $in: activeStatuses },
+  });
+  return res.json({
+    status: record?.status || 'none',
+    waitlistPosition: await waitlistPosition(record),
+    rsvp: record,
+  });
+};
+
 const getEventRSVPs = async (req, res) => {
+  const { id } = req.params;
+  if (!validEventId(id)) return res.status(404).json({ message: 'Event not found' });
+  if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
   try {
-    const { id } = req.params;
-
-    // Validate if event ID is a valid MongoDB ObjectId
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-
-    // Validate user authentication in the controller
-    if (!req.user) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    // Find the event to check its capacity
     const event = await Event.findById(id);
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+    await migrateLegacyRsvpsForEvent(event);
 
-    // Get all RSVPs for this event, populated with user info
-    const rsvps = await RSVP.find({ eventId: id })
+    const records = await RSVP.find({ eventId: id, status: { $in: activeStatuses } })
       .populate('userId', 'name email role')
-      .sort({ createdAt: 1 });
+      .sort({ status: 1, waitlistedAt: 1, createdAt: 1, _id: 1 });
+    const confirmed = records.filter((record) => record.status === 'confirmed');
+    const waitlist = records.filter((record) => record.status === 'waitlist');
+    const current = records.find((record) => record.userId?._id?.equals(req.user._id));
 
-    const confirmedList = rsvps.filter(r => r.status === 'confirmed');
-    const waitlistList = rsvps.filter(r => r.status === 'waitlist');
-
-    // Calculate current user's RSVP status & waitlist position
-    let currentUserStatus = 'none';
-    let currentUserWaitlistPosition = 0;
-
-    if (req.user) {
-      const userRSVP = rsvps.find(r => r.userId._id.toString() === req.user._id.toString());
-      if (userRSVP) {
-        currentUserStatus = userRSVP.status;
-        if (currentUserStatus === 'waitlist') {
-          // Find index in waitlist array (1-based index)
-          currentUserWaitlistPosition = waitlistList.findIndex(r => r.userId._id.toString() === req.user._id.toString()) + 1;
-        }
-      }
-    }
-
-    return res.status(200).json({
+    return res.json({
       eventId: id,
       capacity: event.capacity,
-      confirmedCount: confirmedList.length,
-      waitlistCount: waitlistList.length,
-      confirmed: confirmedList.map(r => ({
-        id: r.userId._id,
-        name: r.userId.name,
-        email: r.userId.email,
-        rsvpId: r._id,
-        createdAt: r.createdAt
+      confirmedCount: confirmed.length,
+      waitlistCount: waitlist.length,
+      confirmed: confirmed.map((record) => ({
+        id: record.userId?._id,
+        name: record.userId?.name,
+        email: record.userId?.email,
+        rsvpId: record._id,
+        createdAt: record.createdAt,
       })),
-      waitlist: waitlistList.map((r, index) => ({
-        id: r.userId._id,
-        name: r.userId.name,
-        email: r.userId.email,
-        rsvpId: r._id,
-        createdAt: r.createdAt,
-        position: index + 1
+      waitlist: waitlist.map((record, index) => ({
+        id: record.userId?._id,
+        name: record.userId?.name,
+        email: record.userId?.email,
+        rsvpId: record._id,
+        createdAt: record.createdAt,
+        position: index + 1,
       })),
       currentUser: {
-        status: currentUserStatus,
-        waitlistPosition: currentUserWaitlistPosition
-      }
+        status: current?.status || 'none',
+        waitlistPosition: current ? await waitlistPosition(current) : 0,
+      },
     });
-
   } catch (error) {
     console.error('Get RSVPs Error:', error);
     return res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
 
-module.exports = {
-  rsvpEvent,
-  cancelRSVP,
-  getEventRSVPs
-};
+module.exports = { rsvpEvent, cancelRSVP, getCurrentUserRsvp, getEventRSVPs };

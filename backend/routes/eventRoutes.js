@@ -15,14 +15,14 @@ const {
   exportEventAttendance,
   getAttendanceAuditLogs
 } = require('../controllers/attendanceController');
-const { auth, requireVerified, requireRole } = require('../middleware/auth');
+const { auth, optionalAuth, requireVerified, requireRole } = require('../middleware/auth');
 const privileged = [auth, requireVerified, requireRole('organizer', 'admin')];
 
 // General Event REST API Endpoints
-router.get('/', getEvents);
+router.get('/', optionalAuth, getEvents);
 router.post('/', ...privileged, createEvent);
 router.get('/search', searchEvents);
-router.get('/:id', getEventById);
+router.get('/:id', optionalAuth, getEventById);
 router.put('/:id', ...privileged, updateEvent);
 router.delete('/:id', ...privileged, deleteEvent);
 router.patch('/:id/publish', ...privileged, publishEvent);

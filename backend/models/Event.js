@@ -75,6 +75,7 @@ const eventSchema = new mongoose.Schema(
     attendeesCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
     rsvpedUsers: [
       {
@@ -107,6 +108,7 @@ const eventSchema = new mongoose.Schema(
     waitlistCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
     waitlistUsers: [
       {

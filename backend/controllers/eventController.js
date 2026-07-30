@@ -1,7 +1,12 @@
 const mongoose = require('mongoose');
-const { isConnectedToMongoDB } = require('../config/db');
 const Event = require('../models/Event');
 const { INITIAL_EVENTS } = require('../data/seedEvents');
+const {
+  enrichEventsWithRsvp,
+  migrateLegacyRsvpsForEvent,
+} = require('../services/rsvpService');
+
+const isConnectedToMongoDB = () => mongoose.connection.readyState === 1;
 
 const getCategoryMatchPatterns = (cat) => {
   if (!cat || String(cat).toLowerCase() === 'all') return [];
@@ -32,7 +37,7 @@ const getEvents = async (req, res, next) => {
   try {
     const { category, tags, published, startDate, endDate, search } = req.query;
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const query = {};
 
       if (category && String(category).toLowerCase() !== 'all') {
@@ -83,7 +88,9 @@ const getEvents = async (req, res, next) => {
       }
 
       const events = await Event.find(query).sort({ startDate: 1, createdAt: -1 });
-      return res.json({ success: true, count: events.length, data: events, events });
+      await Promise.all(events.map((event) => migrateLegacyRsvpsForEvent(event)));
+      const enriched = await enrichEventsWithRsvp(events, req.user?._id);
+      return res.json({ success: true, count: enriched.length, data: enriched, events: enriched });
     }
 
     // In-memory fallback store mode
@@ -160,7 +167,7 @@ const searchEvents = async (req, res, next) => {
     const queryTerm = String(q).trim();
 
     if (!queryTerm) {
-      if (isConnectedToMongoDB) {
+      if (isConnectedToMongoDB()) {
         const allEvents = await Event.find({ published: true }).sort({ startDate: 1 });
         return res.json({ success: true, query: '', count: allEvents.length, data: allEvents });
       }
@@ -168,7 +175,7 @@ const searchEvents = async (req, res, next) => {
       return res.json({ success: true, query: '', count: allEvents.length, data: allEvents });
     }
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const escapedTerm = queryTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escapedTerm, 'i');
       const mongoQuery = {
@@ -210,7 +217,7 @@ const getEventById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       let event = null;
       if (mongoose.Types.ObjectId.isValid(id)) {
         event = await Event.findById(id);
@@ -222,7 +229,9 @@ const getEventById = async (req, res, next) => {
       if (!event) {
         return res.status(404).json({ success: false, message: 'Event not found' });
       }
-      return res.json({ success: true, data: event });
+      await migrateLegacyRsvpsForEvent(event);
+      const [enriched] = await enrichEventsWithRsvp([event], req.user?._id);
+      return res.json({ success: true, data: enriched, ...enriched });
     }
 
     const event = INITIAL_EVENTS.find((e) => e.id === id || e.itemKey === id || e._id === id);
@@ -332,7 +341,7 @@ const createEvent = async (req, res, next) => {
       updatedAt: new Date()
     };
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const createdEvent = await Event.create(newEventData);
       return res.status(201).json({
         success: true,
@@ -383,7 +392,7 @@ const updateEvent = async (req, res, next) => {
       }
     }
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       let updated = null;
       if (mongoose.Types.ObjectId.isValid(id)) {
         updated = await Event.findByIdAndUpdate(id, { $set: updatePayload }, { new: true, runValidators: true });
@@ -437,7 +446,7 @@ const deleteEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       let deleted = null;
       if (mongoose.Types.ObjectId.isValid(id)) {
         deleted = await Event.findByIdAndDelete(id);
@@ -494,7 +503,7 @@ const publishEvent = async (req, res, next) => {
       }
     }
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       let event = null;
       if (mongoose.Types.ObjectId.isValid(id)) {
         event = await Event.findById(id);
@@ -547,30 +556,6 @@ const publishEvent = async (req, res, next) => {
     next(error);
   }
 };
-const rsvpEvent = async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Event not found' });
-    }
-
-    if (event.attendeesCount >= event.capacity) {
-      return res.status(400).json({ success: false, message: 'Event is fully booked' });
-    }
-
-    event.attendeesCount += 1;
-    await event.save();
-
-    res.json({
-      success: true,
-      message: 'RSVP confirmed successfully',
-      attendeesCount: event.attendeesCount
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
 // @desc    Get attendance metrics for an organizer (Task 1 of Story 3)
 // @route   GET /organizer/:id/attendance-metrics
 const getOrganizerAttendanceMetrics = async (req, res) => {
@@ -858,8 +843,6 @@ module.exports = {
   updateEvent,
   deleteEvent,
   publishEvent,
-  rsvpEvent,
   getOrganizerAttendanceMetrics,
   exportOrganizerAttendanceMetricsCSV
 };
-

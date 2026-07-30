@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import RegistrationDesk from './RegistrationDesk';
 import { useAuth } from '../context/AuthContext';
 import authenticatedFetch from '../utils/authenticatedFetch';
@@ -17,6 +17,7 @@ export function OrganizerCheckIn() {
   const [selectedEventId, setSelectedEventId] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [workspaceTab, setWorkspaceTab] = useState('attendance');
+  const defaultedTabEventId = useRef('');
   
   const userRole = user?.role === 'admin' ? 'organizer' : user?.role;
 
@@ -75,14 +76,20 @@ export function OrganizerCheckIn() {
         if (res.ok) {
           const json = await res.json();
           if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            const manageableEvents = user?.role === 'admin'
+            const manageableEvents = (user?.role === 'admin'
               ? json.data
               : json.data.filter((event) => {
                   const ownerId = event.organizer?._id || event.organizer || event.organizerId;
                   return ownerId?.toString() === user?._id?.toString();
-                });
+                }))
+              .sort((left, right) => Number(hasRegistrations(right)) - Number(hasRegistrations(left)));
             setEvents(manageableEvents);
-            setSelectedEventId(manageableEvents[0]?._id || '');
+            setSelectedEventId((currentId) => {
+              const currentStillAvailable = manageableEvents.some((event) =>
+                [event._id, event.id, event.itemKey].filter(Boolean).some((id) => id.toString() === currentId?.toString())
+              );
+              return currentStillAvailable ? currentId : (manageableEvents[0]?._id || '');
+            });
             return;
           }
         }
@@ -93,6 +100,8 @@ export function OrganizerCheckIn() {
       setSelectedEventId('');
     };
     fetchEvents();
+    const refreshTimer = window.setInterval(fetchEvents, 15000);
+    return () => window.clearInterval(refreshTimer);
   }, [user?._id, user?.role]);
 
   // Update selected event object when ID changes
@@ -100,7 +109,11 @@ export function OrganizerCheckIn() {
     const found = events.find((e) => e._id === selectedEventId || e.id === selectedEventId || e.itemKey === selectedEventId);
     const nextEvent = found || events[0] || null;
     setSelectedEvent(nextEvent);
-    setWorkspaceTab(hasRegistrations(nextEvent) ? 'registrations' : 'attendance');
+    const nextEventId = nextEvent?._id || nextEvent?.id || nextEvent?.itemKey || '';
+    if (nextEventId && defaultedTabEventId.current !== nextEventId) {
+      defaultedTabEventId.current = nextEventId;
+      setWorkspaceTab(hasRegistrations(nextEvent) ? 'registrations' : 'attendance');
+    }
   }, [events, selectedEventId]);
 
   // 2. Fetch Attendance Data from API
@@ -157,8 +170,11 @@ export function OrganizerCheckIn() {
   }, [selectedEventId, userRole, search, rsvpFilter, attendanceFilter, page, limit, sortBy, sortOrder]);
 
   useEffect(() => {
+    if (workspaceTab !== 'attendance') return undefined;
     fetchAttendance();
-  }, [fetchAttendance]);
+    const refreshTimer = window.setInterval(fetchAttendance, 15000);
+    return () => window.clearInterval(refreshTimer);
+  }, [fetchAttendance, workspaceTab]);
 
   // 3. Fetch Audit Logs
   const fetchAuditLogs = useCallback(async () => {

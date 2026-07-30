@@ -9,24 +9,30 @@ export default function RegistrationDesk({ eventId, event }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const loadDesk = useCallback(async () => {
+  const loadDesk = useCallback(async ({ quiet = false } = {}) => {
     if (!eventId) return;
-    setLoading(true);
-    setError('');
+    if (!quiet) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const response = await axios.get(`/api/events/${eventId}/rsvps`);
       setDesk(response.data);
     } catch (requestError) {
       const message = requestError.response?.data?.message || 'Unable to load the Registration Desk.';
-      setError(message);
-      showToast(message, 'error');
+      if (!quiet) {
+        setError(message);
+        showToast(message, 'error');
+      }
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, [eventId, showToast]);
 
   useEffect(() => {
     loadDesk();
+    const refreshTimer = window.setInterval(() => loadDesk({ quiet: true }), 15000);
+    return () => window.clearInterval(refreshTimer);
   }, [loadDesk]);
 
   if (loading && !desk) return <div className="registration-desk-state"><RefreshCw className="animate-spin" /> Loading registrations...</div>;
@@ -48,7 +54,7 @@ export default function RegistrationDesk({ eventId, event }) {
           <h3 id="registration-desk-title"><Ticket size={22} /> Registration Desk</h3>
           <p>{event?.title || 'Selected event'} registrations and FIFO waitlist</p>
         </div>
-        <button type="button" className="btn-secondary" onClick={loadDesk} disabled={loading}>
+        <button type="button" className="btn-secondary" onClick={() => loadDesk()} disabled={loading}>
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
       </div>

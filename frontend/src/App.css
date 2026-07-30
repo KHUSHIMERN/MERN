@@ -1401,6 +1401,53 @@
 .promotion-panel { border-color: rgba(99, 102, 241, 0.35); }
 @media (max-width: 760px) { .registration-desk-columns { grid-template-columns: 1fr; } .desk-person { grid-template-columns: auto 1fr; } .desk-person time { grid-column: 2; } }
 
+/* Compact role-aware application header */
+.header-container.compact-header { display: flex; flex-wrap: nowrap; max-width: 1440px; min-height: 4.5rem; gap: 1rem; }
+.compact-header .header-brand { flex: 0 0 auto; color: inherit; }
+.compact-header .desktop-primary-nav { flex: 1 1 auto; justify-content: center; }
+.compact-header .desktop-header-controls { flex: 0 0 auto; justify-self: auto; }
+.compact-timezone { max-width: 12rem; }
+.mobile-header-actions { display: none; align-items: center; gap: 0.5rem; margin-left: auto; }
+.account-menu-wrapper { position: relative; }
+.account-menu-trigger { display: flex; align-items: center; gap: 0.55rem; height: 2.6rem; max-width: 12rem; padding: 0.25rem 0.55rem; border: 1px solid var(--border-color); border-radius: 0.75rem; background: rgba(30, 41, 59, 0.75); color: var(--text-main); cursor: pointer; }
+.account-avatar { width: 1.9rem; height: 1.9rem; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; font-weight: 800; }
+.account-trigger-copy { min-width: 0; display: flex; flex-direction: column; text-align: left; line-height: 1.15; }
+.account-trigger-copy strong { max-width: 7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; }
+.account-trigger-copy small { color: var(--text-muted); font-size: 0.65rem; text-transform: capitalize; }
+.account-dropdown { position: absolute; top: calc(100% + 0.55rem); right: 0; z-index: 1001; width: 13.5rem; padding: 0.45rem; border: 1px solid rgba(148, 163, 184, 0.24); border-radius: 0.8rem; background: rgba(15, 23, 42, 0.98); box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.45); }
+.account-dropdown button { width: 100%; display: flex; align-items: center; gap: 0.65rem; padding: 0.7rem 0.75rem; border: 0; border-radius: 0.55rem; background: transparent; color: #e2e8f0; font-weight: 600; cursor: pointer; text-align: left; }
+.account-dropdown button:hover { background: rgba(99, 102, 241, 0.14); }
+.account-dropdown .account-logout { color: #f87171; border-top: 1px solid rgba(148, 163, 184, 0.12); margin-top: 0.25rem; border-radius: 0 0 0.55rem 0.55rem; }
+.mobile-navigation-drawer { display: none; }
+
+@media (max-width: 82rem) {
+  .compact-header .tz-offset-badge,
+  .compact-header .account-trigger-copy,
+  .compact-header .create-event-header-btn span { display: none; }
+  .compact-header .nav-link { padding-inline: 0.7rem; }
+  .account-menu-trigger { width: auto; }
+}
+
+@media (max-width: 64rem) {
+  .header-container.compact-header { display: flex; grid-template-columns: none; min-height: 4rem; }
+  .compact-header .desktop-primary-nav,
+  .compact-header .desktop-header-controls { display: none; }
+  .mobile-header-actions { display: flex; }
+  .compact-header .mobile-menu-toggle { display: inline-flex; align-items: center; justify-content: center; margin: 0; }
+  .mobile-navigation-drawer { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.75rem 1rem 1rem; border-top: 1px solid var(--border-color); background: rgba(15, 23, 42, 0.98); }
+  .mobile-navigation-drawer > button { width: 100%; padding: 0.8rem 0.9rem; border: 0; border-radius: 0.6rem; background: transparent; color: #e2e8f0; font-weight: 700; text-align: left; cursor: pointer; }
+  .mobile-navigation-drawer > button:hover { background: rgba(99, 102, 241, 0.13); }
+  .mobile-language-control { padding: 0.35rem 0.9rem; }
+  .mobile-language-control .language-select-dropdown { width: 100%; }
+  .mobile-navigation-drawer .mobile-logout { color: #f87171; border-top: 1px solid var(--border-color); border-radius: 0; margin-top: 0.35rem; }
+}
+
+@media (max-width: 30rem) {
+  .compact-header .brand-title { font-size: 1.15rem; }
+  .compact-header .brand-subtitle { display: none; }
+  .header-container.compact-header { padding-inline: 0.75rem; }
+}
+
 /* Header & Role Switcher */
 .checkin-header {
   display: flex;

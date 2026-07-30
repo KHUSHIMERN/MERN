@@ -1,171 +1,151 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Bell, ChevronDown, ClipboardCheck, LogOut, Menu, Plus, Shield, User, X } from 'lucide-react';
 import { LanguageSelector } from './LanguageSelector';
 import TimezoneSelectorModal from './TimezoneSelectorModal';
-import { useTimezone } from '../context/TimezoneContext';
-import { getTimezoneOffsetLabel } from '../utils/dateUtils';
-import { Bell } from 'lucide-react';
 import NotificationPanel from './NotificationPanel';
+import { useTimezone } from '../context/TimezoneContext';
 import { useNotifications } from '../context/NotificationContext';
+import { getTimezoneOffsetLabel } from '../utils/dateUtils';
 
 export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNotificationEvent, user, logout, view, setView }) {
   const { t } = useTranslation();
-  const { activeTimezone, isOverridden } = useTimezone();
+  const { activeTimezone } = useTimezone();
+  const { unreadCount } = useNotifications();
   const [isTzModalOpen, setIsTzModalOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const { unreadCount } = useNotifications();
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const accountRef = useRef(null);
 
+  const canOrganize = user && ['organizer', 'admin'].includes(user.role);
+  const city = activeTimezone.split('/')[1]?.replace('_', ' ') || activeTimezone;
   const offsetLabel = getTimezoneOffsetLabel(activeTimezone);
+
+  useEffect(() => {
+    const closeMenus = (event) => {
+      if (event.key === 'Escape') {
+        setAccountOpen(false);
+        setMobileOpen(false);
+      }
+      if (event.type === 'mousedown' && accountRef.current && !accountRef.current.contains(event.target)) {
+        setAccountOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', closeMenus);
+    document.addEventListener('keydown', closeMenus);
+    return () => {
+      document.removeEventListener('mousedown', closeMenus);
+      document.removeEventListener('keydown', closeMenus);
+    };
+  }, []);
+
+  const navigate = (nextView, nextTab) => {
+    setView?.(nextView);
+    if (nextTab) setActiveTab?.(nextTab);
+    setMobileOpen(false);
+    setAccountOpen(false);
+  };
+
+  const handleLogout = async () => {
+    await logout?.();
+    navigate('login');
+  };
 
   return (
     <>
       <header className="global-header">
-        <div className="header-container">
-          {/* Brand Logo & Title */}
-          <div
-            className="header-brand"
-            onClick={() => {
-              if (setView) setView('events');
-              if (setActiveTab) setActiveTab('events');
-            }}
-            role="button"
-            tabIndex={0}
-          >
-            <div className="brand-logo-icon">✨</div>
-            <div className="brand-titles">
-              <h1 className="brand-title">CommunityConnect</h1>
+        <div className="header-container compact-header">
+          <button type="button" className="header-brand" onClick={() => navigate('events', 'events')}>
+            <span className="brand-logo-icon" aria-hidden="true">✨</span>
+            <span className="brand-titles">
+              <span className="brand-title">CommunityConnect</span>
               <span className="brand-subtitle">{t('header.subtitle', 'Community Hub')}</span>
-            </div>
-          </div>
+            </span>
+          </button>
 
-          {/* Navigation Links */}
-          <nav className="header-nav">
-            <button
-              type="button"
-              className={`nav-link ${view === 'events' && activeTab === 'events' ? 'active' : ''}`}
-              onClick={() => {
-                if (setView) setView('events');
-                if (setActiveTab) setActiveTab('events');
-              }}
-            >
+          <nav className="header-nav desktop-primary-nav" aria-label="Primary navigation">
+            <button type="button" className={`nav-link ${view === 'events' && activeTab === 'events' ? 'active' : ''}`} onClick={() => navigate('events', 'events')}>
               {t('header.nav.events', 'Events')}
             </button>
-
-            <button
-              type="button"
-              className={`nav-link ${view === 'events' && activeTab === 'checkin' ? 'active' : ''}`}
-              onClick={() => {
-                if (setView) setView('events');
-                if (setActiveTab) setActiveTab('checkin');
-              }}
-            >
-              📋 {t('header.nav.checkin', 'Check-in Desk')}
-            </button>
-
-            <button
-              type="button"
-              className="nav-link nav-link-highlight"
-              onClick={onOpenRegisterModal}
-            >
-              + {t('header.nav.register', 'Register Event')}
-            </button>
-
-            <button
-              type="button"
-              className={`nav-link ${view === 'events' && activeTab === 'fallbackDemo' ? 'active' : ''}`}
-              onClick={() => {
-                if (setView) setView('events');
-                if (setActiveTab) setActiveTab('fallbackDemo');
-              }}
-            >
-              🧪 {t('header.nav.fallbackDemo', 'Fallback Demo')}
-            </button>
+            {canOrganize && (
+              <button type="button" className={`nav-link ${view === 'events' && activeTab === 'checkin' ? 'active' : ''}`} onClick={() => navigate('events', 'checkin')}>
+                <ClipboardCheck size={17} /> {t('header.nav.checkin', 'Organizer Workspace')}
+              </button>
+            )}
           </nav>
 
-          {/* Global Controls: Timezone, Auth & Language Selector */}
-          <div className="header-controls">
-            {/* Active Timezone Pill Button */}
-            <button
-              type="button"
-              className={`timezone-pill-btn ${isOverridden ? 'is-override' : ''}`}
-              onClick={() => setIsTzModalOpen(true)}
-              title={`Active Timezone: ${activeTimezone} (${offsetLabel}). Click to change.`}
-            >
-              <span className="tz-globe-icon">🌐</span>
-              <span className="tz-city-name">
-                {activeTimezone.split('/')[1]?.replace('_', ' ') || activeTimezone}
-              </span>
-              <span className="tz-offset-badge">{offsetLabel}</span>
-              {isOverridden && <span className="tz-override-dot" title="Timezone Override Active">⚡</span>}
+          <div className="header-controls desktop-header-controls">
+            {canOrganize && (
+              <button type="button" className="nav-link nav-link-highlight create-event-header-btn" onClick={onOpenRegisterModal}>
+                <Plus size={17} /> Create Event
+              </button>
+            )}
+            <button type="button" className="timezone-pill-btn compact-timezone" onClick={() => setIsTzModalOpen(true)} title={`Timezone: ${activeTimezone} (${offsetLabel})`}>
+              <span aria-hidden="true">🌐</span><span className="tz-city-name">{city}</span><span className="tz-offset-badge">{offsetLabel}</span>
             </button>
+            <div className="header-language-desktop"><LanguageSelector id="desktop-language-select" /></div>
 
             {user ? (
-              <div className="header-user-actions">
-                <span className="user-signed-in-info">
-                  Signed in as <strong>{user.name}</strong> ({user.role})
-                </span>
-                <button
-                  type="button"
-                  className="notification-bell"
-                  onClick={() => setNotificationsOpen((open) => !open)}
-                  aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
-                  aria-expanded={notificationsOpen}
-                >
+              <>
+                <button type="button" className="notification-bell" onClick={() => setNotificationsOpen((open) => !open)} aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} aria-expanded={notificationsOpen}>
                   <Bell size={20} />
                   {unreadCount > 0 && <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
                 </button>
-                {user.role === 'admin' && (
-                  <button
-                    type="button"
-                    className="nav-link nav-link-admin"
-                    onClick={() => setView && setView('admin-requests')}
-                  >
-                    Admin Requests
+                <div className="account-menu-wrapper" ref={accountRef}>
+                  <button type="button" className="account-menu-trigger" onClick={() => setAccountOpen((open) => !open)} aria-expanded={accountOpen} aria-haspopup="menu">
+                    <span className="account-avatar">{user.name?.charAt(0)?.toUpperCase() || 'U'}</span>
+                    <span className="account-trigger-copy"><strong>{user.name}</strong><small>{user.role}</small></span>
+                    <ChevronDown size={16} />
                   </button>
-                )}
-                <button
-                  type="button"
-                  className={`nav-link ${view === 'profile' ? 'active' : ''}`}
-                  onClick={() => setView && setView('profile')}
-                >
-                  Profile
-                </button>
-                <button
-                  type="button"
-                  className="nav-link nav-link-logout"
-                  onClick={() => {
-                    if (logout) logout();
-                    if (setView) setView('login');
-                  }}
-                >
-                  Logout
-                </button>
-              </div>
+                  {accountOpen && (
+                    <div className="account-dropdown" role="menu">
+                      <button type="button" role="menuitem" onClick={() => navigate('profile')}><User size={17} /> Profile & Settings</button>
+                      {user.role === 'admin' && <button type="button" role="menuitem" onClick={() => navigate('admin-requests')}><Shield size={17} /> Admin Requests</button>}
+                      <button type="button" role="menuitem" className="account-logout" onClick={handleLogout}><LogOut size={17} /> Logout</button>
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
-              <div className="header-auth-actions">
-                <button
-                  type="button"
-                  className={`nav-link ${(view === 'login' || view === 'register') ? 'active' : ''}`}
-                  onClick={() => setView && setView('login')}
-                >
-                  🔑 Log In / Register
-                </button>
-              </div>
+              <button type="button" className={`nav-link auth-header-btn ${(view === 'login' || view === 'register') ? 'active' : ''}`} onClick={() => navigate('login')}>
+                Log In / Register
+              </button>
             )}
-            <LanguageSelector variant="dropdown" />
+          </div>
+
+          <div className="mobile-header-actions">
+            {user && (
+              <button type="button" className="notification-bell" onClick={() => setNotificationsOpen((open) => !open)} aria-label={`Notifications, ${unreadCount} unread`}>
+                <Bell size={20} />{unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
+              </button>
+            )}
+            <button type="button" className="mobile-menu-toggle" onClick={() => setMobileOpen((open) => !open)} aria-label="Open navigation menu" aria-expanded={mobileOpen}>
+              {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
           </div>
         </div>
+
+        {mobileOpen && (
+          <nav className="mobile-navigation-drawer" aria-label="Mobile navigation">
+            <button type="button" onClick={() => navigate('events', 'events')}>Events</button>
+            {canOrganize && <button type="button" onClick={() => navigate('events', 'checkin')}>Organizer Workspace</button>}
+            {canOrganize && <button type="button" onClick={() => { onOpenRegisterModal?.(); setMobileOpen(false); }}>Create Event</button>}
+            {user ? (
+              <>
+                <button type="button" onClick={() => navigate('profile')}>Profile & Settings</button>
+                {user.role === 'admin' && <button type="button" onClick={() => navigate('admin-requests')}>Admin Requests</button>}
+              </>
+            ) : <button type="button" onClick={() => navigate('login')}>Log In / Register</button>}
+            <button type="button" onClick={() => setIsTzModalOpen(true)}>Timezone: {city} ({offsetLabel})</button>
+            <div className="mobile-language-control"><LanguageSelector id="mobile-language-select" /></div>
+            {user && <button type="button" className="mobile-logout" onClick={handleLogout}>Logout</button>}
+          </nav>
+        )}
       </header>
 
-      {/* Timezone Selector Modal */}
       <TimezoneSelectorModal open={isTzModalOpen} onClose={() => setIsTzModalOpen(false)} />
-      {user && (
-        <NotificationPanel
-          open={notificationsOpen}
-          onClose={() => setNotificationsOpen(false)}
-          onOpenEvent={onOpenNotificationEvent}
-        />
-      )}
+      {user && <NotificationPanel open={notificationsOpen} onClose={() => setNotificationsOpen(false)} onOpenEvent={onOpenNotificationEvent} />}
     </>
   );
 }

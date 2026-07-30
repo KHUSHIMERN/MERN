@@ -11,6 +11,7 @@
     "seed": "node seed.js",
     "test": "node test-auth-flow.js",
     "test:all": "node test-auth-flow.js && node test-profile-flow.js",
+    "test:auth": "jest tests/authSecurity.test.js --runInBand --forceExit",
     "test:shreya": "jest tests/authAndRsvp.test.js tests/authSecurity.test.js --runInBand --forceExit"
   },
   "keywords": [],

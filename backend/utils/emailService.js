@@ -5,7 +5,8 @@ const emailLog = [];
 
 const sendVerificationEmail = async (email, name, token, originUrl) => {
   const verifyLink = `${originUrl || 'http://localhost:5000'}/api/auth/verify?token=${token}`;
-  const clientVerifyLink = `http://localhost:3000/verify?token=${token}`;
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const clientVerifyLink = `${clientUrl}/verify?token=${token}`;
 
   const emailData = {
     to: email,

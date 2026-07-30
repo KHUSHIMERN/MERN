@@ -24,6 +24,9 @@ const auth = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.type && decoded.type !== 'access') {
+      return res.status(401).json({ message: 'Authentication failed. Invalid token type.' });
+    }
     const user = await User.findById(decoded.id);
 
     if (!user) {

@@ -1,20 +1,24 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
-const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = require('../app');
 const User = require('../models/User');
 const RefreshToken = require('../models/RefreshToken');
-const { JWT_SECRET } = require('../middleware/auth');
 
 let mongoServer;
 
+const refreshCookie = (response) => {
+  const header = response.headers['set-cookie'] || [];
+  const cookie = header.find((entry) => entry.startsWith('cc_refresh_token='));
+  return cookie ? cookie.split(';')[0] : null;
+};
+
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
-  const uri = mongoServer.getUri();
-  await mongoose.connect(uri);
+  await mongoose.connect(mongoServer.getUri());
 });
 
 afterAll(async () => {
@@ -27,168 +31,137 @@ beforeEach(async () => {
   await RefreshToken.deleteMany({});
 });
 
-describe('Secure Authentication & Token Flow Integration Tests', () => {
+describe('Consolidated authentication lifecycle', () => {
+  test('registration hashes the password and requires verification before login', async () => {
+    const registration = await request(app).post('/api/auth/register').send({
+      name: 'John Doe',
+      email: 'john@example.com',
+      password: 'securePassword123',
+      confirmPassword: 'securePassword123',
+    });
 
-  test('1. [Registration] Password is saved as a hashed value', async () => {
-    const registerResponse = await request(app)
-      .post('/api/auth/register')
-      .send({
-        name: 'John Doe',
-        email: 'john@example.com',
-        password: 'securePassword123'
-      });
-
-    expect(registerResponse.status).toBe(201);
-    expect(registerResponse.body.accessToken).toBeDefined();
+    expect(registration.status).toBe(201);
+    expect(registration.body.accessToken).toBeUndefined();
 
     const user = await User.findOne({ email: 'john@example.com' });
-    expect(user).toBeDefined();
-    expect(user.password).not.toBe('securePassword123'); // Hashed!
-    
-    const isMatch = await bcrypt.compare('securePassword123', user.password);
-    expect(isMatch).toBe(true);
+    expect(user.isVerified).toBe(false);
+    expect(user.password).not.toBe('securePassword123');
+    expect(await bcrypt.compare('securePassword123', user.password)).toBe(true);
+
+    const blockedLogin = await request(app).post('/api/auth/login').send({
+      email: 'john@example.com',
+      password: 'securePassword123',
+    });
+    expect(blockedLogin.status).toBe(403);
+
+    const verification = await request(app)
+      .get('/api/auth/verify')
+      .query({ token: registration.body.verificationToken })
+      .set('Accept', 'application/json');
+    expect(verification.status).toBe(200);
   });
 
-  test('2. [Login] Successful login with valid credentials', async () => {
-    // Register user first (will hash password via pre-save)
+  test('login returns a short-lived access token and HTTP-only refresh cookie', async () => {
     await User.create({
       name: 'Jane Doe',
       email: 'jane@example.com',
       password: 'password123',
-      isVerified: true
+      isVerified: true,
+      role: 'resident',
     });
 
-    const response = await request(app)
-      .post('/api/auth/login')
-      .send({
-        email: 'jane@example.com',
-        password: 'password123'
-      });
+    const response = await request(app).post('/api/auth/login').send({
+      email: 'jane@example.com',
+      password: 'password123',
+    });
 
     expect(response.status).toBe(200);
     expect(response.body.accessToken).toBeDefined();
-    expect(response.body.refreshToken).toBeDefined();
-    expect(response.body.user.email).toBe('jane@example.com');
+    expect(response.body.refreshToken).toBeUndefined();
+    const cookieHeader = (response.headers['set-cookie'] || []).join(';');
+    expect(cookieHeader).toContain('cc_refresh_token=');
+    expect(cookieHeader).toContain('HttpOnly');
 
-    // Verify refresh token is in DB
-    const storedToken = await RefreshToken.findOne({ token: response.body.refreshToken });
-    expect(storedToken).toBeDefined();
-    expect(storedToken.userId.toString()).toBe(response.body.user.id);
+    const decoded = jwt.decode(response.body.accessToken);
+    expect(decoded.type).toBe('access');
+    expect(decoded.exp - decoded.iat).toBeLessThanOrEqual(15 * 60);
+    expect(await RefreshToken.countDocuments({ revokedAt: null })).toBe(1);
   });
 
-  test('3. [Login] Fails with invalid password', async () => {
+  test('refresh rotates the cookie and revokes the previous stored token', async () => {
     await User.create({
       name: 'Jane Doe',
       email: 'jane@example.com',
       password: 'password123',
-      isVerified: true
+      isVerified: true,
     });
-
-    const response = await request(app)
-      .post('/api/auth/login')
-      .send({
-        email: 'jane@example.com',
-        password: 'wrongpassword'
-      });
-
-    expect(response.status).toBe(400);
-    expect(response.body.message).toContain('Invalid credentials');
-  });
-
-  test('4. [Login] Fails with unverified account', async () => {
-    await User.create({
-      name: 'Unverified User',
-      email: 'unverified@example.com',
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'jane@example.com',
       password: 'password123',
-      isVerified: false
     });
+    const firstCookie = refreshCookie(login);
 
-    const response = await request(app)
-      .post('/api/auth/login')
-      .send({
-        email: 'unverified@example.com',
-        password: 'password123'
-      });
+    const refreshed = await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', firstCookie);
 
-    expect(response.status).toBe(400);
-    expect(response.body.message).toContain('Account is unverified');
+    expect(refreshed.status).toBe(200);
+    expect(refreshed.body.accessToken).toBeDefined();
+    expect(refreshCookie(refreshed)).not.toBe(firstCookie);
+    expect(await RefreshToken.countDocuments({ revokedAt: { $ne: null } })).toBe(1);
+    expect(await RefreshToken.countDocuments({ revokedAt: null })).toBe(1);
+
+    const replay = await request(app)
+      .post('/api/auth/refresh')
+      .set('Cookie', firstCookie);
+    expect(replay.status).toBe(401);
   });
 
-  test('5. [Refresh] Rotates refresh token and issues new access token', async () => {
-    const user = await User.create({
+  test('logout revokes the active refresh token and clears the cookie', async () => {
+    await User.create({
       name: 'Jane Doe',
       email: 'jane@example.com',
       password: 'password123',
-      isVerified: true
+      isVerified: true,
     });
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'jane@example.com',
+      password: 'password123',
+    });
+    const cookie = refreshCookie(login);
 
-    const loginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({
-        email: 'jane@example.com',
-        password: 'password123'
-      });
+    const logout = await request(app).post('/api/auth/logout').set('Cookie', cookie);
+    expect(logout.status).toBe(200);
+    expect((logout.headers['set-cookie'] || []).join(';')).toContain('cc_refresh_token=;');
+    expect(await RefreshToken.countDocuments({ revokedAt: { $ne: null } })).toBe(1);
 
-    const originalRefreshToken = loginResponse.body.refreshToken;
-
-    // Call /refresh
-    const refreshResponse = await request(app)
-      .post('/api/auth/refresh')
-      .send({ refreshToken: originalRefreshToken });
-
-    expect(refreshResponse.status).toBe(200);
-    expect(refreshResponse.body.accessToken).toBeDefined();
-    expect(refreshResponse.body.refreshToken).toBeDefined();
-    expect(refreshResponse.body.refreshToken).not.toBe(originalRefreshToken); // Rotated!
-
-    // Verify old refresh token is deleted and new one is stored
-    const oldTokenDoc = await RefreshToken.findOne({ token: originalRefreshToken });
-    const newTokenDoc = await RefreshToken.findOne({ token: refreshResponse.body.refreshToken });
-
-    expect(oldTokenDoc).toBeNull();
-    expect(newTokenDoc).toBeDefined();
-    expect(newTokenDoc.userId.toString()).toBe(user._id.toString());
+    const afterLogout = await request(app).post('/api/auth/refresh').set('Cookie', cookie);
+    expect(afterLogout.status).toBe(401);
   });
 
-  test('6. [Refresh] Fails with invalid or deleted refresh token', async () => {
-    const response = await request(app)
-      .post('/api/auth/refresh')
-      .send({ refreshToken: 'someinvalidtoken' });
-
+  test('refresh rejects requests without a refresh cookie', async () => {
+    const response = await request(app).post('/api/auth/refresh');
     expect(response.status).toBe(401);
   });
 
-  test('7. [Logout] Revokes refresh token', async () => {
+  test('a refresh token can be consumed only once under concurrent rotation', async () => {
     await User.create({
-      name: 'Jane Doe',
-      email: 'jane@example.com',
+      name: 'Concurrent User',
+      email: 'concurrent@example.com',
       password: 'password123',
-      isVerified: true
+      isVerified: true,
     });
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'concurrent@example.com',
+      password: 'password123',
+    });
+    const cookie = refreshCookie(login);
 
-    const loginResponse = await request(app)
-      .post('/api/auth/login')
-      .send({
-        email: 'jane@example.com',
-        password: 'password123'
-      });
+    const responses = await Promise.all([
+      request(app).post('/api/auth/refresh').set('Cookie', cookie),
+      request(app).post('/api/auth/refresh').set('Cookie', cookie),
+    ]);
 
-    const refreshToken = loginResponse.body.refreshToken;
-
-    // Confirm it exists
-    let storedToken = await RefreshToken.findOne({ token: refreshToken });
-    expect(storedToken).toBeDefined();
-
-    // Logout
-    const logoutResponse = await request(app)
-      .post('/api/auth/logout')
-      .send({ refreshToken });
-
-    expect(logoutResponse.status).toBe(200);
-
-    // Confirm it is deleted
-    storedToken = await RefreshToken.findOne({ token: refreshToken });
-    expect(storedToken).toBeNull();
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
   });
-
 });

@@ -1,12 +1,69 @@
 const express = require('express');
 const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const RefreshToken = require('../models/RefreshToken');
 const { auth, JWT_SECRET } = require('../middleware/auth');
 const { sendVerificationEmail, getRecentEmails } = require('../utils/emailService');
 
 const router = express.Router();
+
+const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL || '15m';
+const REFRESH_TOKEN_TTL = process.env.REFRESH_TOKEN_TTL || '7d';
+const REFRESH_COOKIE_NAME = 'cc_refresh_token';
+const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
+const refreshCookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+  maxAge: REFRESH_TOKEN_MAX_AGE_MS,
+  path: '/api/auth',
+});
+
+const clearRefreshCookieOptions = () => {
+  const { maxAge, ...options } = refreshCookieOptions();
+  return options;
+};
+
+const readCookie = (req, name) => {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return null;
+  const pair = cookieHeader
+    .split(';')
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith(`${name}=`));
+  return pair ? decodeURIComponent(pair.slice(name.length + 1)) : null;
+};
+
+const signAccessToken = (user) => jwt.sign(
+  { id: user._id, role: user.role, type: 'access' },
+  JWT_SECRET,
+  { expiresIn: ACCESS_TOKEN_TTL }
+);
+
+const signRefreshToken = (user) => jwt.sign(
+  { id: user._id, type: 'refresh', nonce: crypto.randomBytes(16).toString('hex') },
+  JWT_SECRET,
+  { expiresIn: REFRESH_TOKEN_TTL }
+);
+
+const issueSession = async (user, res) => {
+  const accessToken = signAccessToken(user);
+  const refreshToken = signRefreshToken(user);
+  const decoded = jwt.decode(refreshToken);
+
+  await RefreshToken.create({
+    tokenHash: hashToken(refreshToken),
+    userId: user._id,
+    expiresAt: new Date(decoded.exp * 1000),
+  });
+
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
+  return accessToken;
+};
 
 // Helper: validate email regex
 const isValidEmail = (email) => {
@@ -56,10 +113,6 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'An account with this email address already exists.' });
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
     // Generate unique verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
@@ -68,7 +121,7 @@ router.post('/register', async (req, res) => {
     const user = new User({
       name: name.trim(),
       email: email.toLowerCase().trim(),
-      password: hashedPassword,
+      password,
       role: selectedRole,
       isVerified: false,
       verificationToken,
@@ -88,9 +141,11 @@ router.post('/register', async (req, res) => {
     return res.status(201).json({
       message: 'Registration successful! An email verification link has been generated.',
       user: user.toSafeObject(),
-      verificationToken: user.verificationToken,
-      verificationLink: emailInfo.clientVerifyLink,
-      backendVerifyLink: emailInfo.verifyLink,
+      ...(process.env.NODE_ENV !== 'production' ? {
+        verificationToken: user.verificationToken,
+        verificationLink: emailInfo.clientVerifyLink,
+        backendVerifyLink: emailInfo.verifyLink,
+      } : {}),
     });
   } catch (error) {
     console.error('Registration Error:', error);
@@ -109,7 +164,10 @@ router.get('/verify', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Verification token is missing.' });
     }
 
-    const user = await User.findOne({ verificationToken: token });
+    const user = await User.findOne({
+      verificationToken: token,
+      verificationTokenExpires: { $gt: new Date() },
+    });
 
     if (!user) {
       // Check if accepting HTML or JSON request
@@ -130,7 +188,7 @@ router.get('/verify', async (req, res) => {
               <div class="card">
                 <h2>❌ Verification Failed</h2>
                 <p>Invalid or expired verification token. Please register again or request a new verification link.</p>
-                <a href="http://localhost:3000/login">Return to Login</a>
+                <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}">Return to Login</a>
               </div>
             </body>
           </html>
@@ -146,9 +204,6 @@ router.get('/verify', async (req, res) => {
     await user.save();
 
     console.log(`✅ User verified successfully: ${user.email} (${user.role})`);
-
-    // Generate JWT token so verified user can log in seamlessly
-    const jwtToken = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
     if (req.headers.accept && req.headers.accept.includes('text/html')) {
       return res.send(`
@@ -169,7 +224,7 @@ router.get('/verify', async (req, res) => {
               <h2>🎉 Email Verified!</h2>
               <p>Your account (<strong>${user.email}</strong>) has been successfully verified as a <strong>${user.role}</strong>.</p>
               <p>You can now close this window and log in to access all protected event features.</p>
-              <a href="http://localhost:3000/login?verified=true&email=${encodeURIComponent(user.email)}">Go to App Login</a>
+              <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}?verified=true&email=${encodeURIComponent(user.email)}">Go to App Login</a>
             </div>
           </body>
         </html>
@@ -180,7 +235,6 @@ router.get('/verify', async (req, res) => {
       success: true,
       message: 'Email address verified successfully! You can now log in.',
       user: user.toSafeObject(),
-      token: jwtToken,
     });
   } catch (error) {
     console.error('Verification Error:', error);
@@ -223,9 +277,11 @@ router.post('/resend-verification', async (req, res) => {
 
     return res.status(200).json({
       message: 'Verification email resent successfully!',
-      verificationToken,
-      verificationLink: emailInfo.clientVerifyLink,
-      backendVerifyLink: emailInfo.verifyLink,
+      ...(process.env.NODE_ENV !== 'production' ? {
+        verificationToken,
+        verificationLink: emailInfo.clientVerifyLink,
+        backendVerifyLink: emailInfo.verifyLink,
+      } : {}),
     });
   } catch (error) {
     console.error('Resend Error:', error);
@@ -250,7 +306,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Invalid credentials. User does not exist.' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid credentials. Password incorrect.' });
     }
@@ -265,18 +321,92 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Create JWT
-    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    const accessToken = await issueSession(user, res);
 
     return res.status(200).json({
       message: 'Login successful!',
-      token,
+      token: accessToken,
+      accessToken,
       user: user.toSafeObject(),
     });
   } catch (error) {
     console.error('Login Error:', error);
     return res.status(500).json({ message: 'Server error during login.', error: error.message });
   }
+});
+
+// @route   POST /api/auth/refresh
+// @desc    Rotate refresh token and issue a new short-lived access token
+// @access  Public (requires HTTP-only refresh cookie)
+router.post('/refresh', async (req, res) => {
+  const refreshToken = readCookie(req, REFRESH_COOKIE_NAME);
+  if (!refreshToken) {
+    return res.status(401).json({ message: 'Refresh token is required.' });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, JWT_SECRET);
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({ message: 'Invalid refresh token.' });
+    }
+
+    const currentHash = hashToken(refreshToken);
+    const storedToken = await RefreshToken.findOneAndUpdate(
+      {
+        tokenHash: currentHash,
+        revokedAt: null,
+        expiresAt: { $gt: new Date() },
+      },
+      { $set: { revokedAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+
+    if (!storedToken) {
+      res.clearCookie(REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
+      return res.status(401).json({ message: 'Refresh token is invalid, expired, or revoked.' });
+    }
+
+    const user = await User.findById(storedToken.userId);
+    if (!user || !user.isVerified) {
+      res.clearCookie(REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
+      return res.status(401).json({ message: 'User is unavailable or unverified.' });
+    }
+
+    const nextRefreshToken = signRefreshToken(user);
+    const nextHash = hashToken(nextRefreshToken);
+    const nextDecoded = jwt.decode(nextRefreshToken);
+
+    storedToken.replacedByTokenHash = nextHash;
+    await storedToken.save();
+    await RefreshToken.create({
+      tokenHash: nextHash,
+      userId: user._id,
+      expiresAt: new Date(nextDecoded.exp * 1000),
+    });
+
+    res.cookie(REFRESH_COOKIE_NAME, nextRefreshToken, refreshCookieOptions());
+    const accessToken = signAccessToken(user);
+    return res.status(200).json({ token: accessToken, accessToken });
+  } catch (error) {
+    res.clearCookie(REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
+    return res.status(401).json({ message: 'Invalid or expired refresh token.' });
+  }
+});
+
+// @route   POST /api/auth/logout
+// @desc    Revoke the current refresh token and clear its HTTP-only cookie
+// @access  Public
+router.post('/logout', async (req, res) => {
+  const refreshToken = readCookie(req, REFRESH_COOKIE_NAME);
+  if (refreshToken) {
+    await RefreshToken.updateOne(
+      { tokenHash: hashToken(refreshToken), revokedAt: null },
+      { $set: { revokedAt: new Date() } }
+    );
+  }
+
+  res.clearCookie(REFRESH_COOKIE_NAME, clearRefreshCookieOptions());
+  return res.status(200).json({ message: 'Logged out successfully.' });
 });
 
 // @route   GET /api/auth/me

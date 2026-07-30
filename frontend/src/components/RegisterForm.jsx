@@ -81,8 +81,8 @@ export default function RegisterForm({ onSwitchToLogin, hideCardWrapper = false 
       } else {
         const responseData = result.data || {};
         setApiSuccess(responseData.message || 'Registration successful!');
-        if (responseData.verificationLink || responseData.backendVerifyLink) {
-          setVerificationLink(responseData.verificationLink || responseData.backendVerifyLink);
+        if (responseData.backendVerifyLink || responseData.verificationLink) {
+          setVerificationLink(responseData.backendVerifyLink || responseData.verificationLink);
         }
         setFormData({
           name: '',
@@ -273,4 +273,3 @@ export default function RegisterForm({ onSwitchToLogin, hideCardWrapper = false 
 
   return <div className="auth-card">{content}</div>;
 }
-

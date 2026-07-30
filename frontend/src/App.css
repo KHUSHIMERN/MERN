@@ -4,6 +4,9 @@
   display: flex;
   flex-direction: column;
   background: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0f172a 70%);
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .main-content {
@@ -33,6 +36,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 1.5rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .header-brand {
@@ -111,12 +116,50 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .header-controls {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  min-width: 0;
+}
+
+@media (max-width: 100rem) {
+  .header-container {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.65rem 1rem;
+  }
+
+  .header-controls {
+    justify-self: end;
+  }
+
+  .header-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 75rem) {
+  .user-signed-in-info,
+  .tz-city-name {
+    display: none;
+  }
+
+  .header-controls,
+  .header-user-actions,
+  .header-auth-actions {
+    gap: 0.35rem;
+  }
+
+  .nav-link {
+    padding-inline: 0.7rem;
+  }
 }
 
 .header-user-actions,
@@ -1168,7 +1211,17 @@
 @media (max-width: 900px) {
   .header-container {
     position: relative;
-    flex-wrap: nowrap;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .header-brand,
+  .header-controls {
+    justify-self: center;
+  }
+
+  .header-controls {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 
   .mobile-menu-toggle {

@@ -169,6 +169,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const verifyEmail = async (verificationToken) => {
+    try {
+      const response = await axios.get('/api/auth/verify', {
+        params: { token: verificationToken },
+        headers: { Accept: 'application/json' },
+        skipAuthRefresh: true,
+      });
+      return { success: true, message: response.data.message, user: response.data.user };
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Email verification failed.' };
+    }
+  };
+
   const logout = async () => {
     try {
       await axios.post('/api/auth/logout', null, { skipAuthRefresh: true });
@@ -199,6 +212,7 @@ export const AuthProvider = ({ children }) => {
       login,
       register,
       resendVerification,
+      verifyEmail,
       updateProfile,
       requestOrganizerRole,
       logout,

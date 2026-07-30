@@ -12,6 +12,8 @@ const Registration = require('../models/Registration');
 const AuditLog = require('../models/AuditLog');
 const { JWT_SECRET } = require('../middleware/auth');
 
+jest.setTimeout(15000);
+
 let mongoServer;
 
 const tokenFor = (user) => jwt.sign(

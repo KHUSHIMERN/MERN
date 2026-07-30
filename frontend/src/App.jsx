@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { TimezoneProvider } from './context/TimezoneContext';
@@ -73,11 +73,21 @@ const theme = createTheme({
 function AppContent() {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
-  const [view, setView] = useState('register'); // 'register' | 'login' | 'events' | 'profile' | 'admin-requests'
+  const [view, setView] = useState(() => new URLSearchParams(window.location.search).get('verified') === 'true' ? 'login' : 'register');
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedEventForModal, setSelectedEventForModal] = useState(null);
   const [eventsRefreshKey, setEventsRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('verified') === 'true') {
+      setView('login');
+      params.delete('verified');
+      const query = params.toString();
+      window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+    }
+  }, []);
 
   const handleOpenRegisterModal = (evt = null) => {
     setSelectedEventForModal(evt);

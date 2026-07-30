@@ -30,6 +30,9 @@ const claimRegistrationRecord = async (eventId, userId) => {
         waitlistedAt: null,
         promotedAt: null,
         cancelledAt: null,
+        statusPresent: false,
+        checkInAt: null,
+        markedBy: null,
       },
     },
     { returnDocument: 'after' }
@@ -165,7 +168,15 @@ const cancelRSVP = async (req, res) => {
 
     const cancelled = await RSVP.findOneAndUpdate(
       { eventId: id, userId: req.user._id, status: { $in: activeStatuses } },
-      { $set: { status: 'cancelled', cancelledAt: new Date() } },
+      {
+        $set: {
+          status: 'cancelled',
+          cancelledAt: new Date(),
+          statusPresent: false,
+          checkInAt: null,
+          markedBy: null,
+        },
+      },
       { returnDocument: 'before' }
     );
     if (!cancelled) {

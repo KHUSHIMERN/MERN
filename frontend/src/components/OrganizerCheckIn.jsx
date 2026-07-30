@@ -3,7 +3,14 @@ import RegistrationDesk from './RegistrationDesk';
 import { useAuth } from '../context/AuthContext';
 import authenticatedFetch from '../utils/authenticatedFetch';
 
-export function OrganizerCheckIn({ onSelectEventForRegister }) {
+const hasRegistrations = (event) => {
+  if (!event) return false;
+  const confirmed = Number(event.confirmedCount ?? event.attendeesCount ?? event.rsvpedUsers?.length ?? 0);
+  const waitlisted = Number(event.waitlistCount ?? event.waitlistUsers?.length ?? 0);
+  return confirmed + waitlisted > 0;
+};
+
+export function OrganizerCheckIn() {
   const { user } = useAuth();
   // State Management
   const [events, setEvents] = useState([]);
@@ -11,8 +18,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [workspaceTab, setWorkspaceTab] = useState('attendance');
   
-  // Role Simulation Switcher (organizer vs attendee for testing 403 authorization)
-  const [userRole, setUserRole] = useState('organizer');
+  const userRole = user?.role === 'admin' ? 'organizer' : user?.role;
 
   // Attendance Data & Summary Stats
   const [attendanceData, setAttendanceData] = useState([]);
@@ -92,7 +98,9 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
   // Update selected event object when ID changes
   useEffect(() => {
     const found = events.find((e) => e._id === selectedEventId || e.id === selectedEventId || e.itemKey === selectedEventId);
-    setSelectedEvent(found || events[0] || null);
+    const nextEvent = found || events[0] || null;
+    setSelectedEvent(nextEvent);
+    setWorkspaceTab(hasRegistrations(nextEvent) ? 'registrations' : 'attendance');
   }, [events, selectedEventId]);
 
   // 2. Fetch Attendance Data from API
@@ -194,25 +202,28 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
   };
 
   // Selection Checkboxes Logic
-  const handleSelectRow = (regId) => {
+  const handleSelectRow = (regId, isWaitlist = false) => {
+    if (isWaitlist) return;
     setSelectedRegIds((prev) =>
       prev.includes(regId) ? prev.filter((id) => id !== regId) : [...prev, regId]
     );
   };
 
   const handleSelectAllOnPage = (e) => {
+    const eligiblePageRecords = attendanceData.filter((record) => record.rsvpStatus !== 'waitlist');
     if (e.target.checked) {
-      const pageIds = attendanceData.map((r) => r._id || r.id);
+      const pageIds = eligiblePageRecords.map((r) => r._id || r.id);
       setSelectedRegIds(Array.from(new Set([...selectedRegIds, ...pageIds])));
     } else {
-      const pageIds = new Set(attendanceData.map((r) => r._id || r.id));
+      const pageIds = new Set(eligiblePageRecords.map((r) => r._id || r.id));
       setSelectedRegIds((prev) => prev.filter((id) => !pageIds.has(id)));
     }
   };
 
+  const eligiblePageRecords = attendanceData.filter((record) => record.rsvpStatus !== 'waitlist');
   const isAllPageSelected =
-    attendanceData.length > 0 &&
-    attendanceData.every((r) => selectedRegIds.includes(r._id || r.id));
+    eligiblePageRecords.length > 0 &&
+    eligiblePageRecords.every((r) => selectedRegIds.includes(r._id || r.id));
 
   // 4. Per-row Present/Absent Toggle
   const handleToggleSingleAttendance = async (regId, currentStatus, attendeeName) => {
@@ -335,7 +346,14 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
       return;
     }
 
-    const pageIds = attendanceData.map((r) => r._id || r.id);
+    const pageIds = attendanceData
+      .filter((record) => record.rsvpStatus !== 'waitlist')
+      .map((record) => record._id || record.id);
+
+    if (pageIds.length === 0) {
+      showToast('Waitlisted residents cannot be checked in until they are promoted.', 'info');
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -444,7 +462,12 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
     <div className="checkin-container">
       {/* Toast Feedback Banner */}
       {toast && (
-        <div className={`toast-notification toast-${toast.type}`}>
+        <div
+          className={`toast-notification toast-${toast.type}`}
+          role={toast.type === 'error' ? 'alert' : 'status'}
+          aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+          aria-atomic="true"
+        >
           <span className="toast-icon">
             {toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : toast.type === 'warning' ? '⚠️' : 'ℹ️'}
           </span>
@@ -497,16 +520,6 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
         </div>
 
         <div className="action-buttons-group">
-          {onSelectEventForRegister && (
-            <button
-              type="button"
-              className="btn-action btn-secondary"
-              onClick={() => onSelectEventForRegister(selectedEvent)}
-            >
-              ➕ Register Attendee
-            </button>
-          )}
-
           <button
             type="button"
             className="btn-action btn-export"
@@ -556,7 +569,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
             <h3>403 Forbidden - Access Restricted</h3>
             <p>{authError}</p>
             <span className="hint-text">
-              Switch role back to <strong>"Organizer (Authorized)"</strong> above to manage attendance data.
+              Attendance is limited to this event's owner and administrators.
             </span>
           </div>
         </div>
@@ -583,9 +596,9 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
               </div>
               <div className="card-value text-green">{summary.presentCount}</div>
               <div className="card-detail text-muted">
-                {summary.totalRegistrations > 0
-                  ? `${Math.round((summary.presentCount / summary.totalRegistrations) * 100)}% of total registrants`
-                  : 'No RSVPs yet'}
+                {summary.confirmedCount > 0
+                  ? `${summary.attendancePercentage}% of confirmed registrations`
+                  : 'No confirmed RSVPs yet'}
               </div>
             </div>
 
@@ -793,7 +806,9 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => handleSelectRow(regId)}
+                            onChange={() => handleSelectRow(regId, isWaitlist)}
+                            disabled={isWaitlist}
+                            title={isWaitlist ? 'Waitlisted residents cannot be checked in' : 'Select resident'}
                           />
                         </td>
 
@@ -823,7 +838,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
 
                         <td className="td-status">
                           <span className={`status-pill ${isPresent ? 'pill-present' : 'pill-absent'}`}>
-                            {isPresent ? '● Present' : '○ Absent'}
+                            {isWaitlist ? 'Not eligible' : isPresent ? '● Present' : '○ Absent'}
                           </span>
                         </td>
 
@@ -844,10 +859,13 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
                             type="button"
                             className={`btn-toggle-status ${isPresent ? 'btn-mark-absent' : 'btn-mark-present'}`}
                             onClick={() => handleToggleSingleAttendance(regId, isPresent, record.fullName)}
+                            disabled={isWaitlist}
                             aria-pressed={isPresent}
-                            aria-label={`Mark ${record.fullName || 'attendee'} as ${isPresent ? 'Absent' : 'Present'}`}
+                            aria-label={isWaitlist
+                              ? `${record.fullName || 'Resident'} is waitlisted and cannot be checked in`
+                              : `Mark ${record.fullName || 'attendee'} as ${isPresent ? 'Absent' : 'Present'}`}
                           >
-                            {isPresent ? 'Mark Absent ✕' : 'Mark Present ✓'}
+                            {isWaitlist ? 'Awaiting promotion' : isPresent ? 'Mark Absent ✕' : 'Mark Present ✓'}
                           </button>
                         </td>
                       </tr>

@@ -16,12 +16,15 @@ const legacyUserIds = (event, field) => {
 
 const reconcileEventCaches = async (eventId) => {
   const [confirmed, waitlisted] = await Promise.all([
-    RSVP.find({ eventId, status: 'confirmed' }).select('userId').lean(),
+    RSVP.find({ eventId, status: 'confirmed' }).select('userId statusPresent').lean(),
     RSVP.find({ eventId, status: 'waitlist' }).select('userId').lean(),
   ]);
 
   const confirmedIds = uniqueIds(confirmed.map((record) => record.userId));
   const waitlistIds = uniqueIds(waitlisted.map((record) => record.userId));
+  const checkedInIds = uniqueIds(
+    confirmed.filter((record) => record.statusPresent).map((record) => record.userId)
+  );
   const activeIds = uniqueIds([...confirmedIds, ...waitlistIds]);
 
   await Event.findByIdAndUpdate(eventId, {
@@ -30,6 +33,8 @@ const reconcileEventCaches = async (eventId) => {
       waitlistCount: waitlistIds.length,
       rsvpedUsers: confirmedIds,
       waitlistUsers: waitlistIds,
+      checkedInCount: checkedInIds.length,
+      checkedInUsers: checkedInIds,
     },
   });
 

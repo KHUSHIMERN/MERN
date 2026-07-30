@@ -1,30 +1,73 @@
 const mongoose = require('mongoose');
-const Registration = require('../models/Registration');
+const RSVP = require('../models/RSVP');
+const Event = require('../models/Event');
 const AuditLog = require('../models/AuditLog');
 const { memoryRegistrations, memoryAuditLogs } = require('../data/seedEvents');
+const { migrateLegacyRsvpsForEvent } = require('../services/rsvpService');
 const isConnectedToMongoDB = () => mongoose.connection.readyState === 1;
 
-/**
- * Helper to sync seed data to MongoDB if collection is empty
- */
-const ensureMongoSeeded = async (eventId) => {
-  if (!isConnectedToMongoDB()) return;
-  try {
-    const count = await Registration.countDocuments({ eventId });
-    if (count === 0) {
-      const defaultForEvent = memoryRegistrations.filter((r) => r.eventId === eventId);
-      if (defaultForEvent.length > 0) {
-        await Registration.insertMany(
-          defaultForEvent.map(({ id, ...rest }) => ({
-            ...rest,
-            _id: id.startsWith('reg-') ? undefined : id
-          }))
-        );
-      }
-    }
-  } catch (err) {
-    console.warn('[Mongo Seed Check] Error:', err.message);
+const canManageEvent = (user, event) => {
+  if (user?.role === 'admin') return true;
+  if (user?.role !== 'organizer') return false;
+  const ownerId = event.organizer?._id || event.organizer || event.organizerId;
+  return ownerId?.toString() === user._id?.toString();
+};
+
+const loadManagedEvent = async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    res.status(404).json({ message: 'Event not found.' });
+    return null;
   }
+  const event = await Event.findById(req.params.id);
+  if (!event) {
+    res.status(404).json({ message: 'Event not found.' });
+    return null;
+  }
+  if (!canManageEvent(req.user, event)) {
+    res.status(403).json({ message: 'Only this event owner or an administrator can manage event attendance.' });
+    return null;
+  }
+  return event;
+};
+
+const toAttendanceRecord = (record, waitlistPosition = null) => ({
+  _id: record._id.toString(),
+  id: record._id.toString(),
+  eventId: record.eventId.toString(),
+  userId: record.userId?._id?.toString() || record.userId?.toString(),
+  fullName: record.userId?.name || 'Resident',
+  email: record.userId?.email || '',
+  ticketType: 'standard',
+  attendees: 1,
+  rsvpStatus: record.status,
+  waitlistPosition,
+  statusPresent: record.status === 'confirmed' && Boolean(record.statusPresent),
+  checkInAt: record.status === 'confirmed' ? record.checkInAt : null,
+  markedBy: record.markedBy,
+  createdAt: record.createdAt,
+});
+
+const filterAndSortRecords = (records, { search, rsvpStatus, attendanceStatus, sortBy, sortOrder }) => {
+  let filtered = [...records];
+  if (search.trim()) {
+    const term = search.trim().toLowerCase();
+    filtered = filtered.filter((record) =>
+      record.fullName.toLowerCase().includes(term) || record.email.toLowerCase().includes(term)
+    );
+  }
+  if (rsvpStatus !== 'all') filtered = filtered.filter((record) => record.rsvpStatus === rsvpStatus);
+  if (attendanceStatus === 'present') filtered = filtered.filter((record) => record.statusPresent);
+  if (attendanceStatus === 'absent') {
+    filtered = filtered.filter((record) => record.rsvpStatus === 'confirmed' && !record.statusPresent);
+  }
+
+  const direction = sortOrder === 'asc' ? 1 : -1;
+  filtered.sort((left, right) => {
+    const leftValue = left[sortBy] || '';
+    const rightValue = right[sortBy] || '';
+    return String(leftValue).localeCompare(String(rightValue)) * direction;
+  });
+  return filtered;
 };
 
 /**
@@ -48,49 +91,45 @@ const getEventAttendance = async (req, res, next) => {
     const limitNum = Math.max(1, parseInt(limit, 10) || 10);
 
     if (isConnectedToMongoDB()) {
-      await ensureMongoSeeded(eventId);
+      const event = await loadManagedEvent(req, res);
+      if (!event) return;
+      await migrateLegacyRsvpsForEvent(event);
 
-      // Compute overall summary stats for the event
-      const allEventRecords = await Registration.find({ eventId });
+      const normalizedRsvps = await RSVP.find({
+        eventId,
+        status: { $in: ['confirmed', 'waitlist'] },
+      })
+        .populate('userId', 'name email')
+        .sort({ waitlistedAt: 1, createdAt: 1, _id: 1 });
+
+      let waitlistPosition = 0;
+      const allEventRecords = normalizedRsvps.map((record) => {
+        if (record.status === 'waitlist') waitlistPosition += 1;
+        return toAttendanceRecord(record, record.status === 'waitlist' ? waitlistPosition : null);
+      });
+      const confirmedRecords = allEventRecords.filter((record) => record.rsvpStatus === 'confirmed');
+      const presentCount = confirmedRecords.filter((record) => record.statusPresent).length;
       const summary = {
         totalRegistrations: allEventRecords.length,
-        confirmedCount: allEventRecords.filter((r) => r.rsvpStatus !== 'waitlist').length,
-        waitlistCount: allEventRecords.filter((r) => r.rsvpStatus === 'waitlist').length,
-        presentCount: allEventRecords.filter((r) => r.statusPresent).length,
-        absentCount: allEventRecords.filter((r) => !r.statusPresent).length,
-        attendancePercentage: allEventRecords.length > 0
-          ? Math.round((allEventRecords.filter((r) => r.statusPresent).length / allEventRecords.length) * 100)
+        confirmedCount: confirmedRecords.length,
+        waitlistCount: allEventRecords.length - confirmedRecords.length,
+        presentCount,
+        absentCount: confirmedRecords.length - presentCount,
+        attendancePercentage: confirmedRecords.length > 0
+          ? Math.round((presentCount / confirmedRecords.length) * 100)
           : 0
       };
 
-      // Build MongoDB query
-      const query = { eventId };
-
-      if (search.trim()) {
-        const regex = new RegExp(search.trim(), 'i');
-        query.$or = [{ fullName: regex }, { email: regex }, { ticketType: regex }];
-      }
-
-      if (rsvpStatus && rsvpStatus !== 'all') {
-        query.rsvpStatus = rsvpStatus;
-      }
-
-      if (attendanceStatus && attendanceStatus !== 'all') {
-        if (attendanceStatus === 'present') query.statusPresent = true;
-        if (attendanceStatus === 'absent') query.statusPresent = false;
-      }
-
-      const sortDir = sortOrder === 'asc' ? 1 : -1;
-      const sortOptions = {};
-      sortOptions[sortBy] = sortDir;
-
-      const totalFiltered = await Registration.countDocuments(query);
+      const filtered = filterAndSortRecords(allEventRecords, {
+        search,
+        rsvpStatus,
+        attendanceStatus,
+        sortBy,
+        sortOrder,
+      });
+      const totalFiltered = filtered.length;
       const totalPages = Math.ceil(totalFiltered / limitNum) || 1;
-
-      const records = await Registration.find(query)
-        .sort(sortOptions)
-        .skip((pageNum - 1) * limitNum)
-        .limit(limitNum);
+      const records = filtered.slice((pageNum - 1) * limitNum, pageNum * limitNum);
 
       return res.json({
         success: true,
@@ -228,11 +267,16 @@ const updateEventAttendance = async (req, res, next) => {
     const now = new Date();
 
     if (isConnectedToMongoDB()) {
+      const event = await loadManagedEvent(req, res);
+      if (!event) return;
+      const blockedWaitlistIds = [];
+
       for (const item of itemsToUpdate) {
+        if (!mongoose.Types.ObjectId.isValid(item.registrationId)) continue;
         const checkInAtValue = item.statusPresent ? now : null;
 
-        const reg = await Registration.findOneAndUpdate(
-          { $or: [{ _id: item.registrationId }, { id: item.registrationId }] },
+        const reg = await RSVP.findOneAndUpdate(
+          { _id: item.registrationId, eventId, status: 'confirmed' },
           {
             $set: {
               statusPresent: item.statusPresent,
@@ -240,19 +284,19 @@ const updateEventAttendance = async (req, res, next) => {
               markedBy: performer.identity
             }
           },
-          { new: true }
-        );
+          { returnDocument: 'after' }
+        ).populate('userId', 'name email');
 
         if (reg) {
-          updatedRecords.push(reg);
+          updatedRecords.push(toAttendanceRecord(reg));
 
           // Save Audit Log
           const audit = await AuditLog.create({
             action: item.statusPresent ? 'ATTENDANCE_CHECKIN' : 'ATTENDANCE_CHECKOUT',
             eventId: eventId || reg.eventId,
             registrationId: reg._id ? reg._id.toString() : reg.id,
-            attendeeName: reg.fullName,
-            attendeeEmail: reg.email,
+            attendeeName: reg.userId?.name || 'Resident',
+            attendeeEmail: reg.userId?.email || '',
             statusPresent: item.statusPresent,
             checkInAt: checkInAtValue,
             performedBy: performer.identity,
@@ -260,13 +304,39 @@ const updateEventAttendance = async (req, res, next) => {
             timestamp: now
           });
           auditEntries.push(audit);
+        } else {
+          const waitlisted = await RSVP.exists({ _id: item.registrationId, eventId, status: 'waitlist' });
+          if (waitlisted) blockedWaitlistIds.push(item.registrationId);
         }
+      }
+
+      if (updatedRecords.length === 0 && blockedWaitlistIds.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: 'Waitlisted residents cannot be checked in until they are promoted to confirmed.',
+          blockedWaitlistIds,
+        });
+      }
+
+      if (updatedRecords.length > 0) {
+        const checkedInRecords = await RSVP.find({
+          eventId,
+          status: 'confirmed',
+          statusPresent: true,
+        }).select('userId').lean();
+        await Event.findByIdAndUpdate(eventId, {
+          $set: {
+            checkedInCount: checkedInRecords.length,
+            checkedInUsers: checkedInRecords.map((record) => record.userId),
+          },
+        });
       }
 
       return res.json({
         success: true,
         message: `Successfully updated attendance status for ${updatedRecords.length} registrant(s).`,
         count: updatedRecords.length,
+        skippedWaitlistCount: blockedWaitlistIds.length,
         data: updatedRecords,
         auditLogs: auditEntries
       });
@@ -328,24 +398,17 @@ const exportEventAttendance = async (req, res, next) => {
     let records = [];
 
     if (isConnectedToMongoDB()) {
-      await ensureMongoSeeded(eventId);
-      const query = { eventId };
-
-      if (search.trim()) {
-        const regex = new RegExp(search.trim(), 'i');
-        query.$or = [{ fullName: regex }, { email: regex }, { ticketType: regex }];
-      }
-
-      if (rsvpStatus && rsvpStatus !== 'all') {
-        query.rsvpStatus = rsvpStatus;
-      }
-
-      if (attendanceStatus && attendanceStatus !== 'all') {
-        if (attendanceStatus === 'present') query.statusPresent = true;
-        if (attendanceStatus === 'absent') query.statusPresent = false;
-      }
-
-      records = await Registration.find(query).sort({ fullName: 1 });
+      const event = await loadManagedEvent(req, res);
+      if (!event) return;
+      await migrateLegacyRsvpsForEvent(event);
+      const normalizedRsvps = await RSVP.find({
+        eventId,
+        status: { $in: ['confirmed', 'waitlist'] },
+      }).populate('userId', 'name email');
+      records = filterAndSortRecords(
+        normalizedRsvps.map((record) => toAttendanceRecord(record)),
+        { search, rsvpStatus, attendanceStatus, sortBy: 'fullName', sortOrder: 'asc' }
+      );
     } else {
       records = memoryRegistrations.filter((r) => r.eventId === eventId);
       if (records.length === 0 && (eventId === 'evt-1' || eventId === 'evt-2')) {
@@ -440,6 +503,8 @@ const getAttendanceAuditLogs = async (req, res, next) => {
     const { id: eventId } = req.params;
 
     if (isConnectedToMongoDB()) {
+      const event = await loadManagedEvent(req, res);
+      if (!event) return;
       const logs = await AuditLog.find({ eventId }).sort({ createdAt: -1 }).limit(50);
       return res.json({ success: true, count: logs.length, data: logs });
     }

@@ -263,4 +263,41 @@ describe('normalized RSVP and waitlist behavior', () => {
       .set('Authorization', `Bearer ${tokenFor(resident)}`);
     expect(denied.status).toBe(403);
   });
+
+  test('check-in uses normalized RSVPs and prevents waitlist attendance', async () => {
+    const [owner, unrelatedOrganizer, confirmed, waitlisted] = await Promise.all([
+      User.create({ name: 'Event Owner', email: 'event-owner@test.com', role: 'organizer', password: 'password', isVerified: true }),
+      User.create({ name: 'Other Organizer', email: 'other-organizer@test.com', role: 'organizer', password: 'password', isVerified: true }),
+      createUser(201),
+      createUser(202),
+    ]);
+    const event = await createEvent({ organizerId: owner._id.toString(), capacity: 1 });
+    const confirmedRsvp = await RSVP.create({ eventId: event._id, userId: confirmed._id, status: 'confirmed', confirmedAt: new Date() });
+    const waitlistedRsvp = await RSVP.create({ eventId: event._id, userId: waitlisted._id, status: 'waitlist', waitlistedAt: new Date() });
+
+    const attendance = await request(app)
+      .get(`/api/events/${event._id}/attendance`)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`);
+    expect(attendance.status).toBe(200);
+    expect(attendance.body.summary).toMatchObject({ totalRegistrations: 2, confirmedCount: 1, waitlistCount: 1 });
+    expect(attendance.body.data.map((record) => record.email)).toEqual(expect.arrayContaining([confirmed.email, waitlisted.email]));
+
+    const blocked = await request(app)
+      .patch(`/api/events/${event._id}/attendance`)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .send({ registrationId: waitlistedRsvp._id, statusPresent: true });
+    expect(blocked.status).toBe(409);
+
+    const checkedIn = await request(app)
+      .patch(`/api/events/${event._id}/attendance`)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .send({ registrationId: confirmedRsvp._id, statusPresent: true });
+    expect(checkedIn.status).toBe(200);
+    expect((await RSVP.findById(confirmedRsvp._id)).statusPresent).toBe(true);
+
+    const forbidden = await request(app)
+      .get(`/api/events/${event._id}/attendance`)
+      .set('Authorization', `Bearer ${tokenFor(unrelatedOrganizer)}`);
+    expect(forbidden.status).toBe(403);
+  });
 });

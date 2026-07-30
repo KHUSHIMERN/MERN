@@ -34,6 +34,18 @@ const RSVPSchema = new mongoose.Schema({
   cancelledAt: {
     type: Date,
     default: null
+  },
+  statusPresent: {
+    type: Boolean,
+    default: false
+  },
+  checkInAt: {
+    type: Date,
+    default: null
+  },
+  markedBy: {
+    type: String,
+    default: null
   }
 }, {
   // Automatically manages 'createdAt' and 'updatedAt' timestamps

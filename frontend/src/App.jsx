@@ -174,9 +174,7 @@ function AppContent() {
             )}
 
             {activeTab === 'checkin' && (
-              <OrganizerCheckIn
-                onSelectEventForRegister={(evt) => handleOpenRegisterModal(evt)}
-              />
+              <OrganizerCheckIn />
             )}
 
             {activeTab === 'fallbackDemo' && <FallbackTestDemo />}

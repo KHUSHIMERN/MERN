@@ -2040,6 +2040,19 @@
   white-space: nowrap;
 }
 
+.btn-toggle-status:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  background: rgba(100, 116, 139, 0.18);
+  color: #94a3b8;
+  box-shadow: none;
+}
+
+.td-checkbox input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .btn-mark-present {
   background: #10b981;
   color: #ffffff;

@@ -244,7 +244,7 @@ const createEvent = async (req, res, next) => {
     const {
       title,
       description,
-      organizerId,
+      organizerId: requestedOrganizerId,
       category,
       tags,
       startDate,
@@ -257,11 +257,14 @@ const createEvent = async (req, res, next) => {
       seatsLeft
     } = req.body;
 
-    // Required fields validation
+    const organizerId = req.user?._id?.toString() || requestedOrganizerId;
+
+    // The authenticated identity is authoritative; requestedOrganizerId is
+    // retained only for compatibility with legacy internal callers.
     if (!title || !title.trim() || !organizerId || !startDate) {
       return res.status(400).json({
         success: false,
-        message: 'Validation Error: Required fields title, organizerId, and startDate must be provided.'
+        message: 'Validation Error: Required fields title and startDate must be provided.'
       });
     }
 
@@ -859,5 +862,4 @@ module.exports = {
   getOrganizerAttendanceMetrics,
   exportOrganizerAttendanceMetricsCSV
 };
-
 

@@ -1,50 +1,48 @@
 const express = require('express');
 const cors = require('cors');
-const { requireAuth, requireRole } = require('./middleware/auth');
-
-const authRoutes = require('./routes/authRoutes');
-const eventRoutes = require('./routes/eventRoutes');
-const rsvpRoutes = require('./routes/rsvpRoutes');
 
 const app = express();
 
-// Middleware
-app.use(cors({
-  origin: 'http://localhost:5173',
-  credentials: true
-}));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/events', rsvpRoutes); // Handles /api/events/:id/rsvp and /api/events/:id/rsvps
-app.use('/api/events', eventRoutes);
+// One production router per domain. Order matters: the persistent RSVP router
+// owns /:id/rsvp before the broader event router handles /:id.
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/events', require('./routes/rsvpRoutes'));
+app.use('/api/events', require('./routes/eventRoutes'));
+app.use('/api/users', require('./routes/userRoutes'));
+app.use('/api/ai', require('./routes/aiRoutes'));
+app.use('/api/roles', require('./routes/roleRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/recommendations', require('./routes/recommendations'));
+app.use('/organizer', require('./routes/organizerRoutes'));
+app.use('/api/organizer', require('./routes/organizerRoutes'));
+app.use('/api/registrations', require('./routes/registrationRoutes'));
 
-// Example Protected Routes required by Acceptance Criteria
-app.get('/api/organizer/events', requireAuth, requireRole('organizer'), async (req, res) => {
-  try {
-    const Event = require('./models/Event');
-    const organizerEvents = await Event.find({ organizer: req.user._id || req.user.id });
-    res.status(200).json({
-      message: 'Access granted to organizer resources',
-      events: organizerEvents
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching organizer events', error: error.message });
-  }
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'MERN Local Events Backend',
+    timestamp: new Date().toISOString()
+  });
 });
 
-app.get('/api/admin/users', requireAuth, requireRole('admin'), async (req, res) => {
-  try {
-    const User = require('./models/User');
-    const users = await User.find({}).select('-password');
-    res.status(200).json({
-      message: 'Access granted to admin resources',
-      users
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching users', error: error.message });
-  }
+app.get('/', (req, res) => {
+  res.json({
+    appName: 'CommunityConnect API - Tier 2, 3, 4 City Local Event Portal',
+    status: 'Online',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      register: 'POST /api/auth/register',
+      verify: 'GET /api/auth/verify?token=...',
+      login: 'POST /api/auth/login',
+      events: 'GET /api/events',
+      recommendations: 'GET /api/recommendations',
+      health: 'GET /api/health'
+    }
+  });
 });
 
 module.exports = app;

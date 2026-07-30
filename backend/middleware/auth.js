@@ -3,6 +3,11 @@ const User = require('../models/User');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'communityconnect_secret_key_2026';
 
+const normalizeRole = (role) => {
+  const normalized = String(role || '').trim().toLowerCase();
+  return normalized === 'attendee' ? 'resident' : normalized;
+};
+
 const auth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -26,6 +31,7 @@ const auth = async (req, res, next) => {
     }
 
     req.user = user;
+    req.user.normalizedRole = normalizeRole(user.role);
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Authentication failed. Invalid or expired token.', error: error.message });
@@ -51,14 +57,16 @@ const requireVerified = (req, res, next) => {
 
 // Middleware to authorize specific roles (e.g. organizer, admin)
 const requireRole = (...roles) => {
+  const allowedRoles = roles.flat().map(normalizeRole);
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    if (!roles.includes(req.user.role)) {
+    const userRole = normalizeRole(req.user.role);
+    if (!allowedRoles.includes(userRole)) {
       return res.status(403).json({
-        message: `Access denied. Requires one of the following roles: ${roles.join(', ')}. Your role is '${req.user.role}'.`,
+        message: `Access denied. Requires one of the following roles: ${allowedRoles.join(', ')}. Your role is '${userRole}'.`,
       });
     }
 
@@ -68,4 +76,11 @@ const requireRole = (...roles) => {
 
 // `requireAuth` is the name used by the RSVP/auth-security feature modules.
 // Keep `auth` for existing DEV-KHUSHI routes and expose the alias for compatibility.
-module.exports = { auth, requireAuth: auth, requireVerified, requireRole, JWT_SECRET };
+module.exports = {
+  auth,
+  requireAuth: auth,
+  requireVerified,
+  requireRole,
+  normalizeRole,
+  JWT_SECRET
+};

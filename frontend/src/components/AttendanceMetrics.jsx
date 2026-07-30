@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import authenticatedFetch from '../utils/authenticatedFetch';
 import {
   Box,
   Card,
@@ -123,7 +124,7 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
 
       for (const endpoint of endpoints) {
         try {
-          response = await fetch(endpoint);
+          response = await authenticatedFetch(endpoint);
           if (response.ok) {
             data = await response.json();
             if (data && data.success && Array.isArray(data.data)) {
@@ -201,7 +202,7 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
       let downloaded = false;
       for (const endpoint of exportEndpoints) {
         try {
-          const response = await fetch(endpoint);
+          const response = await authenticatedFetch(endpoint);
           if (response.ok) {
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);

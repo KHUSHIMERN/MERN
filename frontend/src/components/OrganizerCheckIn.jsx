@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import RegistrationDesk from './RegistrationDesk';
 import { useAuth } from '../context/AuthContext';
+import authenticatedFetch from '../utils/authenticatedFetch';
 
 export function OrganizerCheckIn({ onSelectEventForRegister }) {
   const { user } = useAuth();
@@ -64,7 +65,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const res = await fetch('/api/events');
+        const res = await authenticatedFetch('/api/events');
         if (res.ok) {
           const json = await res.json();
           if (json.success && Array.isArray(json.data) && json.data.length > 0) {
@@ -112,7 +113,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
         sortOrder
       });
 
-      const res = await fetch(`/api/events/${selectedEventId}/attendance?${queryParams.toString()}`, {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance?${queryParams.toString()}`, {
         headers: {
           'Content-Type': 'application/json',
           'X-User-Role': userRole,
@@ -155,7 +156,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
   const fetchAuditLogs = useCallback(async () => {
     if (!selectedEventId || userRole !== 'organizer') return;
     try {
-      const res = await fetch(`/api/events/${selectedEventId}/attendance/audit-logs`, {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance/audit-logs`, {
         headers: {
           'X-User-Role': userRole,
           'X-User-Name': 'Organizer Admin'
@@ -238,7 +239,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
     );
 
     try {
-      const res = await fetch(`/api/events/${selectedEventId}/attendance`, {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -292,7 +293,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
     setIsLoading(true);
 
     try {
-      const res = await fetch(`/api/events/${selectedEventId}/attendance`, {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -338,7 +339,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
 
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/events/${selectedEventId}/attendance`, {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -383,7 +384,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
         attendanceStatus: attendanceFilter
       });
 
-      const res = await fetch(`/api/events/${selectedEventId}/attendance/export?${queryParams.toString()}`, {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance/export?${queryParams.toString()}`, {
         headers: {
           'X-User-Role': userRole,
           'X-User-Name': 'Organizer Admin'

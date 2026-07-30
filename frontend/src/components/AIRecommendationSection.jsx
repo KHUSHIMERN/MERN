@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import authenticatedFetch from '../utils/authenticatedFetch';
 import { Box, Typography, Card, CardContent, Chip, Grid, Button } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
@@ -27,7 +28,7 @@ export default function AIRecommendationSection({ onSelectEvent, onRSVP }) {
     if (!user || !user.city) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/ai/recommendations', {
+      const res = await authenticatedFetch('/api/ai/recommendations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

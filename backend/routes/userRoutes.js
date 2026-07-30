@@ -33,7 +33,7 @@ router.get('/me', auth, async (req, res) => {
 // @access  Private
 router.put('/me', auth, async (req, res) => {
   try {
-    const { name, contact, language, city, interests, role } = req.body;
+    const { name, contact, language, city, interests, preferredTimezone, role } = req.body;
     const user = req.user;
 
     // Security check: Ignore role field if passed to prevent privilege escalation via PUT
@@ -63,6 +63,17 @@ router.put('/me', auth, async (req, res) => {
 
     if (interests && Array.isArray(interests)) {
       user.interests = interests;
+    }
+
+    if (preferredTimezone !== undefined) {
+      if (preferredTimezone) {
+        try {
+          Intl.DateTimeFormat(undefined, { timeZone: preferredTimezone });
+        } catch {
+          return res.status(400).json({ message: 'Invalid IANA timezone identifier.' });
+        }
+      }
+      user.preferredTimezone = preferredTimezone || null;
     }
 
     await user.save();

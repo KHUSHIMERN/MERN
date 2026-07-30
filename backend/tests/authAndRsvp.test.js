@@ -8,6 +8,8 @@ const User = require('../models/User');
 const Event = require('../models/Event');
 const RSVP = require('../models/RSVP');
 const Notification = require('../models/Notification');
+const Registration = require('../models/Registration');
+const AuditLog = require('../models/AuditLog');
 const { JWT_SECRET } = require('../middleware/auth');
 
 let mongoServer;
@@ -59,6 +61,8 @@ beforeEach(async () => {
     Event.deleteMany({}),
     RSVP.deleteMany({}),
     Notification.deleteMany({}),
+    Registration.deleteMany({}),
+    AuditLog.deleteMany({}),
   ]);
 });
 
@@ -230,5 +234,31 @@ describe('normalized RSVP and waitlist behavior', () => {
     const readAll = await request(app).patch('/api/notifications/read-all').set('Authorization', `Bearer ${tokenFor(recipient)}`);
     expect(readAll.status).toBe(200);
     expect(await Notification.countDocuments({ userId: recipient._id, isRead: false })).toBe(0);
+  });
+
+  test('authenticated organizers and admins can call attendance workspace APIs', async () => {
+    const [organizer, admin] = await Promise.all([
+      User.create({ name: 'Workspace Owner', email: 'workspace@test.com', role: 'organizer', password: 'password', isVerified: true }),
+      User.create({ name: 'Workspace Admin', email: 'workspace-admin@test.com', role: 'admin', password: 'password', isVerified: true }),
+    ]);
+    const event = await createEvent({ organizerId: organizer._id.toString() });
+
+    const organizerResponse = await request(app)
+      .get(`/api/events/${event._id}/attendance`)
+      .set('Authorization', `Bearer ${tokenFor(organizer)}`);
+    expect(organizerResponse.status).toBe(200);
+    expect(organizerResponse.body.success).toBe(true);
+
+    const adminResponse = await request(app)
+      .get(`/api/events/${event._id}/attendance/audit-logs`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`);
+    expect(adminResponse.status).toBe(200);
+    expect(adminResponse.body.success).toBe(true);
+
+    const resident = await createUser(99);
+    const denied = await request(app)
+      .get(`/api/events/${event._id}/attendance`)
+      .set('Authorization', `Bearer ${tokenFor(resident)}`);
+    expect(denied.status).toBe(403);
   });
 });

@@ -1,13 +1,14 @@
-const { isConnectedToMongoDB } = require('../config/db');
+const mongoose = require('mongoose');
 const Registration = require('../models/Registration');
 const AuditLog = require('../models/AuditLog');
 const { memoryRegistrations, memoryAuditLogs } = require('../data/seedEvents');
+const isConnectedToMongoDB = () => mongoose.connection.readyState === 1;
 
 /**
  * Helper to sync seed data to MongoDB if collection is empty
  */
 const ensureMongoSeeded = async (eventId) => {
-  if (!isConnectedToMongoDB) return;
+  if (!isConnectedToMongoDB()) return;
   try {
     const count = await Registration.countDocuments({ eventId });
     if (count === 0) {
@@ -46,7 +47,7 @@ const getEventAttendance = async (req, res, next) => {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.max(1, parseInt(limit, 10) || 10);
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       await ensureMongoSeeded(eventId);
 
       // Compute overall summary stats for the event
@@ -226,7 +227,7 @@ const updateEventAttendance = async (req, res, next) => {
     const auditEntries = [];
     const now = new Date();
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       for (const item of itemsToUpdate) {
         const checkInAtValue = item.statusPresent ? now : null;
 
@@ -326,7 +327,7 @@ const exportEventAttendance = async (req, res, next) => {
 
     let records = [];
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       await ensureMongoSeeded(eventId);
       const query = { eventId };
 
@@ -438,7 +439,7 @@ const getAttendanceAuditLogs = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const logs = await AuditLog.find({ eventId }).sort({ createdAt: -1 }).limit(50);
       return res.json({ success: true, count: logs.length, data: logs });
     }

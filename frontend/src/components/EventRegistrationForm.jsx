@@ -150,7 +150,14 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
     setLoading(true);
 
     try {
-      const res = await axios.post('/api/events', createData);
+      const payload = {
+        ...createData,
+        startDate: new Date(`${createData.date}T09:00:00`).toISOString(),
+        capacity: Number(createData.capacity),
+        published: true,
+      };
+      const res = await axios.post('/api/events', payload);
+      onRsvpChanged?.();
       setSuccessMsg(res.data.message || 'Event created and published successfully!');
       setIsSubmitted(true);
     } catch (err) {

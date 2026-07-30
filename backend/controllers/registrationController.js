@@ -1,6 +1,7 @@
-const { isConnectedToMongoDB } = require('../config/db');
+const mongoose = require('mongoose');
 const Registration = require('../models/Registration');
 const { memoryRegistrations } = require('../data/seedEvents');
+const isConnectedToMongoDB = () => mongoose.connection.readyState === 1;
 
 /**
  * POST /api/registrations
@@ -30,7 +31,7 @@ const registerForEvent = async (req, res, next) => {
       createdAt: new Date().toISOString()
     };
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const dbRegistration = await Registration.create(regRecord);
       return res.status(201).json({
         success: true,
@@ -56,7 +57,7 @@ const registerForEvent = async (req, res, next) => {
  */
 const getRegistrations = async (req, res, next) => {
   try {
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const records = await Registration.find({}).sort({ createdAt: -1 });
       return res.json({ success: true, count: records.length, data: records });
     }

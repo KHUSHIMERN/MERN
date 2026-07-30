@@ -63,6 +63,20 @@ beforeEach(async () => {
 });
 
 describe('normalized RSVP and waitlist behavior', () => {
+  test('verified users may RSVP while unverified users are blocked', async () => {
+    const [verified, unverified, event] = await Promise.all([
+      createUser(1),
+      User.create({ name: 'Unverified', email: 'unverified@test.com', role: 'resident', password: 'password', isVerified: false }),
+      createEvent(),
+    ]);
+
+    expect((await register(event, verified)).status).toBe(201);
+    const blocked = await register(event, unverified);
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.message).toContain('Email verification required');
+    expect(await RSVP.exists({ eventId: event._id, userId: unverified._id })).toBeFalsy();
+  });
+
   test('prevents duplicate records and permits reuse after cancellation', async () => {
     const [user, event] = await Promise.all([createUser(1), createEvent()]);
 

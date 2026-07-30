@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireVerified } = require('../middleware/auth');
+const verified = [requireAuth, requireVerified];
 const {
   rsvpEvent,
   cancelRSVP,
@@ -9,13 +10,13 @@ const {
 } = require('../controllers/rsvpController');
 
 // GET /api/events/:id/rsvps - Retrieve registrations list and capacity details
-router.get('/:id/rsvps', requireAuth, getEventRSVPs);
-router.get('/:id/rsvp', requireAuth, getCurrentUserRsvp);
+router.get('/:id/rsvps', ...verified, getEventRSVPs);
+router.get('/:id/rsvp', ...verified, getCurrentUserRsvp);
 
 // POST /api/events/:id/rsvp - Register for event (or join waitlist)
-router.post('/:id/rsvp', requireAuth, rsvpEvent);
+router.post('/:id/rsvp', ...verified, rsvpEvent);
 
 // DELETE /api/events/:id/rsvp - Cancel RSVP registration
-router.delete('/:id/rsvp', requireAuth, cancelRSVP);
+router.delete('/:id/rsvp', ...verified, cancelRSVP);
 
 module.exports = router;

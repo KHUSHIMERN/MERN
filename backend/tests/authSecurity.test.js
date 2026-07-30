@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const app = require('../app');
 const User = require('../models/User');
 const RefreshToken = require('../models/RefreshToken');
+const { JWT_SECRET } = require('../middleware/auth');
 
 let mongoServer;
 
@@ -163,5 +164,25 @@ describe('Consolidated authentication lifecycle', () => {
     ]);
 
     expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
+  });
+
+  test('an expired access token is rejected by protected APIs', async () => {
+    const user = await User.create({
+      name: 'Expired Token User',
+      email: 'expired@example.com',
+      password: 'password123',
+      isVerified: true,
+    });
+    const expiredToken = jwt.sign(
+      { id: user._id, role: user.role, type: 'access' },
+      JWT_SECRET,
+      { expiresIn: -1 }
+    );
+
+    const response = await request(app)
+      .get('/api/users/me')
+      .set('Authorization', `Bearer ${expiredToken}`);
+    expect(response.status).toBe(401);
+    expect(response.body.message).toContain('Invalid or expired token');
   });
 });

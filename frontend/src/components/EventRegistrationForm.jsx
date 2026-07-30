@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { hasActiveRsvp, isEventFull, rsvpStatus, rsvpStatusLabel } from '../utils/rsvpState';
 import { Calendar, MapPin, PlusCircle, CheckCircle, AlertCircle, ShieldAlert } from 'lucide-react';
 
-export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfile }) {
+export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfile, onRsvpChanged }) {
   const { t } = useTranslation();
   const { user, fetchProfile } = useAuth();
+  const showToast = useToast();
+  const [eventState, setEventState] = useState(selectedEvent);
 
   const isCreateMode = !selectedEvent;
   const isOrganizerOrAdmin = user && (user.role === 'organizer' || user.role === 'admin');
@@ -48,6 +52,22 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
     }
   }, [user]);
 
+  useEffect(() => {
+    setEventState(selectedEvent);
+    const eventId = selectedEvent?._id || selectedEvent?.id;
+    if (!eventId) return;
+    axios.get(`/api/events/${eventId}`)
+      .then((response) => setEventState(response.data.data || response.data))
+      .catch(() => {});
+  }, [selectedEvent]);
+
+  const refreshEvent = async () => {
+    const eventId = selectedEvent?._id || selectedEvent?.id;
+    if (!eventId) return;
+    const response = await axios.get(`/api/events/${eventId}`);
+    setEventState(response.data.data || response.data);
+  };
+
   const handleRsvpChange = (e) => {
     const { name, value, type, checked } = e.target;
     setRsvpData((prev) => ({
@@ -86,10 +106,33 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
       const eventId = selectedEvent._id || selectedEvent.id;
       const res = await axios.post(`/api/events/${eventId}/rsvp`);
       await fetchProfile();
+      await refreshEvent();
+      onRsvpChanged?.();
       setSuccessMsg(res.data.message || 'Successfully registered for event!');
+      showToast(
+        res.data.status === 'waitlist'
+          ? `Joined waitlist at position ${res.data.waitlistPosition}.`
+          : 'Your RSVP is confirmed.',
+        res.data.status === 'waitlist' ? 'warning' : 'success'
+      );
       setIsSubmitted(true);
     } catch (err) {
       setErrorMsg(err.response?.data?.message || 'RSVP registration failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelRsvp = async () => {
+    const eventId = selectedEvent?._id || selectedEvent?.id;
+    setLoading(true);
+    try {
+      await axios.delete(`/api/events/${eventId}/rsvp`);
+      await Promise.all([fetchProfile(), refreshEvent()]);
+      onRsvpChanged?.();
+      showToast('RSVP cancelled successfully.', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to cancel RSVP.', 'error');
     } finally {
       setLoading(false);
     }
@@ -129,6 +172,11 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
               <p className="modal-subtitle">
                 {selectedEvent.title} ({(typeof selectedEvent.location === 'object' && selectedEvent.location !== null ? selectedEvent.location.placeName : selectedEvent.location) || selectedEvent.city})
               </p>
+            )}
+            {selectedEvent && eventState && (
+              <span className={`rsvp-state-badge ${rsvpStatus(eventState) === 'waitlist' ? 'waitlist' : rsvpStatus(eventState) === 'confirmed' ? 'confirmed' : isEventFull(eventState) ? 'full' : ''}`}>
+                {rsvpStatusLabel(eventState)}
+              </span>
             )}
           </div>
           <button type="button" className="close-modal-btn" onClick={onClose}>
@@ -308,6 +356,24 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
               </button>
             </div>
           </form>
+        ) : hasActiveRsvp(eventState) ? (
+          <div style={{ padding: '24px 0' }}>
+            <div className="form-success-box" style={{ marginBottom: '18px' }}>
+              <CheckCircle size={42} color={rsvpStatus(eventState) === 'waitlist' ? '#f59e0b' : '#10b981'} />
+              <h3>{rsvpStatusLabel(eventState)}</h3>
+              <p className="success-text">
+                {rsvpStatus(eventState) === 'waitlist'
+                  ? 'You are in the FIFO waitlist. We will notify you if a place becomes available.'
+                  : 'Your place at this event is confirmed.'}
+              </p>
+            </div>
+            <div className="form-actions">
+              <button type="button" className="btn-secondary" onClick={onClose}>Close</button>
+              <button type="button" className="btn-secondary" disabled={loading} onClick={handleCancelRsvp} style={{ color: '#f87171' }}>
+                {loading ? 'Cancelling...' : 'Cancel RSVP'}
+              </button>
+            </div>
+          </div>
         ) : (
           /* RSVP for existing event Form */
           <form className="registration-form" onSubmit={handleRsvpSubmit}>
@@ -380,7 +446,7 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
                 {t('form.cancelBtn', 'Cancel')}
               </button>
               <button type="submit" className="btn-primary" disabled={loading}>
-                {loading ? 'Submitting...' : t('form.submitBtn', 'Confirm Registration')}
+                {loading ? 'Submitting...' : isEventFull(eventState) ? 'Join Waitlist' : t('form.submitBtn', 'Confirm Registration')}
               </button>
             </div>
           </form>

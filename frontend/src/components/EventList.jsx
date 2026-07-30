@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { confirmedCount, hasActiveRsvp, isEventFull, rsvpStatus, rsvpStatusLabel } from '../utils/rsvpState';
 import { Sparkles, Calendar, MapPin, Ticket, CheckCircle, RefreshCw, AlertCircle } from 'lucide-react';
 
-export function EventList({ onRegisterEvent, onSelectEvent }) {
+export function EventList({ onRegisterEvent, onSelectEvent, refreshKey = 0 }) {
   const { t } = useTranslation();
   const { user, fetchProfile } = useAuth();
+  const showToast = useToast();
 
   const [events, setEvents] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
@@ -28,7 +31,7 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
 
   useEffect(() => {
     fetchEventsAndRecommendations();
-  }, [selectedCategory, searchTerm]);
+  }, [selectedCategory, searchTerm, refreshKey]);
 
   const fetchEventsAndRecommendations = async () => {
     try {
@@ -71,22 +74,25 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
     }
 
     const eventId = evt._id || evt.id;
-    const isAlreadyRsvped = isUserRsvped(evt);
+    const isAlreadyRsvped = hasActiveRsvp(evt) || isUserRsvped(evt);
 
     try {
       setRsvpLoadingId(eventId);
       if (isAlreadyRsvped) {
         await axios.delete(`/api/events/${eventId}/rsvp`);
+        showToast('RSVP cancelled successfully.', 'success');
       } else {
         const response = await axios.post(`/api/events/${eventId}/rsvp`);
         if (response.data?.status === 'waitlist') {
-          alert(`Event is full. You joined the waitlist at position ${response.data.waitlistPosition}.`);
+          showToast(`Event is full. You joined the waitlist at position ${response.data.waitlistPosition}.`, 'warning');
+        } else {
+          showToast('Your RSVP is confirmed.', 'success');
         }
       }
       await fetchProfile();
       await fetchEventsAndRecommendations();
     } catch (err) {
-      alert(err.response?.data?.message || 'RSVP operation failed.');
+      showToast(err.response?.data?.message || 'RSVP operation failed.', 'error');
     } finally {
       setRsvpLoadingId(null);
     }
@@ -94,6 +100,7 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
 
   const isUserRsvped = (evt) => {
     if (!user) return false;
+    if (hasActiveRsvp(evt)) return true;
     const eventId = (evt._id || evt.id)?.toString();
     const userRsvps = (user.rsvpedEvents || []).map((id) => (typeof id === 'object' ? id._id?.toString() : id?.toString()));
     const attendeeUsers = (evt.attendees || []).map((a) => (typeof a.user === 'object' ? a.user?._id?.toString() : a.user?.toString()));
@@ -228,8 +235,10 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
         /* Event Cards Grid */
         <div className="events-grid">
           {events.map((evt) => {
-            const seatsRemaining = Math.max(0, (evt.capacity || 100) - (evt.attendees?.length || 0));
-            const isRsvped = isUserRsvped(evt);
+            const seatsRemaining = Math.max(0, (evt.capacity || 100) - confirmedCount(evt));
+            const isRsvped = hasActiveRsvp(evt) || isUserRsvped(evt);
+            const status = rsvpStatus(evt);
+            const full = isEventFull(evt);
 
             return (
               <div className="event-card animate-fade-in" key={evt._id || evt.id}>
@@ -261,6 +270,9 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
                 </div>
                 <div className="card-body">
                   <h3 className="card-title">{evt.title}</h3>
+                  <span className={`rsvp-state-badge ${status === 'waitlist' ? 'waitlist' : status === 'confirmed' ? 'confirmed' : full ? 'full' : ''}`}>
+                    {rsvpStatusLabel(evt)}
+                  </span>
                   <p className="card-description">{evt.description}</p>
 
                   <div className="card-meta">
@@ -304,6 +316,8 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
                     >
                       {rsvpLoadingId === (evt._id || evt.id)
                         ? 'Updating...'
+                        : !isRsvped && full
+                        ? 'Join Waitlist'
                         : isRsvped
                         ? '✓ RSVPed (Cancel)'
                         : user

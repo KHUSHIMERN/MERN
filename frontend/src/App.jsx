@@ -4,6 +4,7 @@ import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { TimezoneProvider } from './context/TimezoneContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { ToastProvider } from './context/ToastContext';
 import RegisterForm from './components/RegisterForm';
 import LoginForm from './components/LoginForm';
 import AuthPage from './components/AuthPage';
@@ -75,6 +76,7 @@ function AppContent() {
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedEventForModal, setSelectedEventForModal] = useState(null);
+  const [eventsRefreshKey, setEventsRefreshKey] = useState(0);
 
   const handleOpenRegisterModal = (evt = null) => {
     setSelectedEventForModal(evt);
@@ -139,6 +141,7 @@ function AppContent() {
 
             {activeTab === 'events' && (
               <EventList
+                refreshKey={eventsRefreshKey}
                 onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
                 onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
               />
@@ -161,6 +164,7 @@ function AppContent() {
           selectedEvent={selectedEventForModal}
           onClose={handleCloseRegisterModal}
           onNavigateProfile={() => setView('profile')}
+          onRsvpChanged={() => setEventsRefreshKey((key) => key + 1)}
         />
       )}
 
@@ -177,9 +181,11 @@ export function App() {
         <CssBaseline />
         <LanguageProvider>
           <AuthProvider>
-            <TimezoneProvider>
-              <AppContent />
-            </TimezoneProvider>
+            <ToastProvider>
+              <TimezoneProvider>
+                <AppContent />
+              </TimezoneProvider>
+            </ToastProvider>
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>

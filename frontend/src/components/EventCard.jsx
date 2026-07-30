@@ -8,6 +8,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import LockIcon from '@mui/icons-material/Lock';
 import { formatEventDateTime } from '../utils/dateUtils';
 import { useLanguage } from '../context/LanguageContext';
+import { hasActiveRsvp, isEventFull, rsvpLabel, rsvpStatusLabel } from '../utils/rsvpState';
 
 // WCAG AA compliant: all colors achieve ≥4.5:1 contrast ratio with white text
 const categoryColors = {
@@ -74,6 +75,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
   const displayDescription = lang === 'hi' && event.description_hi ? event.description_hi : event.description;
   const capacityStatus = getCapacityStatus(event.attendeesCount ?? 0, event.capacity ?? 100, t);
   const isFull = capacityStatus.level === 'full';
+  const activeRsvp = hasActiveRsvp(event);
 
   return (
     <Card
@@ -139,6 +141,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
             sx={{ fontSize: '0.75rem', ...capacityStatus.sx }}
           />
         </Box>
+        <Chip label={rsvpStatusLabel(event)} size="small" color={activeRsvp ? 'success' : isFull ? 'error' : 'default'} />
 
         {isCrossTimezone && (
           /* Lighthouse fix: MUI color="info" outlined = #0288d1 on white (3.85:1 ❌)
@@ -228,10 +231,8 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
             variant="contained"
             size="small"
             fullWidth
-            disabled={isFull}
-            onClick={() => !isFull && onRSVP(event)}
-            aria-disabled={isFull}
-            aria-label={isFull ? t('statusFullAriaLabel') : t('rsvpBtn')}
+            onClick={() => onRSVP(event)}
+            aria-label={rsvpLabel(event)}
             sx={{
               borderRadius: 2,
               background: isFull
@@ -239,7 +240,7 @@ export default function EventCard({ event, activeTimezone, userLocale, onSelectE
                 : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)'
             }}
           >
-            {isFull ? t('rsvpDisabledFull') : t('rsvpBtn')}
+            {activeRsvp ? 'Cancel RSVP' : isEventFull(event) ? 'Join Waitlist' : t('rsvpBtn')}
           </Button>
         </Box>
       </Box>

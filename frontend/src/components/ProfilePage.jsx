@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { User, Phone, Globe, Shield, Send, CheckCircle, AlertCircle, Edit3, Save, X, Clock, Ticket } from 'lucide-react';
 
 export default function ProfilePage({ onNavigateHome }) {
   const { user, updateProfile, requestOrganizerRole, fetchProfile, logout } = useAuth();
+  const showToast = useToast();
+  const [registeredEvents, setRegisteredEvents] = useState([]);
 
   // Inline edit state
   const [isEditing, setIsEditing] = useState(false);
@@ -32,6 +35,21 @@ export default function ProfilePage({ onNavigateHome }) {
       });
     }
   }, [user]);
+
+  const fetchRegisteredEvents = async () => {
+    if (!user) return;
+    try {
+      const response = await axios.get('/api/events');
+      const allEvents = response.data.events || response.data.data || [];
+      setRegisteredEvents(allEvents.filter((event) => ['confirmed', 'waitlist'].includes(event.userRegistrationStatus)));
+    } catch {
+      setRegisteredEvents([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchRegisteredEvents();
+  }, [user?._id]);
 
   if (!user) {
     return (
@@ -335,21 +353,29 @@ export default function ProfilePage({ onNavigateHome }) {
       <div className="card" style={{ padding: '32px', borderRadius: '16px', marginBottom: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
           <Ticket size={24} color="#6366f1" />
-          <h3 style={{ fontSize: '18px', fontWeight: '700' }}>My Registered Events ({user.rsvpedEvents?.length || 0})</h3>
+          <h3 style={{ fontSize: '18px', fontWeight: '700' }}>My Registered Events ({registeredEvents.length})</h3>
         </div>
 
-        {!user.rsvpedEvents || user.rsvpedEvents.length === 0 ? (
+        {registeredEvents.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
             You have not registered for any events yet. Explore upcoming community events to RSVP!
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {user.rsvpedEvents.map((evt) => {
-              const eventObj = typeof evt === 'object' ? evt : null;
-              const eventId = eventObj ? eventObj._id : evt;
+            {registeredEvents
+              .sort((a, b) => a.userRegistrationStatus === b.userRegistrationStatus ? 0 : a.userRegistrationStatus === 'confirmed' ? -1 : 1)
+              .map((evt, index, sortedEvents) => {
+              const eventObj = evt;
+              const eventId = evt._id;
+              const beginsGroup = index === 0 || sortedEvents[index - 1].userRegistrationStatus !== evt.userRegistrationStatus;
               return (
+                <React.Fragment key={eventId}>
+                {beginsGroup && (
+                  <h4 style={{ marginTop: index ? '16px' : 0, color: evt.userRegistrationStatus === 'confirmed' ? '#34d399' : '#fbbf24' }}>
+                    {evt.userRegistrationStatus === 'confirmed' ? 'Confirmed Events' : 'Waitlisted Events'}
+                  </h4>
+                )}
                 <div
-                  key={eventId}
                   style={{
                     display: 'flex',
                     justify: 'space-between',
@@ -361,6 +387,11 @@ export default function ProfilePage({ onNavigateHome }) {
                   }}
                 >
                   <div>
+                    <span className={`rsvp-state-badge ${eventObj.userRegistrationStatus === 'waitlist' ? 'waitlist' : 'confirmed'}`}>
+                      {eventObj.userRegistrationStatus === 'waitlist'
+                        ? `Waitlisted • Position ${eventObj.userWaitlistPosition}`
+                        : 'Confirmed'}
+                    </span>
                     <h4 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-main)', marginBottom: '4px' }}>
                       {eventObj ? eventObj.title : `Event ID: ${eventId}`}
                     </h4>
@@ -378,10 +409,13 @@ export default function ProfilePage({ onNavigateHome }) {
                         setStatusMessage({ type: 'info', text: 'Cancelling RSVP...' });
                         await axios.delete(`/api/events/${eventId}/rsvp`);
                         await fetchProfile();
+                        await fetchRegisteredEvents();
+                        showToast('RSVP cancelled successfully.', 'success');
                         setStatusMessage({ type: 'success', text: 'RSVP cancelled successfully.' });
                         setTimeout(() => setStatusMessage(null), 4000);
                       } catch (err) {
                         setStatusMessage({ type: 'error', text: err.response?.data?.message || 'Failed to cancel RSVP.' });
+                        showToast(err.response?.data?.message || 'Failed to cancel RSVP.', 'error');
                       }
                     }}
                     style={{ fontSize: '12px', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)' }}
@@ -389,6 +423,7 @@ export default function ProfilePage({ onNavigateHome }) {
                     Cancel RSVP
                   </button>
                 </div>
+                </React.Fragment>
               );
             })}
           </div>

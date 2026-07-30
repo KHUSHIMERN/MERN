@@ -3,25 +3,19 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useNotifications } from '../context/NotificationContext';
 import { hasActiveRsvp, isEventFull, rsvpStatus, rsvpStatusLabel } from '../utils/rsvpState';
-import { Calendar, MapPin, PlusCircle, CheckCircle, AlertCircle, ShieldAlert } from 'lucide-react';
+import { CheckCircle, ShieldAlert } from 'lucide-react';
 
-export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfile, onRsvpChanged }) {
+export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfile, onRsvpChanged, onRequireLogin }) {
   const { t } = useTranslation();
   const { user, fetchProfile } = useAuth();
   const showToast = useToast();
+  const { refreshNotifications } = useNotifications();
   const [eventState, setEventState] = useState(selectedEvent);
 
   const isCreateMode = !selectedEvent;
   const isOrganizerOrAdmin = user && (user.role === 'organizer' || user.role === 'admin');
-
-  // RSVP Form State
-  const [rsvpData, setRsvpData] = useState({
-    fullName: user?.name || '',
-    email: user?.email || '',
-    notes: '',
-    agreeTerms: false,
-  });
 
   // Event Creation Form State (for organizers/admins)
   const [createData, setCreateData] = useState({
@@ -43,37 +37,19 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
   const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
-    if (user) {
-      setRsvpData((prev) => ({
-        ...prev,
-        fullName: user.name || prev.fullName,
-        email: user.email || prev.email,
-      }));
-    }
-  }, [user]);
-
-  useEffect(() => {
     setEventState(selectedEvent);
     const eventId = selectedEvent?._id || selectedEvent?.id;
     if (!eventId) return;
     axios.get(`/api/events/${eventId}`)
       .then((response) => setEventState(response.data.data || response.data))
-      .catch(() => {});
-  }, [selectedEvent]);
+      .catch((error) => showToast(error.response?.data?.message || 'Unable to load event details.', 'error'));
+  }, [selectedEvent, showToast]);
 
   const refreshEvent = async () => {
     const eventId = selectedEvent?._id || selectedEvent?.id;
     if (!eventId) return;
     const response = await axios.get(`/api/events/${eventId}`);
     setEventState(response.data.data || response.data);
-  };
-
-  const handleRsvpChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setRsvpData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
   };
 
   const handleCreateChange = (e) => {
@@ -86,7 +62,8 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
     setErrorMsg('');
 
     if (!user) {
-      setErrorMsg('You must be logged in with a verified account to register for events.');
+      showToast('Please log in with a verified account to RSVP.', 'info');
+      onRequireLogin?.();
       return;
     }
 
@@ -95,18 +72,16 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
       return;
     }
 
-    if (!rsvpData.agreeTerms) {
-      setErrorMsg(t('form.agreeTermsError', 'You must agree to the terms to proceed.'));
-      return;
-    }
-
     setLoading(true);
 
     try {
       const eventId = selectedEvent._id || selectedEvent.id;
       const res = await axios.post(`/api/events/${eventId}/rsvp`);
-      await fetchProfile();
-      await refreshEvent();
+      await Promise.allSettled([
+        fetchProfile(),
+        refreshEvent(),
+        refreshNotifications({ quiet: true }),
+      ]);
       onRsvpChanged?.();
       setSuccessMsg(res.data.message || 'Successfully registered for event!');
       showToast(
@@ -117,7 +92,9 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
       );
       setIsSubmitted(true);
     } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'RSVP registration failed.');
+      const message = err.response?.data?.message || 'RSVP registration failed.';
+      setErrorMsg(message);
+      showToast(message, 'error');
     } finally {
       setLoading(false);
     }
@@ -128,11 +105,17 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
     setLoading(true);
     try {
       await axios.delete(`/api/events/${eventId}/rsvp`);
-      await Promise.all([fetchProfile(), refreshEvent()]);
+      await Promise.allSettled([
+        fetchProfile(),
+        refreshEvent(),
+        refreshNotifications({ quiet: true }),
+      ]);
       onRsvpChanged?.();
       showToast('RSVP cancelled successfully.', 'success');
     } catch (err) {
-      showToast(err.response?.data?.message || 'Failed to cancel RSVP.', 'error');
+      const message = err.response?.data?.message || 'Failed to cancel RSVP.';
+      setErrorMsg(message);
+      showToast(message, 'error');
     } finally {
       setLoading(false);
     }
@@ -161,7 +144,9 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
       setSuccessMsg(res.data.message || 'Event created and published successfully!');
       setIsSubmitted(true);
     } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'Failed to create event.');
+      const message = err.response?.data?.message || 'Failed to create event.';
+      setErrorMsg(message);
+      showToast(message, 'error');
     } finally {
       setLoading(false);
     }
@@ -363,6 +348,16 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
               </button>
             </div>
           </form>
+        ) : !user ? (
+          <div style={{ padding: '24px 0', textAlign: 'center' }}>
+            <ShieldAlert size={42} color="#818cf8" style={{ margin: '0 auto 14px' }} />
+            <h3 style={{ marginBottom: '8px' }}>Log in to RSVP</h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '18px' }}>Use a verified resident account to confirm a seat or join the waitlist.</p>
+            <div className="form-actions">
+              <button type="button" className="btn-secondary" onClick={onClose}>Close</button>
+              <button type="button" className="btn-primary" onClick={onRequireLogin}>Continue to Login</button>
+            </div>
+          </div>
         ) : hasActiveRsvp(eventState) ? (
           <div style={{ padding: '24px 0' }}>
             <div className="form-success-box" style={{ marginBottom: '18px' }}>
@@ -382,78 +377,22 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
             </div>
           </div>
         ) : (
-          /* RSVP for existing event Form */
           <form className="registration-form" onSubmit={handleRsvpSubmit}>
-            {errorMsg && <div className="form-error-alert">{errorMsg}</div>}
-
-            <div className="form-group">
-              <label htmlFor="fullName" className="form-label">
-                {t('form.fullName', 'Full Name')} *
-              </label>
-              <input
-                type="text"
-                id="fullName"
-                name="fullName"
-                className="form-input"
-                placeholder={t('form.fullNamePlaceholder', 'Enter your full name')}
-                value={rsvpData.fullName}
-                onChange={handleRsvpChange}
-                required
-              />
+            {errorMsg && <div className="form-error-alert" role="alert">{errorMsg}</div>}
+            <div style={{ padding: '16px', borderRadius: '12px', background: 'var(--input-bg)', border: '1px solid var(--border-color)' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '8px' }}>Booking as</p>
+              <strong>{user.name}</strong>
+              <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{user.email}</p>
+              <p style={{ marginTop: '12px', color: isEventFull(eventState) ? '#fbbf24' : '#34d399', fontWeight: 700 }}>
+                {isEventFull(eventState)
+                  ? 'This event is full. You will join the FIFO waitlist.'
+                  : 'A seat is currently available.'}
+              </p>
             </div>
-
-            <div className="form-group">
-              <label htmlFor="email" className="form-label">
-                {t('form.email', 'Email Address')} *
-              </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                className="form-input"
-                placeholder={t('form.emailPlaceholder', 'name@example.com')}
-                value={rsvpData.email}
-                onChange={handleRsvpChange}
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="notes" className="form-label">
-                {t('form.notes', 'Special Requests / Notes')}
-              </label>
-              <textarea
-                id="notes"
-                name="notes"
-                rows="2"
-                className="form-textarea"
-                placeholder={t('form.notesPlaceholder', 'Dietary requirements, accessibility needs, etc.')}
-                value={rsvpData.notes}
-                onChange={handleRsvpChange}
-              ></textarea>
-            </div>
-
-            <div className="form-checkbox-group">
-              <input
-                type="checkbox"
-                id="agreeTerms"
-                name="agreeTerms"
-                className="form-checkbox"
-                checked={rsvpData.agreeTerms}
-                onChange={handleRsvpChange}
-                required
-              />
-              <label htmlFor="agreeTerms" className="checkbox-label">
-                {t('form.agreeTerms', 'I agree to the event terms and community code of conduct')}
-              </label>
-            </div>
-
             <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={onClose}>
-                {t('form.cancelBtn', 'Cancel')}
-              </button>
+              <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
               <button type="submit" className="btn-primary" disabled={loading}>
-                {loading ? 'Submitting...' : isEventFull(eventState) ? 'Join Waitlist' : t('form.submitBtn', 'Confirm Registration')}
+                {loading ? 'Updating RSVP...' : isEventFull(eventState) ? 'Join Waitlist' : 'Confirm RSVP'}
               </button>
             </div>
           </form>

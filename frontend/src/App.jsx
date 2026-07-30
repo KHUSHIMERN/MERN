@@ -6,8 +6,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ToastProvider } from './context/ToastContext';
 import { NotificationProvider } from './context/NotificationContext';
-import RegisterForm from './components/RegisterForm';
-import LoginForm from './components/LoginForm';
 import AuthPage from './components/AuthPage';
 import ProfilePage from './components/ProfilePage';
 import AdminRoleRequests from './components/AdminRoleRequests';
@@ -72,7 +70,7 @@ const theme = createTheme({
 
 function AppContent() {
   const { t } = useTranslation();
-  const { user, logout } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth();
   const [view, setView] = useState(() => new URLSearchParams(window.location.search).get('verified') === 'true' ? 'login' : 'register');
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -88,6 +86,13 @@ function AppContent() {
       window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
     }
   }, []);
+
+  useEffect(() => {
+    if (!authLoading && user && (view === 'login' || view === 'register')) {
+      setView('events');
+      setActiveTab('events');
+    }
+  }, [authLoading, user, view]);
 
   const handleOpenRegisterModal = (evt = null) => {
     setSelectedEventForModal(evt);
@@ -143,7 +148,10 @@ function AppContent() {
         )}
 
         {view === 'profile' && (
-          <ProfilePage onNavigateHome={() => setView('events')} />
+          <ProfilePage
+            onNavigateHome={() => setView('events')}
+            onRsvpChanged={() => setEventsRefreshKey((key) => key + 1)}
+          />
         )}
 
         {view === 'admin-requests' && (
@@ -160,8 +168,8 @@ function AppContent() {
             {activeTab === 'events' && (
               <EventList
                 refreshKey={eventsRefreshKey}
-                onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
                 onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+                onRequireLogin={() => setView('login')}
               />
             )}
 
@@ -183,6 +191,10 @@ function AppContent() {
           onClose={handleCloseRegisterModal}
           onNavigateProfile={() => setView('profile')}
           onRsvpChanged={() => setEventsRefreshKey((key) => key + 1)}
+          onRequireLogin={() => {
+            handleCloseRegisterModal();
+            setView('login');
+          }}
         />
       )}
 

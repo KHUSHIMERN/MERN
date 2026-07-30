@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useNotifications } from '../context/NotificationContext';
 import { User, Phone, Globe, Shield, Send, CheckCircle, AlertCircle, Edit3, Save, X, Clock, Ticket } from 'lucide-react';
 
-export default function ProfilePage({ onNavigateHome }) {
-  const { user, updateProfile, requestOrganizerRole, fetchProfile, logout } = useAuth();
+export default function ProfilePage({ onNavigateHome, onRsvpChanged }) {
+  const { user, updateProfile, requestOrganizerRole, fetchProfile } = useAuth();
   const showToast = useToast();
+  const { refreshNotifications } = useNotifications();
   const [registeredEvents, setRegisteredEvents] = useState([]);
 
   // Inline edit state
@@ -408,8 +410,12 @@ export default function ProfilePage({ onNavigateHome }) {
                       try {
                         setStatusMessage({ type: 'info', text: 'Cancelling RSVP...' });
                         await axios.delete(`/api/events/${eventId}/rsvp`);
-                        await fetchProfile();
-                        await fetchRegisteredEvents();
+                        await Promise.allSettled([
+                          fetchProfile(),
+                          fetchRegisteredEvents(),
+                          refreshNotifications({ quiet: true }),
+                        ]);
+                        onRsvpChanged?.();
                         showToast('RSVP cancelled successfully.', 'success');
                         setStatusMessage({ type: 'success', text: 'RSVP cancelled successfully.' });
                         setTimeout(() => setStatusMessage(null), 4000);

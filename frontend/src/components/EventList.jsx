@@ -3,13 +3,15 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useNotifications } from '../context/NotificationContext';
 import { confirmedCount, hasActiveRsvp, isEventFull, rsvpStatus, rsvpStatusLabel } from '../utils/rsvpState';
-import { Sparkles, Calendar, MapPin, Ticket, CheckCircle, RefreshCw, AlertCircle } from 'lucide-react';
+import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 
-export function EventList({ onRegisterEvent, onSelectEvent, refreshKey = 0 }) {
+export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
   const { t } = useTranslation();
   const { user, fetchProfile } = useAuth();
   const showToast = useToast();
+  const { refreshNotifications } = useNotifications();
 
   const [events, setEvents] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
@@ -69,7 +71,8 @@ export function EventList({ onRegisterEvent, onSelectEvent, refreshKey = 0 }) {
 
   const handleToggleRsvp = async (evt) => {
     if (!user) {
-      if (onRegisterEvent) onRegisterEvent(evt);
+      showToast('Please log in with a verified account to RSVP.', 'info');
+      onRequireLogin?.();
       return;
     }
 
@@ -89,8 +92,11 @@ export function EventList({ onRegisterEvent, onSelectEvent, refreshKey = 0 }) {
           showToast('Your RSVP is confirmed.', 'success');
         }
       }
-      await fetchProfile();
-      await fetchEventsAndRecommendations();
+      await Promise.allSettled([
+        fetchProfile(),
+        fetchEventsAndRecommendations(),
+        refreshNotifications({ quiet: true }),
+      ]);
     } catch (err) {
       showToast(err.response?.data?.message || 'RSVP operation failed.', 'error');
     } finally {

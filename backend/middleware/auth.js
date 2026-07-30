@@ -66,4 +66,6 @@ const requireRole = (...roles) => {
   };
 };
 
-module.exports = { auth, requireVerified, requireRole, JWT_SECRET };
+// `requireAuth` is the name used by the RSVP/auth-security feature modules.
+// Keep `auth` for existing DEV-KHUSHI routes and expose the alias for compatibility.
+module.exports = { auth, requireAuth: auth, requireVerified, requireRole, JWT_SECRET };

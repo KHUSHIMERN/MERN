@@ -78,7 +78,10 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
       if (isAlreadyRsvped) {
         await axios.delete(`/api/events/${eventId}/rsvp`);
       } else {
-        await axios.post(`/api/events/${eventId}/rsvp`);
+        const response = await axios.post(`/api/events/${eventId}/rsvp`);
+        if (response.data?.status === 'waitlist') {
+          alert(`Event is full. You joined the waitlist at position ${response.data.waitlistPosition}.`);
+        }
       }
       await fetchProfile();
       await fetchEventsAndRecommendations();

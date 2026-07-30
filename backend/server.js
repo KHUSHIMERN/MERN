@@ -17,6 +17,11 @@ app.use(express.urlencoded({ extended: true }));
 // API Routes
 app.use('/api/auth', require('./routes/auth'));
 
+// RSVP/waitlist routes must be mounted before the legacy event router because
+// both expose /:id/rsvp. The feature router adds authenticated persistence,
+// cancellation, FIFO waitlist promotion, and attendee-list retrieval.
+app.use('/api/events', require('./routes/rsvpRoutes'));
+
 if (fs.existsSync('./routes/userRoutes.js')) {
   app.use('/api/users', require('./routes/userRoutes'));
 }

@@ -12,6 +12,13 @@ const {
 const validEventId = (id) => mongoose.Types.ObjectId.isValid(id);
 const activeStatuses = ['confirmed', 'waitlist'];
 
+const canManageEvent = (user, event) => {
+  if (user?.role === 'admin') return true;
+  if (user?.role !== 'organizer') return false;
+  const userId = user._id.toString();
+  return event.organizer?.toString() === userId || event.organizerId?.toString() === userId;
+};
+
 const claimRegistrationRecord = async (eventId, userId) => {
   const now = new Date();
   let record = await RSVP.findOneAndUpdate(
@@ -259,6 +266,9 @@ const getEventRSVPs = async (req, res) => {
   try {
     const event = await Event.findById(id);
     if (!event) return res.status(404).json({ message: 'Event not found' });
+    if (!canManageEvent(req.user, event)) {
+      return res.status(403).json({ message: 'Only this event owner or an administrator can view its Registration Desk.' });
+    }
     await migrateLegacyRsvpsForEvent(event);
 
     const records = await RSVP.find({ eventId: id, status: { $in: activeStatuses } })
@@ -267,6 +277,10 @@ const getEventRSVPs = async (req, res) => {
     const confirmed = records.filter((record) => record.status === 'confirmed');
     const waitlist = records.filter((record) => record.status === 'waitlist');
     const current = records.find((record) => record.userId?._id?.equals(req.user._id));
+    const promotions = await RSVP.find({ eventId: id, promotedAt: { $ne: null } })
+      .populate('userId', 'name email')
+      .sort({ promotedAt: -1 })
+      .limit(25);
 
     return res.json({
       eventId: id,
@@ -287,6 +301,13 @@ const getEventRSVPs = async (req, res) => {
         rsvpId: record._id,
         createdAt: record.createdAt,
         position: index + 1,
+      })),
+      promotions: promotions.map((record) => ({
+        rsvpId: record._id,
+        userId: record.userId?._id,
+        name: record.userId?.name,
+        email: record.userId?.email,
+        promotedAt: record.promotedAt,
       })),
       currentUser: {
         status: current?.status || 'none',

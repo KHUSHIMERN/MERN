@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import RegistrationDesk from './RegistrationDesk';
+import { useAuth } from '../context/AuthContext';
 
 export function OrganizerCheckIn({ onSelectEventForRegister }) {
+  const { user } = useAuth();
   // State Management
   const [events, setEvents] = useState([]);
-  const [selectedEventId, setSelectedEventId] = useState('evt-1');
+  const [selectedEventId, setSelectedEventId] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [workspaceTab, setWorkspaceTab] = useState('attendance');
   
   // Role Simulation Switcher (organizer vs attendee for testing 403 authorization)
   const [userRole, setUserRole] = useState('organizer');
@@ -64,30 +68,29 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
         if (res.ok) {
           const json = await res.json();
           if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            setEvents(json.data);
-            setSelectedEventId(json.data[0].id || json.data[0].itemKey || 'evt-1');
+            const manageableEvents = user?.role === 'admin'
+              ? json.data
+              : json.data.filter((event) => {
+                  const ownerId = event.organizer?._id || event.organizer || event.organizerId;
+                  return ownerId?.toString() === user?._id?.toString();
+                });
+            setEvents(manageableEvents);
+            setSelectedEventId(manageableEvents[0]?._id || '');
             return;
           }
         }
       } catch (err) {
-        console.warn('Failed to fetch events from API, using fallback events:', err);
+        console.warn('Failed to fetch organizer events:', err);
       }
-      
-      // Fallback default events list
-      const defaultEvts = [
-        { id: 'evt-1', title: 'Tech Summit Bengaluru 2026', category: 'tech', date: '2026-08-15' },
-        { id: 'evt-2', title: 'Karnataka Cultural & Folk Festival', category: 'culture', date: '2026-08-22' },
-        { id: 'evt-3', title: 'Fullstack React & Node Workshop', category: 'workshop', date: '2026-09-02' },
-        { id: 'evt-4', title: 'Green City Cleanliness Drive', category: 'charity', date: '2026-09-10' }
-      ];
-      setEvents(defaultEvts);
+      setEvents([]);
+      setSelectedEventId('');
     };
     fetchEvents();
-  }, []);
+  }, [user?._id, user?.role]);
 
   // Update selected event object when ID changes
   useEffect(() => {
-    const found = events.find((e) => e.id === selectedEventId || e.itemKey === selectedEventId);
+    const found = events.find((e) => e._id === selectedEventId || e.id === selectedEventId || e.itemKey === selectedEventId);
     setSelectedEvent(found || events[0] || null);
   }, [events, selectedEventId]);
 
@@ -485,7 +488,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
             }}
           >
             {events.map((evt) => (
-              <option key={evt.id || evt.itemKey} value={evt.id || evt.itemKey}>
+              <option key={evt._id || evt.id || evt.itemKey} value={evt._id || evt.id || evt.itemKey}>
                 {evt.title} ({evt.date || 'Upcoming'})
               </option>
             ))}
@@ -529,8 +532,23 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
         </div>
       </div>
 
+      <div className="organizer-workspace-tabs" role="tablist" aria-label="Organizer event workspace">
+        <button type="button" role="tab" aria-selected={workspaceTab === 'attendance'} className={workspaceTab === 'attendance' ? 'active' : ''} onClick={() => setWorkspaceTab('attendance')}>
+          Check-in & Attendance
+        </button>
+        <button type="button" role="tab" aria-selected={workspaceTab === 'registrations'} className={workspaceTab === 'registrations' ? 'active' : ''} onClick={() => setWorkspaceTab('registrations')}>
+          Registration Desk
+        </button>
+      </div>
+
+      {workspaceTab === 'registrations' && (
+        selectedEventId
+          ? <RegistrationDesk eventId={selectedEventId} event={selectedEvent} />
+          : <div className="registration-desk-state">No events owned by this organizer.</div>
+      )}
+
       {/* 403 Authorization Banner if Unauthorized */}
-      {authError ? (
+      {workspaceTab === 'attendance' && (authError ? (
         <div className="auth-error-banner">
           <div className="banner-icon">🔒</div>
           <div className="banner-content">
@@ -898,10 +916,10 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
             </div>
           )}
         </>
-      )}
+      ))}
 
       {/* Real-time Audit Trail Panel */}
-      {showAuditLogs && userRole === 'organizer' && (
+      {workspaceTab === 'attendance' && showAuditLogs && userRole === 'organizer' && (
         <div className="audit-log-panel" id="audit-log-panel" role="region" aria-label="Event Audit Trail">
           <div className="audit-panel-header">
             <h3>📜 Event Check-in Audit Trail Log</h3>

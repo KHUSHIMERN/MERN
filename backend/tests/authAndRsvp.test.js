@@ -161,4 +161,29 @@ describe('normalized RSVP and waitlist behavior', () => {
     expect(await RSVP.exists({ eventId: event._id, userId: confirmed._id, status: 'confirmed' })).toBeTruthy();
     expect(await RSVP.exists({ eventId: event._id, userId: waiting._id, status: 'waitlist' })).toBeTruthy();
   });
+
+  test('Registration Desk is limited to the event owner/admin and returns FIFO and promotions', async () => {
+    const [owner, unrelated, admin, confirmed, waiting] = await Promise.all([
+      User.create({ name: 'Owner', email: 'owner@test.com', role: 'organizer', password: 'password', isVerified: true }),
+      User.create({ name: 'Other Organizer', email: 'other@test.com', role: 'organizer', password: 'password', isVerified: true }),
+      User.create({ name: 'Admin', email: 'admin@test.com', role: 'admin', password: 'password', isVerified: true }),
+      createUser(1),
+      createUser(2),
+    ]);
+    const event = await createEvent({ organizerId: owner._id.toString() });
+    await RSVP.create({ eventId: event._id, userId: confirmed._id, status: 'confirmed', confirmedAt: new Date(), promotedAt: new Date() });
+    await RSVP.create({ eventId: event._id, userId: waiting._id, status: 'waitlist', waitlistedAt: new Date() });
+
+    const denied = await request(app).get(`/api/events/${event._id}/rsvps`).set('Authorization', `Bearer ${tokenFor(unrelated)}`);
+    expect(denied.status).toBe(403);
+
+    const ownerDesk = await request(app).get(`/api/events/${event._id}/rsvps`).set('Authorization', `Bearer ${tokenFor(owner)}`);
+    expect(ownerDesk.status).toBe(200);
+    expect(ownerDesk.body.confirmed).toHaveLength(1);
+    expect(ownerDesk.body.waitlist[0].position).toBe(1);
+    expect(ownerDesk.body.promotions).toHaveLength(1);
+
+    const adminDesk = await request(app).get(`/api/events/${event._id}/rsvps`).set('Authorization', `Bearer ${tokenFor(admin)}`);
+    expect(adminDesk.status).toBe(200);
+  });
 });

@@ -1305,6 +1305,28 @@
   border: 1px solid #6366f1;
 }
 
+.organizer-workspace-tabs { display: flex; gap: 0.5rem; padding: 0.35rem; background: rgba(15, 23, 42, 0.75); border: 1px solid var(--border-color); border-radius: 0.75rem; width: fit-content; }
+.organizer-workspace-tabs button { border: 0; border-radius: 0.55rem; padding: 0.7rem 1rem; color: var(--text-muted); background: transparent; font-weight: 700; cursor: pointer; }
+.organizer-workspace-tabs button.active { color: #fff; background: linear-gradient(135deg, #6366f1, #7c3aed); }
+.registration-desk { display: flex; flex-direction: column; gap: 1.25rem; }
+.registration-desk-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.registration-desk-header h3 { display: flex; align-items: center; gap: 0.55rem; font-size: 1.3rem; }
+.registration-desk-header p, .desk-empty { color: var(--text-muted); font-size: 0.85rem; }
+.registration-desk-state { padding: 2rem; display: flex; align-items: center; justify-content: center; gap: 0.75rem; color: var(--text-muted); }
+.desk-capacity-track { height: 0.55rem; border-radius: 999px; overflow: hidden; background: rgba(148, 163, 184, 0.15); }
+.desk-capacity-track span { display: block; height: 100%; background: linear-gradient(90deg, #10b981, #6366f1); transition: width 0.3s ease; }
+.registration-desk-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.desk-panel { padding: 1.1rem; border-radius: 0.9rem; border: 1px solid var(--border-color); background: rgba(15, 23, 42, 0.55); }
+.desk-panel h4 { margin-bottom: 0.9rem; }
+.desk-person { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.75rem; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
+.desk-person:last-child { border-bottom: 0; }
+.desk-person div { display: flex; flex-direction: column; min-width: 0; }
+.desk-person small, .desk-person time { color: var(--text-muted); font-size: 0.72rem; }
+.desk-position { width: 1.8rem; height: 1.8rem; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(245, 158, 11, 0.16); color: #fbbf24; font-weight: 800; }
+.desk-position.confirmed { background: rgba(16, 185, 129, 0.16); color: #34d399; }
+.promotion-panel { border-color: rgba(99, 102, 241, 0.35); }
+@media (max-width: 760px) { .registration-desk-columns { grid-template-columns: 1fr; } .desk-person { grid-template-columns: auto 1fr; } .desk-person time { grid-column: 2; } }
+
 /* Header & Role Switcher */
 .checkin-header {
   display: flex;
@@ -2174,5 +2196,4 @@
   justify-content: center;
   padding: 1.5rem;
 }
-
 

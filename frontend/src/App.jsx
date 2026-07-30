@@ -5,6 +5,7 @@ import { TimezoneProvider } from './context/TimezoneContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ToastProvider } from './context/ToastContext';
+import { NotificationProvider } from './context/NotificationContext';
 import RegisterForm from './components/RegisterForm';
 import LoginForm from './components/LoginForm';
 import AuthPage from './components/AuthPage';
@@ -95,6 +96,12 @@ function AppContent() {
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const handleNotificationEvent = (event) => {
+    setView('events');
+    setActiveTab('events');
+    handleOpenRegisterModal(event);
+  };
+
   return (
     <div className="app-layout">
       {/* Skip-to-Content Link for Keyboard Accessibility */}
@@ -107,6 +114,7 @@ function AppContent() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenRegisterModal={() => handleOpenRegisterModal()}
+        onOpenNotificationEvent={handleNotificationEvent}
         user={user}
         logout={logout}
         view={view}
@@ -181,11 +189,13 @@ export function App() {
         <CssBaseline />
         <LanguageProvider>
           <AuthProvider>
-            <ToastProvider>
-              <TimezoneProvider>
-                <AppContent />
-              </TimezoneProvider>
-            </ToastProvider>
+            <NotificationProvider>
+              <ToastProvider>
+                <TimezoneProvider>
+                  <AppContent />
+                </TimezoneProvider>
+              </ToastProvider>
+            </NotificationProvider>
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>

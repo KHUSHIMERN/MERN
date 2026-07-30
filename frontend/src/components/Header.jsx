@@ -4,11 +4,16 @@ import { LanguageSelector } from './LanguageSelector';
 import TimezoneSelectorModal from './TimezoneSelectorModal';
 import { useTimezone } from '../context/TimezoneContext';
 import { getTimezoneOffsetLabel } from '../utils/dateUtils';
+import { Bell } from 'lucide-react';
+import NotificationPanel from './NotificationPanel';
+import { useNotifications } from '../context/NotificationContext';
 
-export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, logout, view, setView }) {
+export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNotificationEvent, user, logout, view, setView }) {
   const { t } = useTranslation();
   const { activeTimezone, isOverridden } = useTimezone();
   const [isTzModalOpen, setIsTzModalOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const { unreadCount } = useNotifications();
 
   const offsetLabel = getTimezoneOffsetLabel(activeTimezone);
 
@@ -99,6 +104,16 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
                 <span className="user-signed-in-info">
                   Signed in as <strong>{user.name}</strong> ({user.role})
                 </span>
+                <button
+                  type="button"
+                  className="notification-bell"
+                  onClick={() => setNotificationsOpen((open) => !open)}
+                  aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
+                  aria-expanded={notificationsOpen}
+                >
+                  <Bell size={20} />
+                  {unreadCount > 0 && <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+                </button>
                 {user.role === 'admin' && (
                   <button
                     type="button"
@@ -144,6 +159,13 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
 
       {/* Timezone Selector Modal */}
       <TimezoneSelectorModal open={isTzModalOpen} onClose={() => setIsTzModalOpen(false)} />
+      {user && (
+        <NotificationPanel
+          open={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          onOpenEvent={onOpenNotificationEvent}
+        />
+      )}
     </>
   );
 }

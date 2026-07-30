@@ -13,6 +13,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/events', require('./routes/rsvpRoutes'));
 app.use('/api/events', require('./routes/eventRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
+app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
 app.use('/api/roles', require('./routes/roleRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));

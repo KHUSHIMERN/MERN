@@ -186,4 +186,35 @@ describe('normalized RSVP and waitlist behavior', () => {
     const adminDesk = await request(app).get(`/api/events/${event._id}/rsvps`).set('Authorization', `Bearer ${tokenFor(admin)}`);
     expect(adminDesk.status).toBe(200);
   });
+
+  test('notification APIs list linked promotions and enforce per-user read behavior', async () => {
+    const [recipient, otherUser, event] = await Promise.all([createUser(1), createUser(2), createEvent()]);
+    const notification = await Notification.create({
+      userId: recipient._id,
+      eventId: event._id,
+      type: 'promoted_from_waitlist',
+      payload: { status: 'confirmed', message: `You were promoted for ${event.title}.` },
+    });
+
+    const list = await request(app).get('/api/notifications').set('Authorization', `Bearer ${tokenFor(recipient)}`);
+    expect(list.status).toBe(200);
+    expect(list.body.unreadCount).toBe(1);
+    expect(list.body.notifications[0].event.title).toBe(event.title);
+
+    const forbiddenRead = await request(app)
+      .patch(`/api/notifications/${notification._id}/read`)
+      .set('Authorization', `Bearer ${tokenFor(otherUser)}`);
+    expect(forbiddenRead.status).toBe(404);
+
+    const read = await request(app)
+      .patch(`/api/notifications/${notification._id}/read`)
+      .set('Authorization', `Bearer ${tokenFor(recipient)}`);
+    expect(read.status).toBe(200);
+    expect(read.body.notification.isRead).toBe(true);
+
+    await Notification.create({ userId: recipient._id, eventId: event._id, type: 'event_update', payload: { message: 'Update' } });
+    const readAll = await request(app).patch('/api/notifications/read-all').set('Authorization', `Bearer ${tokenFor(recipient)}`);
+    expect(readAll.status).toBe(200);
+    expect(await Notification.countDocuments({ userId: recipient._id, isRead: false })).toBe(0);
+  });
 });

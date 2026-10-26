@@ -5,7 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 import { confirmedCount, hasActiveRsvp, isEventFull, rsvpStatus, rsvpStatusLabel } from '../utils/rsvpState';
-import { Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
+import { Sparkles, RefreshCw, AlertCircle, Filter, MapPin, Calendar, Globe, RotateCcw, X, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { recordInteraction } from '../utils/recommendationApi';
 
 export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
   const { t } = useTranslation();
@@ -20,6 +21,14 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
+  const [languageFilter, setLanguageFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(6);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [rsvpLoadingId, setRsvpLoadingId] = useState(null);
 
   const categories = [
@@ -31,16 +40,20 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
     { key: 'Civic & Community', label: 'Civic & Community' },
   ];
 
-  useEffect(() => {
-    fetchEventsAndRecommendations();
-  }, [selectedCategory, searchTerm, refreshKey]);
+  const languages = [
+    { key: 'all', label: 'All Languages' },
+    { key: 'en', label: 'English (en)' },
+    { key: 'hi', label: 'Hindi (hi)' },
+    { key: 'kn', label: 'Kannada (kn)' },
+  ];
 
-  const fetchEventsAndRecommendations = async () => {
+  const fetchEventsAndRecommendations = React.useCallback(async () => {
     try {
+      void refreshKey;
       setLoading(true);
       setError(null);
 
-      // 1. Fetch Events
+      // Build combined query parameters
       const params = {};
       if (selectedCategory !== 'all') {
         params.category = selectedCategory;
@@ -48,14 +61,45 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
       if (searchTerm.trim()) {
         params.search = searchTerm.trim();
       }
+      if (locationFilter.trim()) {
+        params.location = locationFilter.trim();
+      }
+      if (startDateFilter) {
+        params.startDate = startDateFilter;
+      }
+      if (endDateFilter) {
+        params.endDate = endDateFilter;
+      }
+      if (languageFilter !== 'all') {
+        params.language = languageFilter;
+      }
+      params.page = page;
+      params.pageSize = pageSize;
 
       const eventsRes = await axios.get('/api/events', { params });
       const fetchedEvents = eventsRes.data.events || eventsRes.data.data || (Array.isArray(eventsRes.data) ? eventsRes.data : []);
       setEvents(fetchedEvents);
 
-      // 2. Fetch AI Recommendations
+      if (eventsRes.data.total !== undefined) {
+        setPagination({
+          total: Number(eventsRes.data.total) || fetchedEvents.length,
+          totalPages: Number(eventsRes.data.totalPages) || 1,
+        });
+      } else {
+        setPagination({
+          total: fetchedEvents.length,
+          totalPages: 1,
+        });
+      }
+
+      // Fetch AI Recommendations — pass user city/language so server can personalise
       try {
-        const recRes = await axios.get('/api/recommendations');
+        const recParams = { limit: 4 };
+        const userCity = user?.city;
+        const userLanguage = user?.preferredLanguage || user?.language;
+        if (userCity) recParams.city = userCity;
+        if (userLanguage) recParams.language = userLanguage;
+        const recRes = await axios.get('/api/recommendations', { params: recParams });
         setRecommendations(recRes.data.recommendations || []);
         setRecSource(recRes.data.source || '');
       } catch (recErr) {
@@ -66,6 +110,83 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
       setError('Failed to load events from backend server.');
     } finally {
       setLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory, searchTerm, locationFilter, startDateFilter, endDateFilter, languageFilter, page, pageSize, refreshKey, user?._id]);
+
+  useEffect(() => {
+    fetchEventsAndRecommendations();
+  }, [fetchEventsAndRecommendations]);
+
+  // Compute active filters list for visual tags
+  const activeFilters = [];
+  if (searchTerm.trim()) {
+    activeFilters.push({
+      id: 'search',
+      label: `Search: "${searchTerm.trim()}"`,
+      clear: () => { setSearchTerm(''); setPage(1); }
+    });
+  }
+  if (selectedCategory !== 'all') {
+    activeFilters.push({
+      id: 'category',
+      label: `Category: ${selectedCategory}`,
+      clear: () => { setSelectedCategory('all'); setPage(1); }
+    });
+  }
+  if (locationFilter.trim()) {
+    activeFilters.push({
+      id: 'location',
+      label: `Location: ${locationFilter.trim()}`,
+      clear: () => { setLocationFilter(''); setPage(1); }
+    });
+  }
+  if (startDateFilter) {
+    activeFilters.push({
+      id: 'startDate',
+      label: `From: ${startDateFilter}`,
+      clear: () => { setStartDateFilter(''); setPage(1); }
+    });
+  }
+  if (endDateFilter) {
+    activeFilters.push({
+      id: 'endDate',
+      label: `To: ${endDateFilter}`,
+      clear: () => { setEndDateFilter(''); setPage(1); }
+    });
+  }
+  if (languageFilter !== 'all') {
+    const langLabel = languages.find((l) => l.key === languageFilter)?.label || languageFilter;
+    activeFilters.push({
+      id: 'language',
+      label: `Language: ${langLabel}`,
+      clear: () => { setLanguageFilter('all'); setPage(1); }
+    });
+  }
+
+  const handleResetAllFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('all');
+    setLocationFilter('');
+    setStartDateFilter('');
+    setEndDateFilter('');
+    setLanguageFilter('all');
+    setPage(1);
+  };
+
+  const handleCategorySelect = (key) => {
+    setSelectedCategory(key);
+    setPage(1);
+    // Record filter interaction
+    if (user?._id && key !== 'all') {
+      recordInteraction({
+        userId: user._id,
+        interactionType: 'filter',
+        category: key,
+        city: user?.city || '',
+        language: user?.preferredLanguage || 'en',
+        metadata: { filterType: 'category', value: key },
+      });
     }
   };
 
@@ -91,6 +212,16 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
         } else {
           showToast('Your RSVP is confirmed.', 'success');
         }
+        // Record RSVP interaction to improve future recommendations
+        recordInteraction({
+          userId: user._id,
+          eventId: eventId,
+          interactionType: 'rsvp',
+          category: evt.category || '',
+          city: evt.city || user?.city || '',
+          language: evt.language || user?.preferredLanguage || 'en',
+          metadata: { source: 'event-list' },
+        });
       }
       await Promise.allSettled([
         fetchProfile(),
@@ -187,36 +318,200 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
         </div>
       )}
 
-      {/* Controls Bar: Search + Category Filters */}
+      {/* Controls Bar: Search + Category Filters + Advanced Multi-Criteria Panel */}
       <div className="events-controls">
-        <div className="search-bar">
-          <span className="search-icon">🔍</span>
-          <input
-            type="text"
-            className="search-input"
-            placeholder={t('events.searchPlaceholder', 'Search events by title, city, or category...')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {searchTerm && (
-            <button type="button" className="clear-search-btn" onClick={() => setSearchTerm('')}>
-              ✕
-            </button>
-          )}
+        <div className="search-bar-row">
+          <div className="search-bar">
+            <span className="search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="text"
+              className="search-input"
+              placeholder={t('events.searchPlaceholder', 'Search events by title, city, or category...')}
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Search events"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                className="clear-search-btn"
+                onClick={() => {
+                  setSearchTerm('');
+                  setPage(1);
+                }}
+                aria-label="Clear search input"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className={`advanced-filter-toggle-btn ${showAdvancedFilters ? 'active' : ''}`}
+            onClick={() => setShowAdvancedFilters((prev) => !prev)}
+            aria-expanded={showAdvancedFilters}
+            aria-label="Toggle advanced filters panel"
+          >
+            <SlidersHorizontal size={18} />
+            <span>Filters</span>
+            {(locationFilter || startDateFilter || endDateFilter || languageFilter !== 'all') && (
+              <span className="filter-count-badge">
+                {[Boolean(locationFilter), Boolean(startDateFilter), Boolean(endDateFilter), languageFilter !== 'all'].filter(Boolean).length}
+              </span>
+            )}
+          </button>
         </div>
 
-        <div className="category-filter-tabs" style={{ flexWrap: 'wrap' }}>
+        {/* Category Tabs */}
+        <div className="category-filter-tabs" style={{ flexWrap: 'wrap' }} role="tablist" aria-label="Event category filters">
           {categories.map((cat) => (
             <button
               key={cat.key}
               type="button"
+              role="tab"
+              aria-selected={selectedCategory === cat.key}
               className={`category-tab ${selectedCategory === cat.key ? 'active' : ''}`}
-              onClick={() => setSelectedCategory(cat.key)}
+              onClick={() => handleCategorySelect(cat.key)}
             >
               {cat.label}
             </button>
           ))}
         </div>
+
+        {/* Collapsible Advanced Filters Drawer */}
+        {showAdvancedFilters && (
+          <div className="advanced-filters-panel animate-fade-in" role="region" aria-label="Advanced multi-criteria filters">
+            <div className="filter-grid">
+              {/* Location / City Filter */}
+              <div className="filter-field-group">
+                <label htmlFor="filter-location" className="filter-label">
+                  <MapPin size={15} /> City / Location:
+                </label>
+                <input
+                  id="filter-location"
+                  type="text"
+                  className="filter-input"
+                  placeholder="e.g. Bengaluru, Jaipur, Mysuru"
+                  value={locationFilter}
+                  onChange={(e) => {
+                    setLocationFilter(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+
+              {/* Start Date Filter */}
+              <div className="filter-field-group">
+                <label htmlFor="filter-start-date" className="filter-label">
+                  <Calendar size={15} /> From Date:
+                </label>
+                <input
+                  id="filter-start-date"
+                  type="date"
+                  className="filter-input"
+                  value={startDateFilter}
+                  onChange={(e) => {
+                    setStartDateFilter(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+
+              {/* End Date Filter */}
+              <div className="filter-field-group">
+                <label htmlFor="filter-end-date" className="filter-label">
+                  <Calendar size={15} /> To Date:
+                </label>
+                <input
+                  id="filter-end-date"
+                  type="date"
+                  className="filter-input"
+                  value={endDateFilter}
+                  onChange={(e) => {
+                    setEndDateFilter(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+
+              {/* Language Filter */}
+              <div className="filter-field-group">
+                <label htmlFor="filter-language" className="filter-label">
+                  <Globe size={15} /> Language:
+                </label>
+                <select
+                  id="filter-language"
+                  className="filter-select"
+                  value={languageFilter}
+                  onChange={(e) => {
+                    setLanguageFilter(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  {languages.map((lang) => (
+                    <option key={lang.key} value={lang.key}>
+                      {lang.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Page Size Selector */}
+              <div className="filter-field-group">
+                <label htmlFor="filter-page-size" className="filter-label">
+                  <Filter size={15} /> Items per page:
+                </label>
+                <select
+                  id="filter-page-size"
+                  className="filter-select"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                >
+                  <option value={6}>6 events</option>
+                  <option value={12}>12 events</option>
+                  <option value={24}>24 events</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Active Filter Chips / Pills Bar */}
+        {activeFilters.length > 0 && (
+          <div className="active-filters-bar animate-fade-in" aria-label="Active filters">
+            <span className="active-filters-label">Active filters ({activeFilters.length}):</span>
+            <div className="active-filters-list">
+              {activeFilters.map((flt) => (
+                <span key={flt.id} className="active-filter-pill">
+                  {flt.label}
+                  <button
+                    type="button"
+                    className="remove-filter-btn"
+                    onClick={flt.clear}
+                    aria-label={`Remove ${flt.id} filter`}
+                  >
+                    <X size={14} />
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                className="reset-all-filters-btn"
+                onClick={handleResetAllFilters}
+                aria-label="Reset all filters"
+              >
+                <RotateCcw size={14} /> Reset All
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Loading & Error States */}
@@ -238,8 +533,8 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
           <p>{t('events.noResults', 'No events found matching your search or category filter.')}</p>
         </div>
       ) : (
-        /* Event Cards Grid */
-        <div className="events-grid">
+        <div className="events-grid-wrapper">
+          <div className="events-grid">
           {events.map((evt) => {
             const seatsRemaining = Math.max(0, (evt.capacity || 100) - confirmedCount(evt));
             const isRsvped = hasActiveRsvp(evt) || isUserRsvped(evt);
@@ -334,7 +629,20 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
                     <button
                       type="button"
                       className="btn-secondary card-btn"
-                      onClick={() => onSelectEvent && onSelectEvent(evt)}
+                      onClick={() => {
+                        // Record click/view interaction
+                        if (user?._id) {
+                          recordInteraction({
+                            userId: user._id,
+                            eventId: evt._id || evt.id,
+                            interactionType: 'click',
+                            category: evt.category || '',
+                            city: evt.city || user?.city || '',
+                            language: evt.language || user?.preferredLanguage || 'en',
+                          });
+                        }
+                        onSelectEvent && onSelectEvent(evt);
+                      }}
                     >
                       View Details
                     </button>
@@ -344,8 +652,39 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
             );
           })}
         </div>
-      )}
-    </section>
+
+        {/* Pagination Controls Bar */}
+        {pagination.totalPages > 1 && (
+          <div className="pagination-bar" role="navigation" aria-label="Events pagination">
+            <button
+              type="button"
+              className="pagination-btn"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              aria-label="Previous page"
+            >
+              <ChevronLeft size={16} /> Previous
+            </button>
+
+            <span className="pagination-status">
+              Page <strong>{page}</strong> of <strong>{pagination.totalPages}</strong>
+              <span className="pagination-total-count">({pagination.total} events)</span>
+            </span>
+
+            <button
+              type="button"
+              className="pagination-btn"
+              disabled={page >= pagination.totalPages}
+              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+              aria-label="Next page"
+            >
+              Next <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
+      </div>
+    )}
+  </section>
   );
 }
 

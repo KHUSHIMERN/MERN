@@ -35,25 +35,76 @@ const getCategoryMatchPatterns = (cat) => {
  */
 const getEvents = async (req, res, next) => {
   try {
-    const { category, tags, published, startDate, endDate, search } = req.query;
+    const {
+      category,
+      tags,
+      published,
+      startDate,
+      endDate,
+      search,
+      location,
+      city,
+      language,
+      page: reqPage,
+      pageSize: reqPageSize,
+      limit: reqLimit
+    } = req.query;
+
+    const hasPagination = reqPage !== undefined || reqPageSize !== undefined || reqLimit !== undefined;
+    const page = Math.max(1, parseInt(reqPage, 10) || 1);
+    const pageSize = Math.max(1, parseInt(reqPageSize || reqLimit, 10) || 10);
 
     if (isConnectedToMongoDB()) {
-      const query = {};
+      const andConditions = [];
 
+      // 1. Category filter
       if (category && String(category).toLowerCase() !== 'all') {
         const patterns = getCategoryMatchPatterns(category);
         const regexList = patterns.map((p) => new RegExp(p, 'i'));
-        query.$or = [
-          { category: { $in: regexList } },
-          { title: { $in: regexList } },
-          { tags: { $in: regexList } }
-        ];
+        andConditions.push({
+          $or: [
+            { category: { $in: regexList } },
+            { title: { $in: regexList } },
+            { tags: { $in: regexList } }
+          ]
+        });
       }
 
+      // 2. Location / City filter
+      const locTerm = (location || city || '').trim();
+      if (locTerm && locTerm.toLowerCase() !== 'all') {
+        const locRegex = new RegExp(locTerm, 'i');
+        andConditions.push({
+          $or: [
+            { city: locRegex },
+            { 'location.placeName': locRegex },
+            { location: locRegex }
+          ]
+        });
+      }
+
+      // 3. Language filter
+      if (language && String(language).toLowerCase() !== 'all') {
+        const langClean = language.trim();
+        const langRegex = new RegExp(`^${langClean}$`, 'i');
+        if (langClean.toLowerCase() === 'hi') {
+          andConditions.push({
+            $or: [
+              { language: langRegex },
+              { title_hi: { $exists: true, $ne: '' } }
+            ]
+          });
+        } else {
+          andConditions.push({ language: langRegex });
+        }
+      }
+
+      // 4. Published filter
       if (published !== undefined && published !== 'all') {
-        query.published = String(published).toLowerCase() === 'true';
+        andConditions.push({ published: String(published).toLowerCase() === 'true' });
       }
 
+      // 5. Tags filter
       if (tags) {
         const tagList = Array.isArray(tags)
           ? tags
@@ -62,35 +113,72 @@ const getEvents = async (req, res, next) => {
               .map((t) => t.trim())
               .filter(Boolean);
         if (tagList.length > 0) {
-          query.tags = { $in: tagList };
+          andConditions.push({ tags: { $in: tagList } });
         }
       }
 
+      // 6. Date Range filter (startDate / endDate)
       if (startDate || endDate) {
-        query.startDate = {};
-        if (startDate) query.startDate.$gte = new Date(startDate);
-        if (endDate) query.startDate.$lte = new Date(endDate);
+        const dateCond = {};
+        if (startDate) {
+          const sDate = new Date(startDate);
+          if (!isNaN(sDate.getTime())) {
+            dateCond.$gte = sDate;
+          }
+        }
+        if (endDate) {
+          let eDate = new Date(endDate);
+          if (typeof endDate === 'string' && endDate.length === 10) {
+            eDate = new Date(`${endDate}T23:59:59.999Z`);
+          }
+          if (!isNaN(eDate.getTime())) {
+            dateCond.$lte = eDate;
+          }
+        }
+        if (Object.keys(dateCond).length > 0) {
+          andConditions.push({ startDate: dateCond });
+        }
       }
 
+      // 7. Search text filter
       if (search && search.trim()) {
         const regex = new RegExp(search.trim(), 'i');
-        const searchCond = [
-          { title: regex },
-          { description: regex },
-          { 'location.placeName': regex }
-        ];
-        if (query.$or) {
-          query.$and = [{ $or: query.$or }, { $or: searchCond }];
-          delete query.$or;
-        } else {
-          query.$or = searchCond;
-        }
+        andConditions.push({
+          $or: [
+            { title: regex },
+            { description: regex },
+            { city: regex },
+            { 'location.placeName': regex },
+            { tags: regex }
+          ]
+        });
       }
 
-      const events = await Event.find(query).sort({ startDate: 1, createdAt: -1 });
+      const query = andConditions.length > 0 ? { $and: andConditions } : {};
+
+      const total = await Event.countDocuments(query);
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+      let eventQuery = Event.find(query).sort({ startDate: 1, createdAt: -1 });
+      if (hasPagination) {
+        const skip = (page - 1) * pageSize;
+        eventQuery = eventQuery.skip(skip).limit(pageSize);
+      }
+
+      const events = await eventQuery;
       await Promise.all(events.map((event) => migrateLegacyRsvpsForEvent(event)));
       const enriched = await enrichEventsWithRsvp(events, req.user?._id);
-      return res.json({ success: true, count: enriched.length, data: enriched, events: enriched });
+
+      return res.json({
+        success: true,
+        count: enriched.length,
+        total,
+        page: hasPagination ? page : 1,
+        pageSize: hasPagination ? pageSize : total,
+        totalPages: hasPagination ? totalPages : 1,
+        data: enriched,
+        events: enriched
+      });
     }
 
     // In-memory fallback store mode
@@ -107,6 +195,28 @@ const getEvents = async (req, res, next) => {
             (Array.isArray(e.tags) && e.tags.some((t) => r.test(t)))
         )
       );
+    }
+
+    const locTerm = (location || city || '').trim();
+    if (locTerm && locTerm.toLowerCase() !== 'all') {
+      const locRegex = new RegExp(locTerm, 'i');
+      results = results.filter((e) => {
+        const cityMatch = e.city && locRegex.test(e.city);
+        const placeMatch = typeof e.location === 'object' && e.location?.placeName && locRegex.test(e.location.placeName);
+        const strLocMatch = typeof e.location === 'string' && locRegex.test(e.location);
+        return cityMatch || placeMatch || strLocMatch;
+      });
+    }
+
+    if (language && String(language).toLowerCase() !== 'all') {
+      const langClean = language.trim().toLowerCase();
+      results = results.filter((e) => {
+        const evLang = (e.language || 'en').toLowerCase();
+        if (langClean === 'hi') {
+          return evLang === 'hi' || Boolean(e.title_hi);
+        }
+        return evLang === langClean;
+      });
     }
 
     if (published !== undefined && published !== 'all') {
@@ -130,14 +240,20 @@ const getEvents = async (req, res, next) => {
 
     if (startDate) {
       const start = new Date(startDate).getTime();
-      results = results.filter(
-        (e) => e.startDate && new Date(e.startDate).getTime() >= start
-      );
+      if (!isNaN(start)) {
+        results = results.filter((e) => e.startDate && new Date(e.startDate).getTime() >= start);
+      }
     }
 
     if (endDate) {
-      const end = new Date(endDate).getTime();
-      results = results.filter((e) => e.startDate && new Date(e.startDate).getTime() <= end);
+      let eDate = new Date(endDate);
+      if (typeof endDate === 'string' && endDate.length === 10) {
+        eDate = new Date(`${endDate}T23:59:59.999Z`);
+      }
+      const end = eDate.getTime();
+      if (!isNaN(end)) {
+        results = results.filter((e) => e.startDate && new Date(e.startDate).getTime() <= end);
+      }
     }
 
     if (search && search.trim()) {
@@ -145,13 +261,33 @@ const getEvents = async (req, res, next) => {
       results = results.filter((e) => {
         const titleMatch = e.title && e.title.toLowerCase().includes(term);
         const descMatch = e.description && e.description.toLowerCase().includes(term);
+        const cityMatch = e.city && e.city.toLowerCase().includes(term);
         const locString = typeof e.location === 'object' ? e.location.placeName : String(e.location);
         const locMatch = locString && locString.toLowerCase().includes(term);
-        return titleMatch || descMatch || locMatch;
+        const tagMatch = Array.isArray(e.tags) && e.tags.some((t) => t.toLowerCase().includes(term));
+        return titleMatch || descMatch || cityMatch || locMatch || tagMatch;
       });
     }
 
-    return res.json({ success: true, count: results.length, data: results, events: results });
+    const total = results.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    let paginatedResults = results;
+    if (hasPagination) {
+      const skip = (page - 1) * pageSize;
+      paginatedResults = results.slice(skip, skip + pageSize);
+    }
+
+    return res.json({
+      success: true,
+      count: paginatedResults.length,
+      total,
+      page: hasPagination ? page : 1,
+      pageSize: hasPagination ? pageSize : total,
+      totalPages: hasPagination ? totalPages : 1,
+      data: paginatedResults,
+      events: paginatedResults
+    });
   } catch (error) {
     next(error);
   }
@@ -261,6 +397,8 @@ const createEvent = async (req, res, next) => {
       location,
       published,
       image,
+      imageUrl,
+      imageUrlAlt,
       itemKey,
       date,
       seatsLeft
@@ -322,6 +460,8 @@ const createEvent = async (req, res, next) => {
       ? tags.split(',').map((t) => t.trim()).filter(Boolean)
       : [];
 
+    const finalImage = imageUrl || image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87';
+
     const newEventData = {
       id: `evt-${Date.now()}`,
       itemKey: itemKey || `evt_${Date.now()}`,
@@ -334,7 +474,9 @@ const createEvent = async (req, res, next) => {
       endDate: parsedEnd,
       location: locationObj,
       published: Boolean(published),
-      image: image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87',
+      image: finalImage,
+      imageUrl: finalImage,
+      imageUrlAlt: (imageUrlAlt || '').trim(),
       date: date || parsedStart.toISOString().split('T')[0],
       seatsLeft: seatsLeft !== undefined ? Number(seatsLeft) : 50,
       createdAt: new Date(),

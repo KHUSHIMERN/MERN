@@ -13,6 +13,7 @@ import I18nProvider from './components/I18nProvider';
 import Header from './components/Header';
 import HeroSection from './components/HeroSection';
 import EventList from './components/EventList';
+import AIRecommendationSection from './components/AIRecommendationSection';
 import OrganizerCheckIn from './components/OrganizerCheckIn';
 import EventRegistrationForm from './components/EventRegistrationForm';
 import FallbackTestDemo from './components/FallbackTestDemo';
@@ -166,11 +167,21 @@ function AppContent() {
             />
 
             {activeTab === 'events' && (
-              <EventList
-                refreshKey={eventsRefreshKey}
-                onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
-                onRequireLogin={() => setView('login')}
-              />
+              <>
+                {/* AI Recommendations — shown above the events list, visible to all users.
+                    Authenticated users get personalised results; guests get popular local events. */}
+                <AIRecommendationSection
+                  refreshSignal={eventsRefreshKey}
+                  onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+                  onRSVP={(evt) => handleOpenRegisterModal(evt)}
+                />
+
+                <EventList
+                  refreshKey={eventsRefreshKey}
+                  onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+                  onRequireLogin={() => setView('login')}
+                />
+              </>
             )}
 
             {activeTab === 'checkin' && (

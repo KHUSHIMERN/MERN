@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { User, Mail, Lock, Shield, UserCheck, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export default function RegisterForm({ onSwitchToLogin }) {
-  const { register } = useAuth();
+export default function RegisterForm({ onSwitchToLogin, hideCardWrapper = false }) {
+  const { register, verifyEmail } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -17,6 +17,9 @@ export default function RegisterForm({ onSwitchToLogin }) {
   const [apiError, setApiError] = useState('');
   const [apiSuccess, setApiSuccess] = useState('');
   const [verificationLink, setVerificationLink] = useState('');
+  const [verificationToken, setVerificationToken] = useState('');
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const [verifying, setVerifying] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -60,6 +63,7 @@ export default function RegisterForm({ onSwitchToLogin }) {
     setApiError('');
     setApiSuccess('');
     setVerificationLink('');
+    setVerificationToken('');
 
     if (!validateForm()) {
       return;
@@ -80,13 +84,16 @@ export default function RegisterForm({ onSwitchToLogin }) {
         setApiError(result.message || 'Registration failed. Please try again.');
       } else {
         const responseData = result.data || {};
+        const email = formData.email.trim();
+        setRegisteredEmail(email);
         setApiSuccess(responseData.message || 'Registration successful!');
-        if (responseData.verificationLink || responseData.backendVerifyLink) {
-          setVerificationLink(responseData.verificationLink || responseData.backendVerifyLink);
+        if (responseData.backendVerifyLink || responseData.verificationLink) {
+          setVerificationLink(responseData.backendVerifyLink || responseData.verificationLink);
         }
+        if (responseData.verificationToken) setVerificationToken(responseData.verificationToken);
         setFormData({
           name: '',
-          email: '',
+          email,
           password: '',
           confirmPassword: '',
           role: 'resident',
@@ -100,8 +107,24 @@ export default function RegisterForm({ onSwitchToLogin }) {
     }
   };
 
-  return (
-    <div className="auth-card">
+  const handleVerifyNow = async () => {
+    if (!verificationToken) return;
+    setVerifying(true);
+    setApiError('');
+    const result = await verifyEmail(verificationToken);
+    setVerifying(false);
+    if (!result.success) {
+      setApiError(result.message);
+      return;
+    }
+    setApiSuccess('Email verified successfully! Redirecting you to sign in...');
+    setVerificationLink('');
+    setVerificationToken('');
+    setTimeout(() => onSwitchToLogin?.(registeredEmail), 700);
+  };
+
+  const content = (
+    <>
       <div className="auth-header">
         <span className="auth-badge">
           <UserCheck size={14} /> Tier 2-4 Community Hub
@@ -131,11 +154,16 @@ export default function RegisterForm({ onSwitchToLogin }) {
                 </a>
               </div>
             )}
+            {verificationToken && (
+              <button type="button" className="btn-primary" onClick={handleVerifyNow} disabled={verifying} style={{ marginTop: '10px', width: '100%' }}>
+                <UserCheck size={16} /> {verifying ? 'Verifying account...' : 'Verify Account Now'}
+              </button>
+            )}
             <div style={{ marginTop: '12px' }}>
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={onSwitchToLogin}
+                onClick={() => onSwitchToLogin?.(registeredEmail || formData.email)}
                 style={{ fontSize: '0.85rem', padding: '6px 12px' }}
               >
                 Go to Sign In
@@ -264,6 +292,12 @@ export default function RegisterForm({ onSwitchToLogin }) {
           Sign In
         </button>
       </div>
-    </div>
+    </>
   );
+
+  if (hideCardWrapper) {
+    return <div className="auth-form-inner">{content}</div>;
+  }
+
+  return <div className="auth-card">{content}</div>;
 }

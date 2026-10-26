@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const registrationSchema = new mongoose.Schema(
   {
@@ -17,5 +17,5 @@ const registrationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export const Registration = mongoose.models.Registration || mongoose.model('Registration', registrationSchema);
-export default Registration;
+const Registration = mongoose.models.Registration || mongoose.model('Registration', registrationSchema);
+module.exports = Registration;

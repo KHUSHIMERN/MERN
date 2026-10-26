@@ -1,12 +1,13 @@
-import { isConnectedToMongoDB } from '../config/db.js';
-import Registration from '../models/Registration.js';
-import { memoryRegistrations } from '../data/seedEvents.js';
+const mongoose = require('mongoose');
+const Registration = require('../models/Registration');
+const { memoryRegistrations } = require('../data/seedEvents');
+const isConnectedToMongoDB = () => mongoose.connection.readyState === 1;
 
 /**
  * POST /api/registrations
  * Submit a registration for an event.
  */
-export const registerForEvent = async (req, res, next) => {
+const registerForEvent = async (req, res, next) => {
   try {
     const { eventId, fullName, email, ticketType, attendees, notes, agreeTerms } = req.body;
 
@@ -30,7 +31,7 @@ export const registerForEvent = async (req, res, next) => {
       createdAt: new Date().toISOString()
     };
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const dbRegistration = await Registration.create(regRecord);
       return res.status(201).json({
         success: true,
@@ -54,9 +55,9 @@ export const registerForEvent = async (req, res, next) => {
  * GET /api/registrations
  * Retrieve all registrations.
  */
-export const getRegistrations = async (req, res, next) => {
+const getRegistrations = async (req, res, next) => {
   try {
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const records = await Registration.find({}).sort({ createdAt: -1 });
       return res.json({ success: true, count: records.length, data: records });
     }
@@ -65,4 +66,9 @@ export const getRegistrations = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+module.exports = {
+  registerForEvent,
+  getRegistrations
 };

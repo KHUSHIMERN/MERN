@@ -1,17 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { TimezoneProvider } from './context/TimezoneContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
-import RegisterForm from './components/RegisterForm';
-import LoginForm from './components/LoginForm';
+import { ToastProvider } from './context/ToastContext';
+import { NotificationProvider } from './context/NotificationContext';
+import AuthPage from './components/AuthPage';
 import ProfilePage from './components/ProfilePage';
 import AdminRoleRequests from './components/AdminRoleRequests';
 import I18nProvider from './components/I18nProvider';
 import Header from './components/Header';
 import HeroSection from './components/HeroSection';
 import EventList from './components/EventList';
+import AIRecommendationSection from './components/AIRecommendationSection';
 import OrganizerCheckIn from './components/OrganizerCheckIn';
 import EventRegistrationForm from './components/EventRegistrationForm';
 import FallbackTestDemo from './components/FallbackTestDemo';
@@ -19,6 +21,23 @@ import Footer from './components/Footer';
 import './App.css';
 
 const theme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#6366f1'
+    },
+    secondary: {
+      main: '#8b5cf6'
+    },
+    background: {
+      default: '#0b0f19',
+      paper: '#1e293b'
+    },
+    text: {
+      primary: '#f8fafc',
+      secondary: '#94a3b8'
+    }
+  },
   typography: {
     htmlFontSize: 16,
     fontFamily: '"Plus Jakarta Sans", "Roboto", "Helvetica", "Arial", sans-serif',
@@ -40,30 +59,41 @@ const theme = createTheme({
       styleOverrides: {
         html: {
           fontSize: '100%'
+        },
+        body: {
+          backgroundColor: '#0b0f19',
+          color: '#f8fafc'
         }
       }
-    }
-  },
-  palette: {
-    primary: {
-      main: '#1d4ed8'
-    },
-    secondary: {
-      main: '#374151'
-    },
-    background: {
-      default: '#f8fafc'
     }
   }
 });
 
 function AppContent() {
   const { t } = useTranslation();
-  const { user, logout } = useAuth();
-  const [view, setView] = useState('events'); // 'events' | 'register' | 'login' | 'profile' | 'admin-requests'
+  const { user, loading: authLoading, logout } = useAuth();
+  const [view, setView] = useState(() => new URLSearchParams(window.location.search).get('verified') === 'true' ? 'login' : 'register');
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedEventForModal, setSelectedEventForModal] = useState(null);
+  const [eventsRefreshKey, setEventsRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('verified') === 'true') {
+      setView('login');
+      params.delete('verified');
+      const query = params.toString();
+      window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authLoading && user && (view === 'login' || view === 'register')) {
+      setView('events');
+      setActiveTab('events');
+    }
+  }, [authLoading, user, view]);
 
   const handleOpenRegisterModal = (evt = null) => {
     setSelectedEventForModal(evt);
@@ -82,6 +112,12 @@ function AppContent() {
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const handleNotificationEvent = (event) => {
+    setView('events');
+    setActiveTab('events');
+    handleOpenRegisterModal(event);
+  };
+
   return (
     <div className="app-layout">
       {/* Skip-to-Content Link for Keyboard Accessibility */}
@@ -94,6 +130,7 @@ function AppContent() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenRegisterModal={() => handleOpenRegisterModal()}
+        onOpenNotificationEvent={handleNotificationEvent}
         user={user}
         logout={logout}
         view={view}
@@ -102,23 +139,20 @@ function AppContent() {
 
       {/* Main View Area */}
       <main id="main-content" tabIndex={-1} className="main-content">
-        {view === 'register' && (
+        {(view === 'register' || view === 'login') && (
           <div className="auth-container-wrapper">
-            <RegisterForm onSwitchToLogin={() => setView('login')} />
-          </div>
-        )}
-
-        {view === 'login' && (
-          <div className="auth-container-wrapper">
-            <LoginForm
-              onSwitchToRegister={() => setView('register')}
+            <AuthPage
+              initialMode={view === 'register' ? 'register' : 'login'}
               onLoginSuccess={() => setView('events')}
             />
           </div>
         )}
 
         {view === 'profile' && (
-          <ProfilePage onNavigateHome={() => setView('events')} />
+          <ProfilePage
+            onNavigateHome={() => setView('events')}
+            onRsvpChanged={() => setEventsRefreshKey((key) => key + 1)}
+          />
         )}
 
         {view === 'admin-requests' && (
@@ -133,16 +167,25 @@ function AppContent() {
             />
 
             {activeTab === 'events' && (
-              <EventList
-                onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
-                onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
-              />
+              <>
+                {/* AI Recommendations — shown above the events list, visible to all users.
+                    Authenticated users get personalised results; guests get popular local events. */}
+                <AIRecommendationSection
+                  refreshSignal={eventsRefreshKey}
+                  onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+                  onRSVP={(evt) => handleOpenRegisterModal(evt)}
+                />
+
+                <EventList
+                  refreshKey={eventsRefreshKey}
+                  onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+                  onRequireLogin={() => setView('login')}
+                />
+              </>
             )}
 
             {activeTab === 'checkin' && (
-              <OrganizerCheckIn
-                onSelectEventForRegister={(evt) => handleOpenRegisterModal(evt)}
-              />
+              <OrganizerCheckIn />
             )}
 
             {activeTab === 'fallbackDemo' && <FallbackTestDemo />}
@@ -156,6 +199,11 @@ function AppContent() {
           selectedEvent={selectedEventForModal}
           onClose={handleCloseRegisterModal}
           onNavigateProfile={() => setView('profile')}
+          onRsvpChanged={() => setEventsRefreshKey((key) => key + 1)}
+          onRequireLogin={() => {
+            handleCloseRegisterModal();
+            setView('login');
+          }}
         />
       )}
 
@@ -172,9 +220,13 @@ export function App() {
         <CssBaseline />
         <LanguageProvider>
           <AuthProvider>
-            <TimezoneProvider>
-              <AppContent />
-            </TimezoneProvider>
+            <NotificationProvider>
+              <ToastProvider>
+                <TimezoneProvider>
+                  <AppContent />
+                </TimezoneProvider>
+              </ToastProvider>
+            </NotificationProvider>
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>

@@ -1,53 +1,23 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const auditLogSchema = new mongoose.Schema(
   {
-    action: { type: String, required: true }, // 'ATTENDANCE_UPDATE' or 'BULK_ATTENDANCE_UPDATE'
-    eventId: { type: String, required: true },
-    registrationId: { type: String, required: true },
-    attendeeName: { type: String },
-    attendeeEmail: { type: String },
-    statusPresent: { type: Boolean, required: true },
+    action: { type: String, required: true }, // 'ATTENDANCE_UPDATE', 'ROLE_APPROVE', etc.
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
+    targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
+    eventId: { type: String, required: false },
+    registrationId: { type: String, required: false },
+    attendeeName: { type: String, default: '' },
+    attendeeEmail: { type: String, default: '' },
+    statusPresent: { type: Boolean, default: false },
     checkInAt: { type: Date, default: null },
     performedBy: { type: String, default: 'Organizer Admin' },
     userRole: { type: String, default: 'organizer' },
+    details: { type: String, default: '' },
     timestamp: { type: Date, default: Date.now }
   },
   { timestamps: true }
 );
 
-export const AuditLog = mongoose.models.AuditLog || mongoose.model('AuditLog', auditLogSchema);
-export default AuditLog;
-const mongoose = require('mongoose');
-
-const auditLogSchema = new mongoose.Schema(
-  {
-    action: {
-      type: String,
-      required: true,
-    },
-    adminId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    targetUserId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    details: {
-      type: String,
-      default: '',
-    },
-    timestamp: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
-
-module.exports = mongoose.model('AuditLog', auditLogSchema);
+const AuditLog = mongoose.models.AuditLog || mongoose.model('AuditLog', auditLogSchema);
+module.exports = AuditLog;

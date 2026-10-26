@@ -1,72 +1,63 @@
 const Event = require('../models/Event');
 const User = require('../models/User');
+const { getPersonalizedRecommendations } = require('../services/recommendationService');
+const { INITIAL_EVENTS } = require('../data/seedEvents');
+
+const isConnectedToMongoDB = () => {
+  const mongoose = require('mongoose');
+  return mongoose.connection.readyState === 1;
+};
 
 // @desc    Get AI-powered personalized event recommendations
 // @route   POST /api/ai/recommendations
 exports.getRecommendations = async (req, res) => {
   try {
-    const { userId, userCity, userInterests } = req.body;
+    const { userId, userCity, userInterests, language, limit } = req.body;
 
     let user = null;
-    if (userId) {
+    if (userId && isConnectedToMongoDB()) {
       user = await User.findById(userId).populate('rsvpedEvents');
     }
 
-    const city = userCity || (user ? user.city : 'Jaipur');
-    const interests = userInterests || (user ? user.interests : ['career', 'workshop']);
+    let allEvents = [];
+    if (isConnectedToMongoDB()) {
+      allEvents = await Event.find({ published: true });
+    }
+    if (!allEvents.length) {
+      allEvents = [...INITIAL_EVENTS];
+    }
 
-    const allEvents = await Event.find({});
+    const targetCity = userCity || user?.city || 'Jaipur';
+    const targetLanguage = language || user?.preferredLanguage || user?.language || 'en';
 
-    // Intelligent recommendation engine scoring algorithm
-    const scoredEvents = allEvents.map(event => {
-      let score = 0;
-      let reasons = [];
+    // Build synthesized user object if user is not in DB but profile parameters are provided
+    const userContext = user || {
+      city: targetCity,
+      interests: userInterests || ['Career & Jobs', 'Skill Workshops'],
+      preferredLanguage: targetLanguage,
+      rsvpedEvents: [],
+    };
 
-      // Category interest match (Weight: 40 points)
-      if (interests.includes(event.category)) {
-        score += 40;
-        reasons.push(`Matches your interest in ${event.category}`);
-      }
-
-      // City / Location match (Weight: 35 points)
-      if (event.city && event.city.toLowerCase() === city.toLowerCase()) {
-        score += 35;
-        reasons.push(`Located in your preferred city (${event.city})`);
-      } else if (event.location && event.location.toLowerCase().includes('online')) {
-        score += 25;
-        reasons.push('Virtual / Online accessible event');
-      }
-
-      // Past RSVP similarity (Weight: 15 points)
-      if (user && user.rsvpedEvents && user.rsvpedEvents.length > 0) {
-        const hasRsvpedCategory = user.rsvpedEvents.some(r => r.category === event.category);
-        if (hasRsvpedCategory) {
-          score += 15;
-          reasons.push(`Similar to events you previously registered for`);
-        }
-      }
-
-      // Recency / High capacity availability bonus
-      if (event.capacity - event.attendeesCount > 10) {
-        score += 10;
-      }
-
-      return {
-        event,
-        matchScore: score,
-        recommendationReason: reasons.join(' • ') || 'Popular community event in your region'
-      };
+    const result = await getPersonalizedRecommendations({
+      user: userContext,
+      events: allEvents,
+      limit: limit || 3,
+      targetCity,
+      targetLanguage,
     });
-
-    // Sort by highest match score
-    scoredEvents.sort((a, b) => b.matchScore - a.matchScore);
-
-    const topRecommendations = scoredEvents.slice(0, 3);
 
     res.json({
       success: true,
-      aiPowered: Boolean(process.env.OPENAI_API_KEY),
-      data: topRecommendations
+      aiPowered: true,
+      source: result.source,
+      isFallback: result.isFallback,
+      data: result.recommendations.map((r) => ({
+        event: r.event,
+        matchScore: r.matchScore,
+        similarityScore: r.similarityScore,
+        recommendationReason: r.reason,
+      })),
+      recommendations: result.recommendations,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

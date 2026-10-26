@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import LANGUAGES from '../constants/languages';
 
-export function LanguageSelector({ variant = 'dropdown' }) {
+export function LanguageSelector({ variant = 'dropdown', id = 'language-select' }) {
   const { i18n, t } = useTranslation();
 
   const currentLanguage = (i18n.language || 'en').slice(0, 2);
@@ -55,13 +55,13 @@ export function LanguageSelector({ variant = 'dropdown' }) {
       {/* Dropdown Select Mode */}
       {(variant === 'dropdown' || variant === 'both') && (
         <div className="language-dropdown-container">
-          <label htmlFor="language-select" className="sr-only">
+          <label htmlFor={id} className="sr-only">
             {t('header.languageLabel', 'Language:')}
           </label>
           <div className="select-box-wrapper">
             <span className="globe-icon">🌐</span>
             <select
-              id="language-select"
+              id={id}
               className="language-select-dropdown"
               value={currentLanguage.slice(0, 2)}
               onChange={(e) => handleLanguageChange(e.target.value)}

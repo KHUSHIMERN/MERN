@@ -8,7 +8,6 @@ const {
   deleteEvent,
   publishEvent,
   searchEvents,
-  rsvpEvent,
   getOrganizerAttendanceMetrics,
   exportOrganizerAttendanceMetricsCSV
 } = require('../controllers/eventController');
@@ -20,24 +19,27 @@ const {
   getAttendanceAuditLogs
 } = require('../controllers/attendanceController');
 
-const { requireOrganizer } = require('../middleware/authRole');
+const { auth, optionalAuth, requireVerified, requireRole } = require('../middleware/auth');
+const privileged = [auth, requireVerified, requireRole('organizer', 'admin')];
 
 // General Event REST API Endpoints
-router.get('/', getEvents);
-router.post('/', createEvent);
+router.get('/', optionalAuth, getEvents);
+router.post('/', ...privileged, createEvent);
 router.get('/search', searchEvents);
+
+// Organizer attendance metrics endpoints
 router.get('/organizer/:id/attendance-metrics/export', exportOrganizerAttendanceMetricsCSV);
 router.get('/organizer/:id/attendance-metrics', getOrganizerAttendanceMetrics);
-router.get('/:id', getEventById);
-router.put('/:id', updateEvent);
-router.delete('/:id', deleteEvent);
-router.patch('/:id/publish', publishEvent);
-router.post('/:id/rsvp', rsvpEvent);
 
-// Organizer attendance metrics and check-in endpoints
-router.get('/:id/attendance', requireOrganizer, getEventAttendance);
-router.patch('/:id/attendance', requireOrganizer, updateEventAttendance);
-router.get('/:id/attendance/export', requireOrganizer, exportEventAttendance);
-router.get('/:id/attendance/audit-logs', requireOrganizer, getAttendanceAuditLogs);
+router.get('/:id', optionalAuth, getEventById);
+router.put('/:id', ...privileged, updateEvent);
+router.delete('/:id', ...privileged, deleteEvent);
+router.patch('/:id/publish', ...privileged, publishEvent);
+
+// Organizer-only Attendance Tracking & Check-in Endpoints
+router.get('/:id/attendance', ...privileged, getEventAttendance);
+router.patch('/:id/attendance', ...privileged, updateEventAttendance);
+router.get('/:id/attendance/export', ...privileged, exportEventAttendance);
+router.get('/:id/attendance/audit-logs', ...privileged, getAttendanceAuditLogs);
 
 module.exports = router;

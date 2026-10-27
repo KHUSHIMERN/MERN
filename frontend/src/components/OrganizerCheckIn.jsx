@@ -1,13 +1,25 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import RegistrationDesk from './RegistrationDesk';
+import { useAuth } from '../context/AuthContext';
+import authenticatedFetch from '../utils/authenticatedFetch';
 
-export function OrganizerCheckIn({ onSelectEventForRegister }) {
+const hasRegistrations = (event) => {
+  if (!event) return false;
+  const confirmed = Number(event.confirmedCount ?? event.attendeesCount ?? event.rsvpedUsers?.length ?? 0);
+  const waitlisted = Number(event.waitlistCount ?? event.waitlistUsers?.length ?? 0);
+  return confirmed + waitlisted > 0;
+};
+
+export function OrganizerCheckIn() {
+  const { user } = useAuth();
   // State Management
   const [events, setEvents] = useState([]);
-  const [selectedEventId, setSelectedEventId] = useState('evt-1');
+  const [selectedEventId, setSelectedEventId] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [workspaceTab, setWorkspaceTab] = useState('attendance');
+  const defaultedTabEventId = useRef('');
   
-  // Role Simulation Switcher (organizer vs attendee for testing 403 authorization)
-  const [userRole, setUserRole] = useState('organizer');
+  const userRole = user?.role === 'admin' ? 'organizer' : user?.role;
 
   // Attendance Data & Summary Stats
   const [attendanceData, setAttendanceData] = useState([]);
@@ -60,48 +72,49 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const res = await fetch('/api/events');
+        const res = await authenticatedFetch('/api/events');
         if (res.ok) {
           const json = await res.json();
           if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            setEvents(json.data);
-            setSelectedEventId(json.data[0].id || json.data[0].itemKey || 'evt-1');
+            const manageableEvents = (user?.role === 'admin'
+              ? json.data
+              : json.data.filter((event) => {
+                  const ownerId = event.organizer?._id || event.organizer || event.organizerId;
+                  return ownerId?.toString() === user?._id?.toString();
+                }))
+              .sort((left, right) => Number(hasRegistrations(right)) - Number(hasRegistrations(left)));
+            setEvents(manageableEvents);
+            setSelectedEventId((currentId) => {
+              const currentStillAvailable = manageableEvents.some((event) =>
+                [event._id, event.id, event.itemKey].filter(Boolean).some((id) => id.toString() === currentId?.toString())
+              );
+              return currentStillAvailable ? currentId : (manageableEvents[0]?._id || '');
+            });
             return;
           }
         }
       } catch (err) {
-        console.warn('Failed to fetch events from API, using fallback events:', err);
+        console.warn('Failed to fetch organizer events:', err);
       }
-      
-      // Fallback default events list
-      const defaultEvts = [
-        { id: 'evt-1', title: 'Tech Summit Bengaluru 2026', category: 'tech', date: '2026-08-15' },
-        { id: 'evt-2', title: 'Karnataka Cultural & Folk Festival', category: 'culture', date: '2026-08-22' },
-        { id: 'evt-3', title: 'Fullstack React & Node Workshop', category: 'workshop', date: '2026-09-02' },
-        { id: 'evt-4', title: 'Green City Cleanliness Drive', category: 'charity', date: '2026-09-10' }
-      ];
-      setEvents(defaultEvts);
+      setEvents([]);
+      setSelectedEventId('');
     };
     fetchEvents();
-  }, []);
+    const refreshTimer = window.setInterval(fetchEvents, 15000);
+    return () => window.clearInterval(refreshTimer);
+  }, [user?._id, user?.role]);
 
   // Update selected event object when ID changes
   useEffect(() => {
-    const found = events.find((e) => e.id === selectedEventId || e.itemKey === selectedEventId);
-    setSelectedEvent(found || events[0] || null);
+    const found = events.find((e) => e._id === selectedEventId || e.id === selectedEventId || e.itemKey === selectedEventId);
+    const nextEvent = found || events[0] || null;
+    setSelectedEvent(nextEvent);
+    const nextEventId = nextEvent?._id || nextEvent?.id || nextEvent?.itemKey || '';
+    if (nextEventId && defaultedTabEventId.current !== nextEventId) {
+      defaultedTabEventId.current = nextEventId;
+      setWorkspaceTab(hasRegistrations(nextEvent) ? 'registrations' : 'attendance');
+    }
   }, [events, selectedEventId]);
-
-  const getAuthHeaders = (role = userRole) => {
-    const token = localStorage.getItem('cc_token');
-    const h = {
-      'Content-Type': 'application/json',
-      'X-User-Role': role,
-      'X-User-Name': 'Organizer Admin',
-      'X-User-Email': 'organizer@eventpulse.org'
-    };
-    if (token) h['Authorization'] = `Bearer ${token}`;
-    return h;
-  };
 
   // 2. Fetch Attendance Data from API
   const fetchAttendance = useCallback(async () => {
@@ -121,8 +134,13 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
         sortOrder
       });
 
-      const res = await fetch(`/api/events/${selectedEventId}/attendance?${queryParams.toString()}`, {
-        headers: getAuthHeaders()
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance?${queryParams.toString()}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin',
+          'X-User-Email': 'organizer@eventpulse.org'
+        }
       });
 
       if (res.status === 403) {
@@ -152,15 +170,21 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
   }, [selectedEventId, userRole, search, rsvpFilter, attendanceFilter, page, limit, sortBy, sortOrder]);
 
   useEffect(() => {
+    if (workspaceTab !== 'attendance') return undefined;
     fetchAttendance();
-  }, [fetchAttendance]);
+    const refreshTimer = window.setInterval(fetchAttendance, 15000);
+    return () => window.clearInterval(refreshTimer);
+  }, [fetchAttendance, workspaceTab]);
 
   // 3. Fetch Audit Logs
   const fetchAuditLogs = useCallback(async () => {
     if (!selectedEventId || userRole !== 'organizer') return;
     try {
-      const res = await fetch(`/api/events/${selectedEventId}/attendance/audit-logs`, {
-        headers: getAuthHeaders()
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance/audit-logs`, {
+        headers: {
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin'
+        }
       });
       if (res.ok) {
         const json = await res.json();
@@ -194,25 +218,28 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
   };
 
   // Selection Checkboxes Logic
-  const handleSelectRow = (regId) => {
+  const handleSelectRow = (regId, isWaitlist = false) => {
+    if (isWaitlist) return;
     setSelectedRegIds((prev) =>
       prev.includes(regId) ? prev.filter((id) => id !== regId) : [...prev, regId]
     );
   };
 
   const handleSelectAllOnPage = (e) => {
+    const eligiblePageRecords = attendanceData.filter((record) => record.rsvpStatus !== 'waitlist');
     if (e.target.checked) {
-      const pageIds = attendanceData.map((r) => r._id || r.id);
+      const pageIds = eligiblePageRecords.map((r) => r._id || r.id);
       setSelectedRegIds(Array.from(new Set([...selectedRegIds, ...pageIds])));
     } else {
-      const pageIds = new Set(attendanceData.map((r) => r._id || r.id));
+      const pageIds = new Set(eligiblePageRecords.map((r) => r._id || r.id));
       setSelectedRegIds((prev) => prev.filter((id) => !pageIds.has(id)));
     }
   };
 
+  const eligiblePageRecords = attendanceData.filter((record) => record.rsvpStatus !== 'waitlist');
   const isAllPageSelected =
-    attendanceData.length > 0 &&
-    attendanceData.every((r) => selectedRegIds.includes(r._id || r.id));
+    eligiblePageRecords.length > 0 &&
+    eligiblePageRecords.every((r) => selectedRegIds.includes(r._id || r.id));
 
   // 4. Per-row Present/Absent Toggle
   const handleToggleSingleAttendance = async (regId, currentStatus, attendeeName) => {
@@ -239,9 +266,14 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
     );
 
     try {
-      const res = await fetch(`/api/events/${selectedEventId}/attendance`, {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance`, {
         method: 'PATCH',
-        headers: getAuthHeaders(),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin',
+          'X-User-Email': 'organizer@eventpulse.org'
+        },
         body: JSON.stringify({
           registrationId: regId,
           statusPresent: nextStatus
@@ -288,9 +320,14 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
     setIsLoading(true);
 
     try {
-      const res = await fetch(`/api/events/${selectedEventId}/attendance`, {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance`, {
         method: 'PATCH',
-        headers: getAuthHeaders(),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin',
+          'X-User-Email': 'organizer@eventpulse.org'
+        },
         body: JSON.stringify({
           registrationIds: selectedRegIds,
           statusPresent: targetStatus
@@ -325,13 +362,25 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
       return;
     }
 
-    const pageIds = attendanceData.map((r) => r._id || r.id);
+    const pageIds = attendanceData
+      .filter((record) => record.rsvpStatus !== 'waitlist')
+      .map((record) => record._id || record.id);
+
+    if (pageIds.length === 0) {
+      showToast('Waitlisted residents cannot be checked in until they are promoted.', 'info');
+      return;
+    }
 
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/events/${selectedEventId}/attendance`, {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance`, {
         method: 'PATCH',
-        headers: getAuthHeaders(),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin',
+          'X-User-Email': 'organizer@eventpulse.org'
+        },
         body: JSON.stringify({
           registrationIds: pageIds,
           statusPresent: true
@@ -369,8 +418,11 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
         attendanceStatus: attendanceFilter
       });
 
-      const res = await fetch(`/api/events/${selectedEventId}/attendance/export?${queryParams.toString()}`, {
-        headers: getAuthHeaders()
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance/export?${queryParams.toString()}`, {
+        headers: {
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin'
+        }
       });
 
       if (res.status === 403) {
@@ -426,7 +478,12 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
     <div className="checkin-container">
       {/* Toast Feedback Banner */}
       {toast && (
-        <div className={`toast-notification toast-${toast.type}`}>
+        <div
+          className={`toast-notification toast-${toast.type}`}
+          role={toast.type === 'error' ? 'alert' : 'status'}
+          aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+          aria-atomic="true"
+        >
           <span className="toast-icon">
             {toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : toast.type === 'warning' ? '⚠️' : 'ℹ️'}
           </span>
@@ -471,7 +528,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
             }}
           >
             {events.map((evt) => (
-              <option key={evt.id || evt.itemKey} value={evt.id || evt.itemKey}>
+              <option key={evt._id || evt.id || evt.itemKey} value={evt._id || evt.id || evt.itemKey}>
                 {evt.title} ({evt.date || 'Upcoming'})
               </option>
             ))}
@@ -479,16 +536,6 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
         </div>
 
         <div className="action-buttons-group">
-          {onSelectEventForRegister && (
-            <button
-              type="button"
-              className="btn-action btn-secondary"
-              onClick={() => onSelectEventForRegister(selectedEvent)}
-            >
-              ➕ Register Attendee
-            </button>
-          )}
-
           <button
             type="button"
             className="btn-action btn-export"
@@ -515,15 +562,30 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
         </div>
       </div>
 
+      <div className="organizer-workspace-tabs" role="tablist" aria-label="Organizer event workspace">
+        <button type="button" role="tab" aria-selected={workspaceTab === 'attendance'} className={workspaceTab === 'attendance' ? 'active' : ''} onClick={() => setWorkspaceTab('attendance')}>
+          Check-in & Attendance
+        </button>
+        <button type="button" role="tab" aria-selected={workspaceTab === 'registrations'} className={workspaceTab === 'registrations' ? 'active' : ''} onClick={() => setWorkspaceTab('registrations')}>
+          Registration Desk
+        </button>
+      </div>
+
+      {workspaceTab === 'registrations' && (
+        selectedEventId
+          ? <RegistrationDesk eventId={selectedEventId} event={selectedEvent} />
+          : <div className="registration-desk-state">No events owned by this organizer.</div>
+      )}
+
       {/* 403 Authorization Banner if Unauthorized */}
-      {authError ? (
+      {workspaceTab === 'attendance' && (authError ? (
         <div className="auth-error-banner">
           <div className="banner-icon">🔒</div>
           <div className="banner-content">
             <h3>403 Forbidden - Access Restricted</h3>
             <p>{authError}</p>
             <span className="hint-text">
-              Switch role back to <strong>"Organizer (Authorized)"</strong> above to manage attendance data.
+              Attendance is limited to this event's owner and administrators.
             </span>
           </div>
         </div>
@@ -550,9 +612,9 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
               </div>
               <div className="card-value text-green">{summary.presentCount}</div>
               <div className="card-detail text-muted">
-                {summary.totalRegistrations > 0
-                  ? `${Math.round((summary.presentCount / summary.totalRegistrations) * 100)}% of total registrants`
-                  : 'No RSVPs yet'}
+                {summary.confirmedCount > 0
+                  ? `${summary.attendancePercentage}% of confirmed registrations`
+                  : 'No confirmed RSVPs yet'}
               </div>
             </div>
 
@@ -760,7 +822,9 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => handleSelectRow(regId)}
+                            onChange={() => handleSelectRow(regId, isWaitlist)}
+                            disabled={isWaitlist}
+                            title={isWaitlist ? 'Waitlisted residents cannot be checked in' : 'Select resident'}
                           />
                         </td>
 
@@ -790,7 +854,7 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
 
                         <td className="td-status">
                           <span className={`status-pill ${isPresent ? 'pill-present' : 'pill-absent'}`}>
-                            {isPresent ? '● Present' : '○ Absent'}
+                            {isWaitlist ? 'Not eligible' : isPresent ? '● Present' : '○ Absent'}
                           </span>
                         </td>
 
@@ -811,10 +875,13 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
                             type="button"
                             className={`btn-toggle-status ${isPresent ? 'btn-mark-absent' : 'btn-mark-present'}`}
                             onClick={() => handleToggleSingleAttendance(regId, isPresent, record.fullName)}
+                            disabled={isWaitlist}
                             aria-pressed={isPresent}
-                            aria-label={`Mark ${record.fullName || 'attendee'} as ${isPresent ? 'Absent' : 'Present'}`}
+                            aria-label={isWaitlist
+                              ? `${record.fullName || 'Resident'} is waitlisted and cannot be checked in`
+                              : `Mark ${record.fullName || 'attendee'} as ${isPresent ? 'Absent' : 'Present'}`}
                           >
-                            {isPresent ? 'Mark Absent ✕' : 'Mark Present ✓'}
+                            {isWaitlist ? 'Awaiting promotion' : isPresent ? 'Mark Absent ✕' : 'Mark Present ✓'}
                           </button>
                         </td>
                       </tr>
@@ -884,10 +951,10 @@ export function OrganizerCheckIn({ onSelectEventForRegister }) {
             </div>
           )}
         </>
-      )}
+      ))}
 
       {/* Real-time Audit Trail Panel */}
-      {showAuditLogs && userRole === 'organizer' && (
+      {workspaceTab === 'attendance' && showAuditLogs && userRole === 'organizer' && (
         <div className="audit-log-panel" id="audit-log-panel" role="region" aria-label="Event Audit Trail">
           <div className="audit-panel-header">
             <h3>📜 Event Check-in Audit Trail Log</h3>

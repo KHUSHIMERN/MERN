@@ -65,6 +65,18 @@ const eventSchema = new mongoose.Schema(
       type: String,
       default: 'Asia/Kolkata',
       trim: true,
+      validate: {
+        validator: function (v) {
+          if (!v) return true;
+          try {
+            Intl.DateTimeFormat(undefined, { timeZone: v });
+            return true;
+          } catch (e) {
+            return false;
+          }
+        },
+        message: props => `${props.value} is not a valid IANA timezone identifier`,
+      },
     },
     organizer: {
       type: mongoose.Schema.Types.ObjectId,
@@ -86,6 +98,7 @@ const eventSchema = new mongoose.Schema(
     attendeesCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
     rsvpedUsers: [
       {
@@ -118,6 +131,7 @@ const eventSchema = new mongoose.Schema(
     waitlistCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
     waitlistUsers: [
       {
@@ -180,6 +194,12 @@ eventSchema.index(
 eventSchema.index({ tags: 1 });
 eventSchema.index({ published: 1, startDate: 1 });
 eventSchema.index({ category: 1, published: 1 });
+eventSchema.index({ category: 1 });
+eventSchema.index({ city: 1 });
+eventSchema.index({ startDate: 1 });
+eventSchema.index({ language: 1 });
+eventSchema.index({ published: 1 });
+eventSchema.index({ category: 1, city: 1, startDate: 1, language: 1 });
 
 const Event = mongoose.models.Event || mongoose.model('Event', eventSchema);
 

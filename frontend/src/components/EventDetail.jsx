@@ -19,6 +19,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import LockIcon from '@mui/icons-material/Lock';
 import { formatEventDateTime, getTimezoneOffsetLabel } from '../utils/dateUtils';
 import { useLanguage } from '../context/LanguageContext';
+import { hasActiveRsvp, isEventFull, rsvpLabel, rsvpStatusLabel } from '../utils/rsvpState';
 
 /**
  * WCAG 1.4.1 — getCapacityStatus (mirrors EventCard implementation)
@@ -60,6 +61,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
 
   const capacityStatus = getCapacityStatus(event.attendeesCount ?? 0, event.capacity ?? 100, t);
   const isFull = capacityStatus.level === 'full';
+  const activeRsvp = hasActiveRsvp(event);
 
   const startFormatted = formatEventDateTime(event.startDate, event.timezone, activeTimezone, userLocale);
   const endFormatted = event.endDate
@@ -86,6 +88,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
             aria-label={capacityStatus.ariaLabel}
             sx={{ fontSize: '0.75rem', ...capacityStatus.sx }}
           />
+          <Chip label={rsvpStatusLabel(event)} size="small" color={activeRsvp ? 'success' : isFull ? 'error' : 'default'} />
           {startFormatted.isCrossTimezone && (
             <Chip label={t('convertedTimeLabel')} color="info" size="small" variant="outlined" />
           )}
@@ -178,18 +181,13 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
         {/* WCAG 1.4.1: Fully Booked text label — not just a greyed-out button */}
         <Button
           variant="contained"
-          disabled={isFull}
-          aria-disabled={isFull}
-          aria-label={isFull ? t('statusFullAriaLabel') : t('rsvpBtn')}
+          aria-label={rsvpLabel(event)}
           onClick={() => {
-            if (!isFull) {
-              onClose();
-              onRSVP(event);
-            }
+            onRSVP(event);
           }}
           sx={{ borderRadius: 2 }}
         >
-          {isFull ? t('rsvpDisabledFull') : t('rsvpBtn')}
+          {activeRsvp ? 'Cancel RSVP' : isEventFull(event) ? 'Join Waitlist' : t('rsvpBtn')}
         </Button>
       </DialogActions>
     </Dialog>

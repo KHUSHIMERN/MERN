@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { TimezoneProvider } from './context/TimezoneContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
-import RegisterForm from './components/RegisterForm';
-import LoginForm from './components/LoginForm';
+import { ToastProvider } from './context/ToastContext';
+import { NotificationProvider } from './context/NotificationContext';
 import AuthPage from './components/AuthPage';
 import ProfilePage from './components/ProfilePage';
 import AdminRoleRequests from './components/AdminRoleRequests';
@@ -13,6 +13,7 @@ import I18nProvider from './components/I18nProvider';
 import Header from './components/Header';
 import HeroSection from './components/HeroSection';
 import EventList from './components/EventList';
+import AIRecommendationSection from './components/AIRecommendationSection';
 import OrganizerCheckIn from './components/OrganizerCheckIn';
 import EventRegistrationForm from './components/EventRegistrationForm';
 import FallbackTestDemo from './components/FallbackTestDemo';
@@ -71,11 +72,29 @@ const theme = createTheme({
 
 function AppContent() {
   const { t } = useTranslation();
-  const { user, logout } = useAuth();
-  const [view, setView] = useState('events'); // 'events' | 'register' | 'login' | 'profile' | 'admin-requests'
+  const { user, loading: authLoading, logout } = useAuth();
+  const [view, setView] = useState(() => new URLSearchParams(window.location.search).get('verified') === 'true' ? 'login' : 'events');
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedEventForModal, setSelectedEventForModal] = useState(null);
+  const [eventsRefreshKey, setEventsRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('verified') === 'true') {
+      setView('login');
+      params.delete('verified');
+      const query = params.toString();
+      window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authLoading && user && (view === 'login' || view === 'register')) {
+      setView('events');
+      setActiveTab('events');
+    }
+  }, [authLoading, user, view]);
 
   const handleOpenRegisterModal = (evt = null) => {
     setSelectedEventForModal(evt);
@@ -94,6 +113,12 @@ function AppContent() {
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const handleNotificationEvent = (event) => {
+    setView('events');
+    setActiveTab('events');
+    handleOpenRegisterModal(event);
+  };
+
   return (
     <div className="app-layout">
       {/* Skip-to-Content Link for Keyboard Accessibility */}
@@ -106,6 +131,7 @@ function AppContent() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenRegisterModal={() => handleOpenRegisterModal()}
+        onOpenNotificationEvent={handleNotificationEvent}
         user={user}
         logout={logout}
         view={view}
@@ -124,7 +150,10 @@ function AppContent() {
         )}
 
         {view === 'profile' && (
-          <ProfilePage onNavigateHome={() => setView('events')} />
+          <ProfilePage
+            onNavigateHome={() => setView('events')}
+            onRsvpChanged={() => setEventsRefreshKey((key) => key + 1)}
+          />
         )}
 
         {view === 'admin-requests' && (
@@ -139,17 +168,25 @@ function AppContent() {
                   onExplore={handleExploreClick}
                   onRegister={() => handleOpenRegisterModal()}
                 />
-                <EventList
-                  onRegisterEvent={(evt) => handleOpenRegisterModal(evt)}
+
+                {/* AI Recommendations — shown above the events list, visible to all users.
+                    Authenticated users get personalised results; guests get popular local events. */}
+                <AIRecommendationSection
+                  refreshSignal={eventsRefreshKey}
                   onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+                  onRSVP={(evt) => handleOpenRegisterModal(evt)}
+                />
+
+                <EventList
+                  refreshKey={eventsRefreshKey}
+                  onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+                  onRequireLogin={() => setView('login')}
                 />
               </>
             )}
 
             {activeTab === 'checkin' && (
-              <OrganizerCheckIn
-                onSelectEventForRegister={(evt) => handleOpenRegisterModal(evt)}
-              />
+              <OrganizerCheckIn />
             )}
 
             {activeTab === 'fallbackDemo' && <FallbackTestDemo />}
@@ -163,6 +200,11 @@ function AppContent() {
           selectedEvent={selectedEventForModal}
           onClose={handleCloseRegisterModal}
           onNavigateProfile={() => setView('profile')}
+          onRsvpChanged={() => setEventsRefreshKey((key) => key + 1)}
+          onRequireLogin={() => {
+            handleCloseRegisterModal();
+            setView('login');
+          }}
         />
       )}
 
@@ -179,9 +221,13 @@ export function App() {
         <CssBaseline />
         <LanguageProvider>
           <AuthProvider>
-            <TimezoneProvider>
-              <AppContent />
-            </TimezoneProvider>
+            <NotificationProvider>
+              <ToastProvider>
+                <TimezoneProvider>
+                  <AppContent />
+                </TimezoneProvider>
+              </ToastProvider>
+            </NotificationProvider>
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>

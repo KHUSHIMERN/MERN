@@ -4,6 +4,7 @@ import RegisterForm from './RegisterForm';
 
 export default function AuthPage({ initialMode = 'login', onLoginSuccess }) {
   const [mode, setMode] = useState(initialMode);
+  const [registeredEmail, setRegisteredEmail] = useState(() => new URLSearchParams(window.location.search).get('email') || '');
 
   useEffect(() => {
     if (initialMode) {
@@ -37,11 +38,15 @@ export default function AuthPage({ initialMode = 'login', onLoginSuccess }) {
           hideCardWrapper={true}
           onSwitchToRegister={() => setMode('register')}
           onLoginSuccess={onLoginSuccess}
+          initialEmail={registeredEmail}
         />
       ) : (
         <RegisterForm
           hideCardWrapper={true}
-          onSwitchToLogin={() => setMode('login')}
+          onSwitchToLogin={(email = '') => {
+            if (email) setRegisteredEmail(email);
+            setMode('login');
+          }}
         />
       )}
     </div>

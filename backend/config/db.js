@@ -22,6 +22,18 @@ const connectDB = async () => {
     return mongoose.connection;
   }
 
+  // Allow local networks to provide a reachable resolver for MongoDB Atlas.
+  // Public DNS remains the default when no override is configured.
+  try {
+    const dnsServers = (process.env.DNS_SERVERS || "8.8.8.8,8.8.4.4")
+      .split(",")
+      .map((server) => server.trim())
+      .filter(Boolean);
+    dns.setServers(dnsServers);
+  } catch (err) {
+    console.warn("Warning: Could not set custom DNS servers:", err.message);
+  }
+
   // Support both MONGO_URI (DEV-KHUSHI) and MONGODB_URI (QA) env variable names
   const mongoUri =
     process.env.MONGO_URI ||

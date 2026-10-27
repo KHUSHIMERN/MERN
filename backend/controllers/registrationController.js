@@ -1,8 +1,7 @@
-const connectDB = require('../config/db');
+const mongoose = require('mongoose');
 const Registration = require('../models/Registration');
 const { memoryRegistrations } = require('../data/seedEvents');
-
-const isConnectedToMongoDB = () => Boolean(connectDB.isConnectedToMongoDB);
+const isConnectedToMongoDB = () => mongoose.connection.readyState === 1;
 
 /**
  * POST /api/registrations

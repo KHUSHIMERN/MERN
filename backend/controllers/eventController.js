@@ -1,9 +1,12 @@
 const mongoose = require('mongoose');
-const connectDB = require('../config/db');
 const Event = require('../models/Event');
 const { INITIAL_EVENTS } = require('../data/seedEvents');
+const {
+  enrichEventsWithRsvp,
+  migrateLegacyRsvpsForEvent,
+} = require('../services/rsvpService');
 
-const isConnectedToMongoDB = () => Boolean(connectDB.isConnectedToMongoDB);
+const isConnectedToMongoDB = () => mongoose.connection.readyState === 1;
 
 const getCategoryMatchPatterns = (cat) => {
   if (!cat || String(cat).toLowerCase() === 'all') return [];
@@ -32,29 +35,76 @@ const getCategoryMatchPatterns = (cat) => {
  */
 const getEvents = async (req, res, next) => {
   try {
-    const { category, tags, published, startDate, endDate, search, city } = req.query;
+    const {
+      category,
+      tags,
+      published,
+      startDate,
+      endDate,
+      search,
+      location,
+      city,
+      language,
+      page: reqPage,
+      pageSize: reqPageSize,
+      limit: reqLimit
+    } = req.query;
+
+    const hasPagination = reqPage !== undefined || reqPageSize !== undefined || reqLimit !== undefined;
+    const page = Math.max(1, parseInt(reqPage, 10) || 1);
+    const pageSize = Math.max(1, parseInt(reqPageSize || reqLimit, 10) || 10);
 
     if (isConnectedToMongoDB()) {
-      const query = {};
+      const andConditions = [];
 
+      // 1. Category filter
       if (category && String(category).toLowerCase() !== 'all') {
         const patterns = getCategoryMatchPatterns(category);
         const regexList = patterns.map((p) => new RegExp(p, 'i'));
-        query.$or = [
-          { category: { $in: regexList } },
-          { title: { $in: regexList } },
-          { tags: { $in: regexList } }
-        ];
+        andConditions.push({
+          $or: [
+            { category: { $in: regexList } },
+            { title: { $in: regexList } },
+            { tags: { $in: regexList } }
+          ]
+        });
       }
 
-      if (city && city !== 'all') {
-        query.city = new RegExp(city, 'i');
+      // 2. Location / City filter
+      const locTerm = (location || city || '').trim();
+      if (locTerm && locTerm.toLowerCase() !== 'all') {
+        const locRegex = new RegExp(locTerm, 'i');
+        andConditions.push({
+          $or: [
+            { city: locRegex },
+            { 'location.placeName': locRegex },
+            { location: locRegex }
+          ]
+        });
       }
 
+      // 3. Language filter
+      if (language && String(language).toLowerCase() !== 'all') {
+        const langClean = language.trim();
+        const langRegex = new RegExp(`^${langClean}$`, 'i');
+        if (langClean.toLowerCase() === 'hi') {
+          andConditions.push({
+            $or: [
+              { language: langRegex },
+              { title_hi: { $exists: true, $ne: '' } }
+            ]
+          });
+        } else {
+          andConditions.push({ language: langRegex });
+        }
+      }
+
+      // 4. Published filter
       if (published !== undefined && published !== 'all') {
-        query.published = String(published).toLowerCase() === 'true';
+        andConditions.push({ published: String(published).toLowerCase() === 'true' });
       }
 
+      // 5. Tags filter
       if (tags) {
         const tagList = Array.isArray(tags)
           ? tags
@@ -63,39 +113,76 @@ const getEvents = async (req, res, next) => {
               .map((t) => t.trim())
               .filter(Boolean);
         if (tagList.length > 0) {
-          query.tags = { $in: tagList };
+          andConditions.push({ tags: { $in: tagList } });
         }
       }
 
+      // 6. Date Range filter (startDate / endDate)
       if (startDate || endDate) {
-        query.startDate = {};
-        if (startDate) query.startDate.$gte = new Date(startDate);
-        if (endDate) query.startDate.$lte = new Date(endDate);
+        const dateCond = {};
+        if (startDate) {
+          const sDate = new Date(startDate);
+          if (!isNaN(sDate.getTime())) {
+            dateCond.$gte = sDate;
+          }
+        }
+        if (endDate) {
+          let eDate = new Date(endDate);
+          if (typeof endDate === 'string' && endDate.length === 10) {
+            eDate = new Date(`${endDate}T23:59:59.999Z`);
+          }
+          if (!isNaN(eDate.getTime())) {
+            dateCond.$lte = eDate;
+          }
+        }
+        if (Object.keys(dateCond).length > 0) {
+          andConditions.push({ startDate: dateCond });
+        }
       }
 
+      // 7. Search text filter
       if (search && search.trim()) {
         const regex = new RegExp(search.trim(), 'i');
-        const searchCond = [
-          { title: regex },
-          { description: regex },
-          { 'location.placeName': regex },
-          { location: regex },
-          { city: regex }
-        ];
-        if (query.$or) {
-          query.$and = [{ $or: query.$or }, { $or: searchCond }];
-          delete query.$or;
-        } else {
-          query.$or = searchCond;
-        }
+        andConditions.push({
+          $or: [
+            { title: regex },
+            { description: regex },
+            { city: regex },
+            { 'location.placeName': regex },
+            { tags: regex }
+          ]
+        });
       }
 
-      const events = await Event.find(query).sort({ startDate: 1, createdAt: -1 });
-      return res.json({ success: true, count: events.length, data: events, events });
+      const query = andConditions.length > 0 ? { $and: andConditions } : {};
+
+      const total = await Event.countDocuments(query);
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+      let eventQuery = Event.find(query).sort({ startDate: 1, createdAt: -1 });
+      if (hasPagination) {
+        const skip = (page - 1) * pageSize;
+        eventQuery = eventQuery.skip(skip).limit(pageSize);
+      }
+
+      const events = await eventQuery;
+      await Promise.all(events.map((event) => migrateLegacyRsvpsForEvent(event)));
+      const enriched = await enrichEventsWithRsvp(events, req.user?._id);
+
+      return res.json({
+        success: true,
+        count: enriched.length,
+        total,
+        page: hasPagination ? page : 1,
+        pageSize: hasPagination ? pageSize : total,
+        totalPages: hasPagination ? totalPages : 1,
+        data: enriched,
+        events: enriched
+      });
     }
 
     // In-memory fallback store mode
-    let results = [...(INITIAL_EVENTS || [])];
+    let results = [...INITIAL_EVENTS];
 
     if (category && String(category).toLowerCase() !== 'all') {
       const patterns = getCategoryMatchPatterns(category);
@@ -110,8 +197,26 @@ const getEvents = async (req, res, next) => {
       );
     }
 
-    if (city && city !== 'all') {
-      results = results.filter((e) => e.city && e.city.toLowerCase() === city.toLowerCase());
+    const locTerm = (location || city || '').trim();
+    if (locTerm && locTerm.toLowerCase() !== 'all') {
+      const locRegex = new RegExp(locTerm, 'i');
+      results = results.filter((e) => {
+        const cityMatch = e.city && locRegex.test(e.city);
+        const placeMatch = typeof e.location === 'object' && e.location?.placeName && locRegex.test(e.location.placeName);
+        const strLocMatch = typeof e.location === 'string' && locRegex.test(e.location);
+        return cityMatch || placeMatch || strLocMatch;
+      });
+    }
+
+    if (language && String(language).toLowerCase() !== 'all') {
+      const langClean = language.trim().toLowerCase();
+      results = results.filter((e) => {
+        const evLang = (e.language || 'en').toLowerCase();
+        if (langClean === 'hi') {
+          return evLang === 'hi' || Boolean(e.title_hi);
+        }
+        return evLang === langClean;
+      });
     }
 
     if (published !== undefined && published !== 'all') {
@@ -135,14 +240,20 @@ const getEvents = async (req, res, next) => {
 
     if (startDate) {
       const start = new Date(startDate).getTime();
-      results = results.filter(
-        (e) => e.startDate && new Date(e.startDate).getTime() >= start
-      );
+      if (!isNaN(start)) {
+        results = results.filter((e) => e.startDate && new Date(e.startDate).getTime() >= start);
+      }
     }
 
     if (endDate) {
-      const end = new Date(endDate).getTime();
-      results = results.filter((e) => e.startDate && new Date(e.startDate).getTime() <= end);
+      let eDate = new Date(endDate);
+      if (typeof endDate === 'string' && endDate.length === 10) {
+        eDate = new Date(`${endDate}T23:59:59.999Z`);
+      }
+      const end = eDate.getTime();
+      if (!isNaN(end)) {
+        results = results.filter((e) => e.startDate && new Date(e.startDate).getTime() <= end);
+      }
     }
 
     if (search && search.trim()) {
@@ -150,16 +261,35 @@ const getEvents = async (req, res, next) => {
       results = results.filter((e) => {
         const titleMatch = e.title && e.title.toLowerCase().includes(term);
         const descMatch = e.description && e.description.toLowerCase().includes(term);
+        const cityMatch = e.city && e.city.toLowerCase().includes(term);
         const locString = typeof e.location === 'object' ? e.location.placeName : String(e.location);
         const locMatch = locString && locString.toLowerCase().includes(term);
-        return titleMatch || descMatch || locMatch;
+        const tagMatch = Array.isArray(e.tags) && e.tags.some((t) => t.toLowerCase().includes(term));
+        return titleMatch || descMatch || cityMatch || locMatch || tagMatch;
       });
     }
 
-    return res.json({ success: true, count: results.length, data: results, events: results });
+    const total = results.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    let paginatedResults = results;
+    if (hasPagination) {
+      const skip = (page - 1) * pageSize;
+      paginatedResults = results.slice(skip, skip + pageSize);
+    }
+
+    return res.json({
+      success: true,
+      count: paginatedResults.length,
+      total,
+      page: hasPagination ? page : 1,
+      pageSize: hasPagination ? pageSize : total,
+      totalPages: hasPagination ? totalPages : 1,
+      data: paginatedResults,
+      events: paginatedResults
+    });
   } catch (error) {
-    if (next) return next(error);
-    return res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
@@ -175,10 +305,10 @@ const searchEvents = async (req, res, next) => {
     if (!queryTerm) {
       if (isConnectedToMongoDB()) {
         const allEvents = await Event.find({ published: true }).sort({ startDate: 1 });
-        return res.json({ success: true, query: '', count: allEvents.length, data: allEvents, events: allEvents });
+        return res.json({ success: true, query: '', count: allEvents.length, data: allEvents });
       }
-      const allEvents = (INITIAL_EVENTS || []).filter((e) => Boolean(e.published));
-      return res.json({ success: true, query: '', count: allEvents.length, data: allEvents, events: allEvents });
+      const allEvents = INITIAL_EVENTS.filter((e) => Boolean(e.published));
+      return res.json({ success: true, query: '', count: allEvents.length, data: allEvents });
     }
 
     if (isConnectedToMongoDB()) {
@@ -189,18 +319,17 @@ const searchEvents = async (req, res, next) => {
           { title: regex },
           { description: regex },
           { tags: { $in: [regex] } },
-          { 'location.placeName': regex },
-          { location: regex }
+          { 'location.placeName': regex }
         ]
       };
 
       const events = await Event.find(mongoQuery).sort({ startDate: 1, createdAt: -1 });
-      return res.json({ success: true, query: queryTerm, count: events.length, data: events, events });
+      return res.json({ success: true, query: queryTerm, count: events.length, data: events });
     }
 
     // In-memory fallback mode
     const term = queryTerm.toLowerCase();
-    const results = (INITIAL_EVENTS || []).filter((e) => {
+    const results = INITIAL_EVENTS.filter((e) => {
       const titleMatch = e.title && e.title.toLowerCase().includes(term);
       const descMatch = e.description && e.description.toLowerCase().includes(term);
       const tagMatch = Array.isArray(e.tags) && e.tags.some((t) => t.toLowerCase().includes(term));
@@ -210,10 +339,9 @@ const searchEvents = async (req, res, next) => {
       return titleMatch || descMatch || tagMatch || locMatch;
     });
 
-    return res.json({ success: true, query: queryTerm, count: results.length, data: results, events: results });
+    return res.json({ success: true, query: queryTerm, count: results.length, data: results });
   } catch (error) {
-    if (next) return next(error);
-    return res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
@@ -237,17 +365,18 @@ const getEventById = async (req, res, next) => {
       if (!event) {
         return res.status(404).json({ success: false, message: 'Event not found' });
       }
-      return res.json({ success: true, data: event, event });
+      await migrateLegacyRsvpsForEvent(event);
+      const [enriched] = await enrichEventsWithRsvp([event], req.user?._id);
+      return res.json({ success: true, data: enriched, ...enriched });
     }
 
-    const event = (INITIAL_EVENTS || []).find((e) => e.id === id || e.itemKey === id || e._id === id);
+    const event = INITIAL_EVENTS.find((e) => e.id === id || e.itemKey === id || e._id === id);
     if (!event) {
       return res.status(404).json({ success: false, message: 'Event not found' });
     }
-    return res.json({ success: true, data: event, event });
+    return res.json({ success: true, data: event });
   } catch (error) {
-    if (next) return next(error);
-    return res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
@@ -262,42 +391,32 @@ const createEvent = async (req, res, next) => {
       title_hi,
       description,
       description_hi,
-      organizerId,
-      organizer,
+      organizerId: requestedOrganizerId,
       category,
+      city,
+      capacity,
+      timezone,
       tags,
       startDate,
       endDate,
-      timezone,
       location,
-      city,
       published,
       image,
       imageUrl,
       imageUrlAlt,
       itemKey,
       date,
-      seatsLeft,
-      capacity
+      seatsLeft
     } = req.body;
 
-    const org = organizerId || organizer;
+    const organizerId = req.user?._id?.toString() || requestedOrganizerId;
 
-    // Required fields validation
-    if (!title || !title.trim() || !org || !startDate) {
+    // The authenticated identity is authoritative; requestedOrganizerId is
+    // retained only for compatibility with legacy internal callers.
+    if (!title || !title.trim() || !organizerId || !startDate) {
       return res.status(400).json({
         success: false,
-        message: 'Validation Error: Required fields title, organizerId, and startDate must be provided.'
-      });
-    }
-
-    const eventTimezone = timezone || 'Asia/Kolkata';
-    try {
-      Intl.DateTimeFormat(undefined, { timeZone: eventTimezone });
-    } catch (e) {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid IANA timezone identifier: '${eventTimezone}'`
+        message: 'Validation Error: Required fields title and startDate must be provided.'
       });
     }
 
@@ -329,7 +448,16 @@ const createEvent = async (req, res, next) => {
     }
 
     // Format location object
-    let locationObj = location || { placeName: '', latitude: null, longitude: null };
+    let locationObj = { placeName: '', latitude: null, longitude: null };
+    if (typeof location === 'object' && location !== null) {
+      locationObj = {
+        placeName: location.placeName || '',
+        latitude: location.latitude !== undefined ? Number(location.latitude) : null,
+        longitude: location.longitude !== undefined ? Number(location.longitude) : null
+      };
+    } else if (typeof location === 'string') {
+      locationObj.placeName = location;
+    }
 
     const formattedTags = Array.isArray(tags)
       ? tags
@@ -337,27 +465,28 @@ const createEvent = async (req, res, next) => {
       ? tags.split(',').map((t) => t.trim()).filter(Boolean)
       : [];
 
+    const finalImage = imageUrl || image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87';
+
     const newEventData = {
       id: `evt-${Date.now()}`,
       itemKey: itemKey || `evt_${Date.now()}`,
       title: title.trim(),
-      title_hi: title_hi || '',
       description: description || '',
-      description_hi: description_hi || '',
-      organizerId: org,
-      organizerName: typeof org === 'string' ? org : 'Community Organizer',
+      organizerId: organizerId.trim(),
       category: category || 'general',
-      city: city || 'Jaipur',
+      city: (city || '').trim() || (typeof location === 'string' ? location : locationObj.placeName) || 'Jaipur',
+      capacity: capacity !== undefined ? Number(capacity) : 100,
+      timezone: timezone || 'Asia/Kolkata',
+      title_hi: (title_hi || '').trim(),
+      description_hi: (description_hi || '').trim(),
       tags: formattedTags,
       startDate: parsedStart,
       endDate: parsedEnd,
-      timezone: eventTimezone,
       location: locationObj,
-      capacity: capacity ? Number(capacity) : 100,
-      published: published !== undefined ? Boolean(published) : true,
-      image: image || imageUrl || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87',
-      imageUrl: imageUrl || image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87',
-      imageUrlAlt: imageUrlAlt || (title ? `Banner image for ${title}` : 'Event banner image'),
+      published: Boolean(published),
+      image: finalImage,
+      imageUrl: finalImage,
+      imageUrlAlt: (imageUrlAlt || '').trim(),
       date: date || parsedStart.toISOString().split('T')[0],
       seatsLeft: seatsLeft !== undefined ? Number(seatsLeft) : 50,
       createdAt: new Date(),
@@ -374,7 +503,7 @@ const createEvent = async (req, res, next) => {
       });
     }
 
-    if (INITIAL_EVENTS) INITIAL_EVENTS.push(newEventData);
+    INITIAL_EVENTS.push(newEventData);
     return res.status(201).json({
       success: true,
       message: 'Event created successfully.',
@@ -382,8 +511,7 @@ const createEvent = async (req, res, next) => {
       data: newEventData
     });
   } catch (error) {
-    if (next) return next(error);
-    return res.status(400).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
@@ -395,17 +523,6 @@ const updateEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
     const updatePayload = { ...req.body };
-
-    if (updatePayload.timezone) {
-      try {
-        Intl.DateTimeFormat(undefined, { timeZone: updatePayload.timezone });
-      } catch (e) {
-        return res.status(400).json({
-          success: false,
-          message: `Invalid IANA timezone identifier: '${updatePayload.timezone}'`
-        });
-      }
-    }
 
     // Validate startDate <= endDate if both are updated
     if (updatePayload.startDate || updatePayload.endDate) {
@@ -452,7 +569,7 @@ const updateEvent = async (req, res, next) => {
     }
 
     // In-memory fallback
-    const index = (INITIAL_EVENTS || []).findIndex((e) => e.id === id || e.itemKey === id || e._id === id);
+    const index = INITIAL_EVENTS.findIndex((e) => e.id === id || e.itemKey === id || e._id === id);
     if (index === -1) {
       return res.status(404).json({ success: false, message: 'Event not found for update' });
     }
@@ -469,8 +586,7 @@ const updateEvent = async (req, res, next) => {
       data: INITIAL_EVENTS[index]
     });
   } catch (error) {
-    if (next) return next(error);
-    return res.status(400).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
@@ -499,7 +615,7 @@ const deleteEvent = async (req, res, next) => {
     }
 
     // In-memory fallback
-    const index = (INITIAL_EVENTS || []).findIndex((e) => e.id === id || e.itemKey === id || e._id === id);
+    const index = INITIAL_EVENTS.findIndex((e) => e.id === id || e.itemKey === id || e._id === id);
     if (index === -1) {
       return res.status(404).json({ success: false, message: 'Event not found for deletion' });
     }
@@ -507,8 +623,7 @@ const deleteEvent = async (req, res, next) => {
     INITIAL_EVENTS.splice(index, 1);
     return res.json({ success: true, message: 'Event deleted successfully.' });
   } catch (error) {
-    if (next) return next(error);
-    return res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 
@@ -557,6 +672,7 @@ const publishEvent = async (req, res, next) => {
         targetPublished = !event.published;
       }
 
+      // Ensure ONLY published field is modified
       event.published = targetPublished;
       const updatedEvent = await event.save();
 
@@ -569,7 +685,7 @@ const publishEvent = async (req, res, next) => {
     }
 
     // In-memory fallback mode
-    const index = (INITIAL_EVENTS || []).findIndex((e) => e.id === id || e.itemKey === id || e._id === id);
+    const index = INITIAL_EVENTS.findIndex((e) => e.id === id || e.itemKey === id || e._id === id);
     if (index === -1) {
       return res.status(404).json({ success: false, message: 'Event not found for publish update' });
     }
@@ -578,6 +694,7 @@ const publishEvent = async (req, res, next) => {
       targetPublished = !Boolean(INITIAL_EVENTS[index].published);
     }
 
+    // Mutate ONLY published and updatedAt
     INITIAL_EVENTS[index].published = targetPublished;
     INITIAL_EVENTS[index].updatedAt = new Date();
 
@@ -588,96 +705,12 @@ const publishEvent = async (req, res, next) => {
       data: INITIAL_EVENTS[index]
     });
   } catch (error) {
-    if (next) return next(error);
-    return res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
-
-/**
- * POST /api/events/:id/rsvp
- * RSVP for an event.
- */
-const rsvpEvent = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const User = require('../models/User.js');
-    const jwt = require('jsonwebtoken');
-    const { JWT_SECRET } = require('../middleware/auth.js');
-
-    let authenticatedUser = req.user || null;
-    if (!authenticatedUser) {
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        try {
-          const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-          if (decoded && decoded.id) {
-            authenticatedUser = await User.findById(decoded.id);
-          }
-        } catch (e) {
-          // Continue as guest
-        }
-      }
-    }
-
-    if (isConnectedToMongoDB()) {
-      let event = null;
-      if (mongoose.Types.ObjectId.isValid(id)) {
-        event = await Event.findById(id);
-      }
-      if (!event) {
-        event = await Event.findOne({ $or: [{ id }, { itemKey: id }] });
-      }
-      if (!event) {
-        return res.status(404).json({ success: false, message: 'Event not found' });
-      }
-
-      if (event.attendeesCount >= event.capacity) {
-        return res.status(400).json({ success: false, message: 'Event is fully booked' });
-      }
-
-      event.attendeesCount += 1;
-
-      if (authenticatedUser) {
-        const alreadyInAttendees = event.attendees && event.attendees.some(a => a.user && a.user.toString() === authenticatedUser._id.toString());
-        if (!alreadyInAttendees) {
-          event.attendees.push({ user: authenticatedUser._id, registeredAt: new Date() });
-        }
-        if (!authenticatedUser.rsvpedEvents.includes(event._id)) {
-          authenticatedUser.rsvpedEvents.push(event._id);
-          await authenticatedUser.save();
-        }
-      }
-
-      await event.save();
-
-      return res.json({
-        success: true,
-        message: 'RSVP confirmed successfully',
-        attendeesCount: event.attendeesCount
-      });
-    }
-
-    const event = (INITIAL_EVENTS || []).find((e) => e.id === id || e.itemKey === id || e._id === id);
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Event not found' });
-    }
-    event.attendeesCount = (event.attendeesCount || 0) + 1;
-    return res.json({
-      success: true,
-      message: 'RSVP confirmed successfully',
-      attendeesCount: event.attendeesCount
-    });
-  } catch (error) {
-    if (next) return next(error);
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-/**
- * GET /organizer/:id/attendance-metrics
- * Get attendance metrics for an organizer (Task 1 of Story 3)
- */
-const getOrganizerAttendanceMetrics = async (req, res, next) => {
+// @desc    Get attendance metrics for an organizer (Task 1 of Story 3)
+// @route   GET /organizer/:id/attendance-metrics
+const getOrganizerAttendanceMetrics = async (req, res) => {
   try {
     const { id } = req.params;
     const limitVal = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 6;
@@ -706,196 +739,254 @@ const getOrganizerAttendanceMetrics = async (req, res, next) => {
 
     const now = new Date();
 
-    if (isConnectedToMongoDB()) {
-      const pipeline = [
-        { $match: matchQuery },
-        { $sort: { startDate: -1 } }
-      ];
+    const pipeline = [
+      { $match: matchQuery },
+      { $sort: { startDate: -1 } }
+    ];
 
-      if (!isNaN(limitVal) && limitVal > 0) {
-        pipeline.push({ $limit: limitVal });
-      }
+    if (!isNaN(limitVal) && limitVal > 0) {
+      pipeline.push({ $limit: limitVal });
+    }
 
-      pipeline.push(
-        {
-          $project: {
-            eventId: '$_id',
-            title: 1,
-            date: '$startDate',
-            startDate: 1,
-            endDate: 1,
-            capacity: { $ifNull: ['$capacity', 100] },
-            confirmed: {
-              $max: [
-                {
-                  $cond: {
-                    if: { $isArray: '$rsvpedUsers' },
-                    then: { $size: '$rsvpedUsers' },
-                    else: 0
-                  }
-                },
-                { $ifNull: ['$attendeesCount', 0] }
-              ]
-            },
-            waitlist: {
-              $cond: {
-                if: { $gt: [{ $size: { $ifNull: ['$waitlistUsers', []] } }, 0] },
-                then: { $size: '$waitlistUsers' },
-                else: { $ifNull: ['$waitlistCount', 0] }
-              }
-            },
-            checkedIn: {
-              $cond: {
-                if: { $gt: [{ $size: { $ifNull: ['$checkedInUsers', []] } }, 0] },
-                then: { $size: '$checkedInUsers' },
-                else: { $ifNull: ['$checkedInCount', 0] }
-              }
+    pipeline.push(
+      {
+        $project: {
+          eventId: '$_id',
+          title: 1,
+          date: '$startDate',
+          startDate: 1,
+          endDate: 1,
+          capacity: { $ifNull: ['$capacity', 100] },
+          confirmed: {
+            $max: [
+              {
+                $cond: {
+                  if: { $isArray: '$rsvpedUsers' },
+                  then: { $size: '$rsvpedUsers' },
+                  else: 0
+                }
+              },
+              { $ifNull: ['$attendeesCount', 0] }
+            ]
+          },
+          waitlist: {
+            $cond: {
+              if: { $gt: [{ $size: { $ifNull: ['$waitlistUsers', []] } }, 0] },
+              then: { $size: '$waitlistUsers' },
+              else: { $ifNull: ['$waitlistCount', 0] }
             }
-          }
-        },
-        {
-          $project: {
-            eventId: 1,
-            title: 1,
-            date: 1,
-            startDate: 1,
-            endDate: 1,
-            capacity: 1,
-            confirmed: 1,
-            waitlist: {
-              $max: [
-                '$waitlist',
-                { $max: [0, { $subtract: ['$confirmed', '$capacity'] }] }
-              ]
-            },
-            checkedIn: 1,
-            noShow: {
-              $cond: {
-                if: { $lt: [{ $ifNull: ['$endDate', '$startDate'] }, now] },
-                then: { $max: [0, { $subtract: ['$confirmed', '$checkedIn'] }] },
-                else: 0
-              }
-            },
-            attendanceRate: {
-              $cond: {
-                if: { $gt: ['$confirmed', 0] },
-                then: { $round: [{ $divide: ['$checkedIn', '$confirmed'] }, 4] },
-                else: 0
-              }
+          },
+          checkedIn: {
+            $cond: {
+              if: { $gt: [{ $size: { $ifNull: ['$checkedInUsers', []] } }, 0] },
+              then: { $size: '$checkedInUsers' },
+              else: { $ifNull: ['$checkedInCount', 0] }
             }
           }
         }
-      );
+      },
+      {
+        $project: {
+          eventId: 1,
+          title: 1,
+          date: 1,
+          startDate: 1,
+          endDate: 1,
+          capacity: 1,
+          confirmed: 1,
+          waitlist: {
+            $max: [
+              '$waitlist',
+              { $max: [0, { $subtract: ['$confirmed', '$capacity'] }] }
+            ]
+          },
+          checkedIn: 1,
+          noShow: {
+            $cond: {
+              if: { $lt: [{ $ifNull: ['$endDate', '$startDate'] }, now] },
+              then: { $max: [0, { $subtract: ['$confirmed', '$checkedIn'] }] },
+              else: 0
+            }
+          },
+          attendanceRate: {
+            $cond: {
+              if: { $gt: ['$confirmed', 0] },
+              then: { $round: [{ $divide: ['$checkedIn', '$confirmed'] }, 4] },
+              else: "0%"
+            }
+          }
+        }
+      }
+    );
 
-      const metrics = await Event.aggregate(pipeline);
-      return res.json({
-        success: true,
-        count: metrics.length,
-        data: metrics
-      });
-    }
+    const metrics = await Event.aggregate(pipeline);
 
-    // In-memory fallback mode
-    const mockMetrics = (INITIAL_EVENTS || []).slice(0, limitVal).map(e => ({
-      eventId: e._id || e.id,
-      title: e.title,
-      date: e.startDate || new Date(),
-      startDate: e.startDate || new Date(),
-      capacity: e.capacity || 100,
-      confirmed: e.attendeesCount || 40,
-      checkedIn: e.checkedInCount || 30,
-      waitlist: e.waitlistCount || 5,
-      noShow: Math.max(0, (e.attendeesCount || 40) - (e.checkedInCount || 30)),
-      attendanceRate: (e.attendeesCount || 40) > 0 ? Number(((e.checkedInCount || 30) / (e.attendeesCount || 40)).toFixed(4)) : 0
-    }));
-
-    return res.json({
+    res.json({
       success: true,
-      count: mockMetrics.length,
-      data: mockMetrics
+      count: metrics.length,
+      data: metrics
     });
   } catch (error) {
-    if (next) return next(error);
-    return res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-/**
- * GET /organizer/:id/attendance-metrics/export
- * Export attendance metrics as CSV (Task 3 of Story 3)
- */
-const exportOrganizerAttendanceMetricsCSV = async (req, res, next) => {
+// @desc    Export attendance metrics as CSV for an organizer (Task 3 of Story 3)
+// @route   GET /organizer/:id/attendance-metrics/export
+const exportOrganizerAttendanceMetricsCSV = async (req, res) => {
   try {
     const { id } = req.params;
-    const limitVal = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 5;
+    const limitVal = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 0;
 
-    let metrics = [];
+    const { startDate, endDate, from, to } = req.query;
+    const dateFrom = startDate || from;
+    const dateTo = endDate || to;
 
-    if (isConnectedToMongoDB()) {
-      const matchQuery = {};
-      if (mongoose.Types.ObjectId.isValid(id)) {
-        const objId = new mongoose.Types.ObjectId(id);
-        matchQuery.$or = [{ organizerId: objId }, { organizerId: id }];
-      } else {
-        matchQuery.organizerId = id;
-      }
+    const matchQuery = {};
 
-      const events = await Event.find(matchQuery).sort({ startDate: -1 }).limit(limitVal);
-      metrics = events.map(e => {
-        const confirmed = (e.rsvpedUsers && e.rsvpedUsers.length) || e.attendeesCount || 0;
-        const checkedIn = (e.checkedInUsers && e.checkedInUsers.length) || e.checkedInCount || 0;
-        const waitlist = (e.waitlistUsers && e.waitlistUsers.length) || e.waitlistCount || 0;
-        const noShow = Math.max(0, confirmed - checkedIn);
-        const rate = confirmed > 0 ? (checkedIn / confirmed).toFixed(4) : '0%';
-        return {
-          title: e.title,
-          date: e.startDate ? new Date(e.startDate).toISOString() : 'N/A',
-          capacity: e.capacity || 100,
-          confirmed,
-          checkedIn,
-          waitlist,
-          noShow,
-          attendanceRate: rate
-        };
-      });
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      const objId = new mongoose.Types.ObjectId(id);
+      matchQuery.$or = [
+        { organizerId: objId },
+        { organizerId: id }
+      ];
     } else {
-      metrics = (INITIAL_EVENTS || []).slice(0, limitVal).map(e => ({
-        title: e.title,
-        date: e.startDate ? new Date(e.startDate).toISOString() : new Date().toISOString(),
-        capacity: e.capacity || 100,
-        confirmed: e.attendeesCount || 40,
-        checkedIn: e.checkedInCount || 30,
-        waitlist: e.waitlistCount || 5,
-        noShow: Math.max(0, (e.attendeesCount || 40) - (e.checkedInCount || 30)),
-        attendanceRate: (e.attendeesCount || 40) > 0 ? ((e.checkedInCount || 30) / (e.attendeesCount || 40)).toFixed(4) : '0%'
-      }));
+      matchQuery.organizerId = id;
     }
 
-    const headers = ['Event Title', 'Date', 'Capacity', 'Confirmed RSVPs', 'Checked In', 'Waitlist', 'No Show', 'Attendance Rate'];
-    const rows = [headers.join(',')];
+    if (dateFrom || dateTo) {
+      matchQuery.startDate = {};
+      if (dateFrom) matchQuery.startDate.$gte = new Date(dateFrom);
+      if (dateTo) matchQuery.startDate.$lte = new Date(dateTo);
+    }
+
+    const now = new Date();
+
+    const pipeline = [
+      { $match: matchQuery },
+      { $sort: { startDate: -1 } }
+    ];
+
+    if (!isNaN(limitVal) && limitVal > 0) {
+      pipeline.push({ $limit: limitVal });
+    }
+
+    pipeline.push(
+      {
+        $project: {
+          eventId: '$_id',
+          title: 1,
+          date: '$startDate',
+          startDate: 1,
+          endDate: 1,
+          capacity: { $ifNull: ['$capacity', 100] },
+          confirmed: {
+            $max: [
+              {
+                $cond: {
+                  if: { $isArray: '$rsvpedUsers' },
+                  then: { $size: '$rsvpedUsers' },
+                  else: 0
+                }
+              },
+              { $ifNull: ['$attendeesCount', 0] }
+            ]
+          },
+          waitlist: {
+            $cond: {
+              if: { $gt: [{ $size: { $ifNull: ['$waitlistUsers', []] } }, 0] },
+              then: { $size: '$waitlistUsers' },
+              else: { $ifNull: ['$waitlistCount', 0] }
+            }
+          },
+          checkedIn: {
+            $cond: {
+              if: { $gt: [{ $size: { $ifNull: ['$checkedInUsers', []] } }, 0] },
+              then: { $size: '$checkedInUsers' },
+              else: { $ifNull: ['$checkedInCount', 0] }
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          eventId: 1,
+          title: 1,
+          date: 1,
+          startDate: 1,
+          endDate: 1,
+          capacity: 1,
+          confirmed: 1,
+          waitlist: {
+            $max: [
+              '$waitlist',
+              { $max: [0, { $subtract: ['$confirmed', '$capacity'] }] }
+            ]
+          },
+          checkedIn: 1,
+          noShow: {
+            $cond: {
+              if: { $lt: [{ $ifNull: ['$endDate', '$startDate'] }, now] },
+              then: { $max: [0, { $subtract: ['$confirmed', '$checkedIn'] }] },
+              else: 0
+            }
+          },
+          attendanceRate: {
+            $cond: {
+              if: { $gt: ['$confirmed', 0] },
+              then: { $round: [{ $divide: ['$checkedIn', '$confirmed'] }, 4] },
+              else: "0%"
+            }
+          }
+        }
+      }
+    );
+
+    let metrics = [];
+    try {
+      metrics = await Event.aggregate(pipeline);
+    } catch (e) {
+      metrics = [];
+    }
+
+    const headers = ['Event ID', 'Event Title', 'Date', 'Capacity', 'Confirmed', 'Waitlist', 'Checked-In', 'No-Show', 'Attendance Rate (%)'];
+    const csvRows = [headers.join(',')];
+
+    const escapeCsvField = (val) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
 
     metrics.forEach(m => {
-      rows.push([
-        `"${String(m.title).replace(/"/g, '""')}"`,
-        `"${m.date}"`,
-        m.capacity,
-        m.confirmed,
-        m.checkedIn,
-        m.waitlist,
-        m.noShow,
-        `"${m.attendanceRate}"`
-      ].join(','));
+      const formattedDate = m.date || m.startDate ? new Date(m.date || m.startDate).toISOString() : '';
+      const ratePct = m.attendanceRate !== undefined
+        ? (m.attendanceRate === '0%' ? '0%' : (m.attendanceRate * 100).toFixed(1))
+        : '0.0';
+      const row = [
+        escapeCsvField(m.eventId || m._id),
+        escapeCsvField(m.title),
+        escapeCsvField(formattedDate),
+        escapeCsvField(m.capacity ?? 0),
+        escapeCsvField(m.confirmed ?? 0),
+        escapeCsvField(m.waitlist ?? 0),
+        escapeCsvField(m.checkedIn ?? 0),
+        escapeCsvField(m.noShow ?? 0),
+        escapeCsvField(ratePct)
+      ];
+      csvRows.push(row.join(','));
     });
 
-    const csvContent = rows.join('\n');
+    const csvContent = csvRows.join('\n');
+
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="attendance-metrics.csv"');
+    res.setHeader('Content-Disposition', `attachment; filename="attendance-metrics-${id}.csv"`);
     return res.status(200).send(csvContent);
   } catch (error) {
-    if (next) return next(error);
-    return res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
+
 module.exports = {
   getEvents,
   searchEvents,
@@ -904,7 +995,6 @@ module.exports = {
   updateEvent,
   deleteEvent,
   publishEvent,
-  rsvpEvent,
   getOrganizerAttendanceMetrics,
   exportOrganizerAttendanceMetricsCSV
 };

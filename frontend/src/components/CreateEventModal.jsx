@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import authenticatedFetch from '../utils/authenticatedFetch';
 import {
   Dialog,
   DialogTitle,
@@ -92,13 +93,9 @@ export default function CreateEventModal({ open, onClose, onEventCreated }) {
         capacity: Number(formData.capacity)
       };
 
-      const token = localStorage.getItem('cc_token');
-      const headers = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res = await fetch('/api/events', {
+      const res = await authenticatedFetch('/api/events', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 

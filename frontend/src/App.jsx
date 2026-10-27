@@ -14,6 +14,7 @@ import Header from './components/Header';
 import HeroSection from './components/HeroSection';
 import EventList from './components/EventList';
 import OrganizerCheckIn from './components/OrganizerCheckIn';
+import OrganizerDashboard from './components/OrganizerDashboard';
 import EventRegistrationForm from './components/EventRegistrationForm';
 import FallbackTestDemo from './components/FallbackTestDemo';
 import Footer from './components/Footer';
@@ -147,6 +148,12 @@ function AppContent() {
             {activeTab === 'checkin' && (
               <OrganizerCheckIn
                 onSelectEventForRegister={(evt) => handleOpenRegisterModal(evt)}
+              />
+            )}
+
+            {activeTab === 'organizer-dashboard' && (
+              <OrganizerDashboard
+                onNavigateHome={() => setActiveTab('events')}
               />
             )}
 

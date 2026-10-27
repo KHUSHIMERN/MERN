@@ -59,6 +59,17 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, user, log
 
             <button
               type="button"
+              className={`nav-link ${view === 'events' && activeTab === 'organizer-dashboard' ? 'active' : ''}`}
+              onClick={() => {
+                if (setView) setView('events');
+                if (setActiveTab) setActiveTab('organizer-dashboard');
+              }}
+            >
+              📊 {t('header.nav.organizerDashboard', 'Organizer Dashboard')}
+            </button>
+
+            <button
+              type="button"
               className="nav-link nav-link-highlight"
               onClick={onOpenRegisterModal}
             >

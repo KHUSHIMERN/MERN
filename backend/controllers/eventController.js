@@ -24,13 +24,51 @@ const getCategoryMatchPatterns = (cat) => {
   return [cat];
 };
 
+const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
 /**
  * GET /api/events
- * Fetch all events with category, tags, date range, published, and search filter support.
+ * Fetch all events with category, tags, date range, published, search, organizerId, geo-radius, and pagination.
  */
 const getEvents = async (req, res, next) => {
   try {
-    const { category, tags, published, startDate, endDate, search } = req.query;
+    const {
+      category,
+      tags,
+      published,
+      startDate,
+      endDate,
+      search,
+      organizerId,
+      organizer,
+      lat,
+      latitude,
+      lng,
+      longitude,
+      radius,
+      radiusKm,
+      page,
+      limit,
+      pageSize
+    } = req.query;
+
+    const orgFilter = (organizerId || organizer || '').toString().trim();
+    const centerLat = lat !== undefined ? Number(lat) : latitude !== undefined ? Number(latitude) : null;
+    const centerLng = lng !== undefined ? Number(lng) : longitude !== undefined ? Number(longitude) : null;
+    const maxRadius = radius !== undefined ? Number(radius) : radiusKm !== undefined ? Number(radiusKm) : null;
 
     if (isConnectedToMongoDB) {
       const query = {};
@@ -49,6 +87,22 @@ const getEvents = async (req, res, next) => {
         query.published = String(published).toLowerCase() === 'true';
       }
 
+      if (orgFilter) {
+        const orgOr = [{ organizerId: orgFilter }, { organizerName: orgFilter }];
+        if (mongoose.Types.ObjectId.isValid(orgFilter)) {
+          orgOr.push({ organizer: new mongoose.Types.ObjectId(orgFilter) });
+          orgOr.push({ organizerId: new mongoose.Types.ObjectId(orgFilter) });
+        }
+        if (query.$and) {
+          query.$and.push({ $or: orgOr });
+        } else if (query.$or) {
+          query.$and = [{ $or: query.$or }, { $or: orgOr }];
+          delete query.$or;
+        } else {
+          query.$or = orgOr;
+        }
+      }
+
       if (tags) {
         const tagList = Array.isArray(tags)
           ? tags
@@ -57,14 +111,21 @@ const getEvents = async (req, res, next) => {
               .map((t) => t.trim())
               .filter(Boolean);
         if (tagList.length > 0) {
-          query.tags = { $in: tagList };
+          const tagRegexes = tagList.map((t) => new RegExp(`^${t}$`, 'i'));
+          query.tags = { $in: tagRegexes };
         }
       }
 
       if (startDate || endDate) {
         query.startDate = {};
         if (startDate) query.startDate.$gte = new Date(startDate);
-        if (endDate) query.startDate.$lte = new Date(endDate);
+        if (endDate) {
+          let eDate = new Date(endDate);
+          if (typeof endDate === 'string' && endDate.length === 10) {
+            eDate = new Date(`${endDate}T23:59:59.999Z`);
+          }
+          query.startDate.$lte = eDate;
+        }
       }
 
       if (search && search.trim()) {
@@ -72,9 +133,13 @@ const getEvents = async (req, res, next) => {
         const searchCond = [
           { title: regex },
           { description: regex },
-          { 'location.placeName': regex }
+          { 'location.placeName': regex },
+          { city: regex },
+          { tags: regex }
         ];
-        if (query.$or) {
+        if (query.$and) {
+          query.$and.push({ $or: searchCond });
+        } else if (query.$or) {
           query.$and = [{ $or: query.$or }, { $or: searchCond }];
           delete query.$or;
         } else {
@@ -82,8 +147,38 @@ const getEvents = async (req, res, next) => {
         }
       }
 
-      const events = await Event.find(query).sort({ startDate: 1, createdAt: -1 });
-      return res.json({ success: true, count: events.length, data: events, events });
+      let events = await Event.find(query).sort({ startDate: 1, createdAt: -1 });
+
+      if (centerLat !== null && centerLng !== null && maxRadius !== null && !isNaN(maxRadius)) {
+        events = events.filter((e) => {
+          const eLat = e.location?.latitude ?? (e.latitude != null ? Number(e.latitude) : null);
+          const eLng = e.location?.longitude ?? (e.longitude != null ? Number(e.longitude) : null);
+          if (eLat == null || eLng == null) return false;
+          const dist = calculateDistanceKm(centerLat, centerLng, eLat, eLng);
+          return dist !== null && dist <= maxRadius;
+        });
+      }
+
+      const totalCount = events.length;
+      const reqLimit = parseInt(limit || pageSize, 10);
+      const reqPage = Math.max(1, parseInt(page, 10) || 1);
+
+      let paginated = events;
+      let totalPages = 1;
+      if (reqLimit > 0) {
+        totalPages = Math.ceil(totalCount / reqLimit) || 1;
+        const startIndex = (reqPage - 1) * reqLimit;
+        paginated = events.slice(startIndex, startIndex + reqLimit);
+      }
+
+      return res.json({
+        success: true,
+        count: totalCount,
+        page: reqPage,
+        totalPages,
+        data: paginated,
+        events: paginated
+      });
     }
 
     // In-memory fallback store mode
@@ -107,6 +202,15 @@ const getEvents = async (req, res, next) => {
       results = results.filter((e) => Boolean(e.published) === isPub);
     }
 
+    if (orgFilter) {
+      results = results.filter(
+        (e) =>
+          String(e.organizerId || '').toLowerCase() === orgFilter.toLowerCase() ||
+          String(e.organizer || '').toLowerCase() === orgFilter.toLowerCase() ||
+          String(e.organizerName || '').toLowerCase() === orgFilter.toLowerCase()
+      );
+    }
+
     if (tags) {
       const tagList = Array.isArray(tags)
         ? tags
@@ -116,7 +220,7 @@ const getEvents = async (req, res, next) => {
             .filter(Boolean);
       if (tagList.length > 0) {
         results = results.filter(
-          (e) => Array.isArray(e.tags) && e.tags.some((t) => tagList.includes(t.toLowerCase()))
+          (e) => Array.isArray(e.tags) && e.tags.some((t) => tagList.includes(String(t).toLowerCase()))
         );
       }
     }
@@ -129,7 +233,11 @@ const getEvents = async (req, res, next) => {
     }
 
     if (endDate) {
-      const end = new Date(endDate).getTime();
+      let eDate = new Date(endDate);
+      if (typeof endDate === 'string' && endDate.length === 10) {
+        eDate = new Date(`${endDate}T23:59:59.999Z`);
+      }
+      const end = eDate.getTime();
       results = results.filter((e) => e.startDate && new Date(e.startDate).getTime() <= end);
     }
 
@@ -138,13 +246,43 @@ const getEvents = async (req, res, next) => {
       results = results.filter((e) => {
         const titleMatch = e.title && e.title.toLowerCase().includes(term);
         const descMatch = e.description && e.description.toLowerCase().includes(term);
-        const locString = typeof e.location === 'object' ? e.location.placeName : String(e.location);
+        const locString = typeof e.location === 'object' ? (e.location?.placeName || '') : String(e.location || '');
         const locMatch = locString && locString.toLowerCase().includes(term);
-        return titleMatch || descMatch || locMatch;
+        const tagMatch = Array.isArray(e.tags) && e.tags.some((t) => String(t).toLowerCase().includes(term));
+        return titleMatch || descMatch || locMatch || tagMatch;
       });
     }
 
-    return res.json({ success: true, count: results.length, data: results, events: results });
+    if (centerLat !== null && centerLng !== null && maxRadius !== null && !isNaN(maxRadius)) {
+      results = results.filter((e) => {
+        const eLat = e.location?.latitude ?? (e.latitude != null ? Number(e.latitude) : null);
+        const eLng = e.location?.longitude ?? (e.longitude != null ? Number(e.longitude) : null);
+        if (eLat == null || eLng == null) return false;
+        const dist = calculateDistanceKm(centerLat, centerLng, eLat, eLng);
+        return dist !== null && dist <= maxRadius;
+      });
+    }
+
+    const totalCount = results.length;
+    const reqLimit = parseInt(limit || pageSize, 10);
+    const reqPage = Math.max(1, parseInt(page, 10) || 1);
+
+    let paginated = results;
+    let totalPages = 1;
+    if (reqLimit > 0) {
+      totalPages = Math.ceil(totalCount / reqLimit) || 1;
+      const startIndex = (reqPage - 1) * reqLimit;
+      paginated = results.slice(startIndex, startIndex + reqLimit);
+    }
+
+    return res.json({
+      success: true,
+      count: totalCount,
+      page: reqPage,
+      totalPages,
+      data: paginated,
+      events: paginated
+    });
   } catch (error) {
     next(error);
   }
@@ -257,11 +395,17 @@ const createEvent = async (req, res, next) => {
       seatsLeft
     } = req.body;
 
-    // Required fields validation
-    if (!title || !title.trim() || !organizerId || !startDate) {
+    const resolvedOrganizerId =
+      (organizerId && String(organizerId).trim()) ||
+      (req.user && (req.user._id || req.user.id)?.toString()) ||
+      (req.body.organizer && String(req.body.organizer).trim()) ||
+      'organizer-default';
+
+    // Required fields validation (title and startDate)
+    if (!title || !title.trim() || !startDate) {
       return res.status(400).json({
         success: false,
-        message: 'Validation Error: Required fields title, organizerId, and startDate must be provided.'
+        message: 'Validation Error: Required fields title and startDate must be provided.'
       });
     }
 
@@ -315,7 +459,9 @@ const createEvent = async (req, res, next) => {
       itemKey: itemKey || `evt_${Date.now()}`,
       title: title.trim(),
       description: description || '',
-      organizerId: organizerId.trim(),
+      organizerId: resolvedOrganizerId,
+      organizer: mongoose.Types.ObjectId.isValid(resolvedOrganizerId) ? resolvedOrganizerId : undefined,
+      organizerName: req.body.organizerName || req.user?.name || 'Community Organizer',
       category: category || 'general',
       tags: formattedTags,
       startDate: parsedStart,
@@ -377,6 +523,26 @@ const updateEvent = async (req, res, next) => {
           success: false,
           message: 'Validation Error: startDate cannot be after endDate.'
         });
+      }
+    }
+
+    if (updatePayload.tags !== undefined) {
+      updatePayload.tags = Array.isArray(updatePayload.tags)
+        ? updatePayload.tags
+        : typeof updatePayload.tags === 'string'
+        ? updatePayload.tags.split(',').map((t) => t.trim()).filter(Boolean)
+        : [];
+    }
+
+    if (updatePayload.location !== undefined) {
+      if (typeof updatePayload.location === 'object' && updatePayload.location !== null) {
+        updatePayload.location = {
+          placeName: updatePayload.location.placeName || '',
+          latitude: updatePayload.location.latitude !== undefined ? Number(updatePayload.location.latitude) : null,
+          longitude: updatePayload.location.longitude !== undefined ? Number(updatePayload.location.longitude) : null
+        };
+      } else if (typeof updatePayload.location === 'string') {
+        updatePayload.location = { placeName: updatePayload.location, latitude: null, longitude: null };
       }
     }
 

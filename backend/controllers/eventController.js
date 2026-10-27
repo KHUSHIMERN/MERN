@@ -1,4 +1,4 @@
-﻿const mongoose = require('mongoose');
+onst mongoose = require('mongoose');
 const Event = require('../models/Event');
 const { INITIAL_EVENTS } = require('../data/seedEvents');
 const {

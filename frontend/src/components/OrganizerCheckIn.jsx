@@ -1,0 +1,1008 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import RegistrationDesk from './RegistrationDesk';
+import { useAuth } from '../context/AuthContext';
+import authenticatedFetch from '../utils/authenticatedFetch';
+
+const hasRegistrations = (event) => {
+  if (!event) return false;
+  const confirmed = Number(event.confirmedCount ?? event.attendeesCount ?? event.rsvpedUsers?.length ?? 0);
+  const waitlisted = Number(event.waitlistCount ?? event.waitlistUsers?.length ?? 0);
+  return confirmed + waitlisted > 0;
+};
+
+export function OrganizerCheckIn() {
+  const { user } = useAuth();
+  // State Management
+  const [events, setEvents] = useState([]);
+  const [selectedEventId, setSelectedEventId] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [workspaceTab, setWorkspaceTab] = useState('attendance');
+  const defaultedTabEventId = useRef('');
+  
+  const userRole = user?.role === 'admin' ? 'organizer' : user?.role;
+
+  // Attendance Data & Summary Stats
+  const [attendanceData, setAttendanceData] = useState([]);
+  const [summary, setSummary] = useState({
+    totalRegistrations: 0,
+    confirmedCount: 0,
+    waitlistCount: 0,
+    presentCount: 0,
+    absentCount: 0,
+    attendancePercentage: 0
+  });
+
+  // Filter & Pagination States
+  const [search, setSearch] = useState('');
+  const [rsvpFilter, setRsvpFilter] = useState('all'); // 'all' | 'confirmed' | 'waitlist'
+  const [attendanceFilter, setAttendanceFilter] = useState('all'); // 'all' | 'present' | 'absent'
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
+
+  // Pagination metadata
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1
+  });
+
+  // Selection & Bulk Operations
+  const [selectedRegIds, setSelectedRegIds] = useState([]);
+
+  // Audit Logs State
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [showAuditLogs, setShowAuditLogs] = useState(false);
+
+  // UI State: Loading & Toast Messages
+  const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  // Helper to trigger temporary toast message
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  // 1. Fetch Events List for Event Selector
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const res = await authenticatedFetch('/api/events');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            const manageableEvents = (user?.role === 'admin'
+              ? json.data
+              : json.data.filter((event) => {
+                  const ownerId = event.organizer?._id || event.organizer || event.organizerId;
+                  return ownerId?.toString() === user?._id?.toString();
+                }))
+              .sort((left, right) => Number(hasRegistrations(right)) - Number(hasRegistrations(left)));
+            setEvents(manageableEvents);
+            setSelectedEventId((currentId) => {
+              const currentStillAvailable = manageableEvents.some((event) =>
+                [event._id, event.id, event.itemKey].filter(Boolean).some((id) => id.toString() === currentId?.toString())
+              );
+              return currentStillAvailable ? currentId : (manageableEvents[0]?._id || '');
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch organizer events:', err);
+      }
+      setEvents([]);
+      setSelectedEventId('');
+    };
+    fetchEvents();
+    const refreshTimer = window.setInterval(fetchEvents, 15000);
+    return () => window.clearInterval(refreshTimer);
+  }, [user?._id, user?.role]);
+
+  // Update selected event object when ID changes
+  useEffect(() => {
+    const found = events.find((e) => e._id === selectedEventId || e.id === selectedEventId || e.itemKey === selectedEventId);
+    const nextEvent = found || events[0] || null;
+    setSelectedEvent(nextEvent);
+    const nextEventId = nextEvent?._id || nextEvent?.id || nextEvent?.itemKey || '';
+    if (nextEventId && defaultedTabEventId.current !== nextEventId) {
+      defaultedTabEventId.current = nextEventId;
+      setWorkspaceTab(hasRegistrations(nextEvent) ? 'registrations' : 'attendance');
+    }
+  }, [events, selectedEventId]);
+
+  // 2. Fetch Attendance Data from API
+  const fetchAttendance = useCallback(async () => {
+    if (!selectedEventId) return;
+
+    setIsLoading(true);
+    setAuthError(null);
+
+    try {
+      const queryParams = new URLSearchParams({
+        search,
+        rsvpStatus: rsvpFilter,
+        attendanceStatus: attendanceFilter,
+        page: page.toString(),
+        limit: limit.toString(),
+        sortBy,
+        sortOrder
+      });
+
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance?${queryParams.toString()}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin',
+          'X-User-Email': 'organizer@eventpulse.org'
+        }
+      });
+
+      if (res.status === 403) {
+        const errJson = await res.json();
+        setAuthError(errJson.message || 'Access Denied: Organizer role required.');
+        setAttendanceData([]);
+        setIsLoading(false);
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(`HTTP Error ${res.status}`);
+      }
+
+      const json = await res.json();
+      if (json.success) {
+        setAttendanceData(json.data || []);
+        if (json.summary) setSummary(json.summary);
+        if (json.pagination) setPagination(json.pagination);
+      }
+    } catch (err) {
+      console.error('Error fetching attendance:', err);
+      showToast(`Error fetching attendance: ${err.message}`, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedEventId, userRole, search, rsvpFilter, attendanceFilter, page, limit, sortBy, sortOrder]);
+
+  useEffect(() => {
+    if (workspaceTab !== 'attendance') return undefined;
+    fetchAttendance();
+    const refreshTimer = window.setInterval(fetchAttendance, 15000);
+    return () => window.clearInterval(refreshTimer);
+  }, [fetchAttendance, workspaceTab]);
+
+  // 3. Fetch Audit Logs
+  const fetchAuditLogs = useCallback(async () => {
+    if (!selectedEventId || userRole !== 'organizer') return;
+    try {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance/audit-logs`, {
+        headers: {
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin'
+        }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) setAuditLogs(json.data || []);
+      }
+    } catch (err) {
+      console.warn('Could not fetch audit logs:', err);
+    }
+  }, [selectedEventId, userRole]);
+
+  useEffect(() => {
+    if (showAuditLogs) {
+      fetchAuditLogs();
+    }
+  }, [showAuditLogs, fetchAuditLogs]);
+
+  // Reset page to 1 when search or filters change
+  const handleSearchChange = (e) => {
+    setSearch(e.target.value);
+    setPage(1);
+  };
+
+  const handleRsvpFilterChange = (e) => {
+    setRsvpFilter(e.target.value);
+    setPage(1);
+  };
+
+  const handleAttendanceFilterChange = (e) => {
+    setAttendanceFilter(e.target.value);
+    setPage(1);
+  };
+
+  // Selection Checkboxes Logic
+  const handleSelectRow = (regId, isWaitlist = false) => {
+    if (isWaitlist) return;
+    setSelectedRegIds((prev) =>
+      prev.includes(regId) ? prev.filter((id) => id !== regId) : [...prev, regId]
+    );
+  };
+
+  const handleSelectAllOnPage = (e) => {
+    const eligiblePageRecords = attendanceData.filter((record) => record.rsvpStatus !== 'waitlist');
+    if (e.target.checked) {
+      const pageIds = eligiblePageRecords.map((r) => r._id || r.id);
+      setSelectedRegIds(Array.from(new Set([...selectedRegIds, ...pageIds])));
+    } else {
+      const pageIds = new Set(eligiblePageRecords.map((r) => r._id || r.id));
+      setSelectedRegIds((prev) => prev.filter((id) => !pageIds.has(id)));
+    }
+  };
+
+  const eligiblePageRecords = attendanceData.filter((record) => record.rsvpStatus !== 'waitlist');
+  const isAllPageSelected =
+    eligiblePageRecords.length > 0 &&
+    eligiblePageRecords.every((r) => selectedRegIds.includes(r._id || r.id));
+
+  // 4. Per-row Present/Absent Toggle
+  const handleToggleSingleAttendance = async (regId, currentStatus, attendeeName) => {
+    if (userRole !== 'organizer') {
+      showToast('Access Denied: Only organizers can update attendance.', 'error');
+      return;
+    }
+
+    const nextStatus = !currentStatus;
+
+    // Optimistic UI Update
+    setAttendanceData((prev) =>
+      prev.map((item) => {
+        if ((item._id || item.id) === regId) {
+          return {
+            ...item,
+            statusPresent: nextStatus,
+            checkInAt: nextStatus ? new Date().toISOString() : null,
+            markedBy: 'Organizer Admin (organizer@eventpulse.org)'
+          };
+        }
+        return item;
+      })
+    );
+
+    try {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin',
+          'X-User-Email': 'organizer@eventpulse.org'
+        },
+        body: JSON.stringify({
+          registrationId: regId,
+          statusPresent: nextStatus
+        })
+      });
+
+      if (res.status === 403) {
+        showToast('Access Denied: Only organizers can perform check-ins.', 'error');
+        fetchAttendance(); // Revert
+        return;
+      }
+
+      const json = await res.json();
+      if (json.success) {
+        showToast(
+          nextStatus
+            ? `Marked ${attendeeName || 'attendee'} as PRESENT ✓`
+            : `Marked ${attendeeName || 'attendee'} as ABSENT`,
+          nextStatus ? 'success' : 'info'
+        );
+        fetchAttendance();
+        if (showAuditLogs) fetchAuditLogs();
+      } else {
+        throw new Error(json.message || 'Update failed');
+      }
+    } catch (err) {
+      showToast(`Error updating attendance: ${err.message}`, 'error');
+      fetchAttendance(); // Revert
+    }
+  };
+
+  // 5. Bulk Mark Selected (Present or Absent)
+  const handleBulkAttendanceUpdate = async (targetStatus) => {
+    if (selectedRegIds.length === 0) {
+      showToast('Please select at least one registrant from the table.', 'warning');
+      return;
+    }
+
+    if (userRole !== 'organizer') {
+      showToast('Access Denied: Organizer role required.', 'error');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin',
+          'X-User-Email': 'organizer@eventpulse.org'
+        },
+        body: JSON.stringify({
+          registrationIds: selectedRegIds,
+          statusPresent: targetStatus
+        })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        showToast(
+          `Bulk Update: Marked ${json.count || selectedRegIds.length} registrant(s) as ${
+            targetStatus ? 'PRESENT ✓' : 'ABSENT'
+          }`,
+          'success'
+        );
+        setSelectedRegIds([]);
+        fetchAttendance();
+        if (showAuditLogs) fetchAuditLogs();
+      } else {
+        throw new Error(json.message || 'Bulk update failed');
+      }
+    } catch (err) {
+      showToast(`Bulk update error: ${err.message}`, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 6. Bulk Quick Action: Mark All Present on Current Page
+  const handleMarkPageAllPresent = async () => {
+    if (attendanceData.length === 0) {
+      showToast('No registrants available on this page to mark present.', 'info');
+      return;
+    }
+
+    const pageIds = attendanceData
+      .filter((record) => record.rsvpStatus !== 'waitlist')
+      .map((record) => record._id || record.id);
+
+    if (pageIds.length === 0) {
+      showToast('Waitlisted residents cannot be checked in until they are promoted.', 'info');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin',
+          'X-User-Email': 'organizer@eventpulse.org'
+        },
+        body: JSON.stringify({
+          registrationIds: pageIds,
+          statusPresent: true
+        })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        showToast(`Marked all ${pageIds.length} attendees on current page as PRESENT ✓`, 'success');
+        fetchAttendance();
+        if (showAuditLogs) fetchAuditLogs();
+      } else {
+        throw new Error(json.message || 'Action failed');
+      }
+    } catch (err) {
+      showToast(`Error: ${err.message}`, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 7. Export Current Attendance List to CSV
+  const handleExportCSV = async () => {
+    if (userRole !== 'organizer') {
+      showToast('Access Denied: Only organizers can export attendance reports.', 'error');
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      const queryParams = new URLSearchParams({
+        search,
+        rsvpStatus: rsvpFilter,
+        attendanceStatus: attendanceFilter
+      });
+
+      const res = await authenticatedFetch(`/api/events/${selectedEventId}/attendance/export?${queryParams.toString()}`, {
+        headers: {
+          'X-User-Role': userRole,
+          'X-User-Name': 'Organizer Admin'
+        }
+      });
+
+      if (res.status === 403) {
+        const err = await res.json();
+        showToast(err.message || 'Access denied for export.', 'error');
+        setIsExporting(false);
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(`Export failed with status ${res.status}`);
+      }
+
+      // Download CSV Blob
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `attendance-${selectedEventId}-${Date.now()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      showToast('Attendance report CSV downloaded successfully!', 'success');
+    } catch (err) {
+      console.error('CSV Export Error:', err);
+      showToast(`Export failed: ${err.message}`, 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Formatter for timestamp strings
+  const formatTimestamp = (dateStr) => {
+    if (!dateStr) return 'Not checked in';
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    } catch {
+      return String(dateStr);
+    }
+  };
+
+  return (
+    <div className="checkin-container">
+      {/* Toast Feedback Banner */}
+      {toast && (
+        <div
+          className={`toast-notification toast-${toast.type}`}
+          role={toast.type === 'error' ? 'alert' : 'status'}
+          aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+          aria-atomic="true"
+        >
+          <span className="toast-icon">
+            {toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : toast.type === 'warning' ? '⚠️' : 'ℹ️'}
+          </span>
+          <span className="toast-text">{toast.message}</span>
+        </div>
+      )}
+
+      {/* Screen Title & Controls Bar */}
+      <div className="checkin-header">
+        <div className="header-titles">
+          <h2 className="checkin-title">
+            <span className="title-icon">📋</span> Organizer Check-in & Attendance Desk
+          </h2>
+          <p className="checkin-subtitle">
+            {selectedEvent ? <strong>{selectedEvent.title} — </strong> : null}
+            Manage real-time event day attendance, confirm RSVPs, mark check-in timestamps, and export audit records.
+          </p>
+        </div>
+
+        {/* Role Badge */}
+        <div className="role-switcher-card">
+          <div className="role-buttons">
+            <span className="role-btn active-organizer" style={{ cursor: 'default' }}>
+              👑 Organizer (Authorized)
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Event Selector & Action Bar */}
+      <div className="event-selection-bar">
+        <div className="event-picker flex-1">
+          <label htmlFor="event-select" className="picker-label">Select Event:</label>
+          <select
+            id="event-select"
+            className="event-select-dropdown"
+            value={selectedEventId}
+            onChange={(e) => {
+              setSelectedEventId(e.target.value);
+              setPage(1);
+              setSelectedRegIds([]);
+            }}
+          >
+            {events.map((evt) => (
+              <option key={evt._id || evt.id || evt.itemKey} value={evt._id || evt.id || evt.itemKey}>
+                {evt.title} ({evt.date || 'Upcoming'})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="action-buttons-group">
+          <button
+            type="button"
+            className="btn-action btn-export"
+            onClick={handleExportCSV}
+            disabled={isExporting || userRole !== 'organizer'}
+          >
+            {isExporting ? (
+              <>⏳ Generating CSV...</>
+            ) : (
+              <>📥 Export Current Attendance (CSV)</>
+            )}
+          </button>
+          
+          <button
+            type="button"
+            className={`btn-action btn-audit ${showAuditLogs ? 'active' : ''}`}
+            onClick={() => setShowAuditLogs(!showAuditLogs)}
+            disabled={userRole !== 'organizer'}
+            aria-expanded={showAuditLogs}
+            aria-controls="audit-log-panel"
+          >
+            📜 {showAuditLogs ? 'Hide Audit Log' : 'View Audit Trail'}
+          </button>
+        </div>
+      </div>
+
+      <div className="organizer-workspace-tabs" role="tablist" aria-label="Organizer event workspace">
+        <button type="button" role="tab" aria-selected={workspaceTab === 'attendance'} className={workspaceTab === 'attendance' ? 'active' : ''} onClick={() => setWorkspaceTab('attendance')}>
+          Check-in & Attendance
+        </button>
+        <button type="button" role="tab" aria-selected={workspaceTab === 'registrations'} className={workspaceTab === 'registrations' ? 'active' : ''} onClick={() => setWorkspaceTab('registrations')}>
+          Registration Desk
+        </button>
+      </div>
+
+      {workspaceTab === 'registrations' && (
+        selectedEventId
+          ? <RegistrationDesk eventId={selectedEventId} event={selectedEvent} />
+          : <div className="registration-desk-state">No events owned by this organizer.</div>
+      )}
+
+      {/* 403 Authorization Banner if Unauthorized */}
+      {workspaceTab === 'attendance' && (authError ? (
+        <div className="auth-error-banner">
+          <div className="banner-icon">🔒</div>
+          <div className="banner-content">
+            <h3>403 Forbidden - Access Restricted</h3>
+            <p>{authError}</p>
+            <span className="hint-text">
+              Attendance is limited to this event's owner and administrators.
+            </span>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Summary Dashboard Cards */}
+          <div className="summary-cards-grid">
+            <div className="summary-card total-card">
+              <div className="card-header">
+                <span className="card-title">Total Registrations</span>
+                <span className="card-icon">🎟️</span>
+              </div>
+              <div className="card-value">{summary.totalRegistrations}</div>
+              <div className="card-detail">
+                <span className="tag tag-confirmed">{summary.confirmedCount} Confirmed</span>
+                <span className="tag tag-waitlist">{summary.waitlistCount} Waitlist</span>
+              </div>
+            </div>
+
+            <div className="summary-card present-card">
+              <div className="card-header">
+                <span className="card-title">Present / Checked In</span>
+                <span className="card-icon">✅</span>
+              </div>
+              <div className="card-value text-green">{summary.presentCount}</div>
+              <div className="card-detail text-muted">
+                {summary.confirmedCount > 0
+                  ? `${summary.attendancePercentage}% of confirmed registrations`
+                  : 'No confirmed RSVPs yet'}
+              </div>
+            </div>
+
+            <div className="summary-card absent-card">
+              <div className="card-header">
+                <span className="card-title">Absent / Pending</span>
+                <span className="card-icon">⏳</span>
+              </div>
+              <div className="card-value text-amber">{summary.absentCount}</div>
+              <div className="card-detail text-muted">Awaiting check-in at venue</div>
+            </div>
+
+            <div className="summary-card rate-card">
+              <div className="card-header">
+                <span className="card-title">Attendance Rate</span>
+                <span className="card-icon">📈</span>
+              </div>
+              <div className="card-value text-indigo">{summary.attendancePercentage}%</div>
+              <div className="progress-bar-bg">
+                <div
+                  className="progress-bar-fill"
+                  style={{ width: `${Math.min(100, Math.max(0, summary.attendancePercentage))}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Search, Filter & Bulk Control Bar */}
+          <div className="table-controls-panel">
+            {/* Search Input */}
+            <div className="search-box">
+              <span className="search-icon">🔍</span>
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search by registrant name or email..."
+                value={search}
+                onChange={handleSearchChange}
+              />
+              {search && (
+                <button
+                  type="button"
+                  className="clear-search"
+                  onClick={() => setSearch('')}
+                  aria-label="Clear search input"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Filter Dropdowns */}
+            <div className="filters-group">
+              <div className="filter-item">
+                <label className="filter-label">RSVP Status:</label>
+                <select className="filter-select" value={rsvpFilter} onChange={handleRsvpFilterChange}>
+                  <option value="all">All (Confirmed & Waitlist)</option>
+                  <option value="confirmed">Confirmed RSVPs</option>
+                  <option value="waitlist">Waitlist Only</option>
+                </select>
+              </div>
+
+              <div className="filter-item">
+                <label className="filter-label">Attendance:</label>
+                <select
+                  className="filter-select"
+                  value={attendanceFilter}
+                  onChange={handleAttendanceFilterChange}
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="present">Present Only</option>
+                  <option value="absent">Absent Only</option>
+                </select>
+              </div>
+
+              <div className="filter-item">
+                <label className="filter-label">Sort By:</label>
+                <select
+                  className="filter-select"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option value="fullName">Name (A-Z)</option>
+                  <option value="createdAt">Registration Time</option>
+                  <option value="checkInAt">Check-in Time</option>
+                </select>
+              </div>
+
+              <div className="filter-item">
+                <label className="filter-label">Order:</label>
+                <select
+                  className="filter-select"
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Bulk Operations Toolbar */}
+          <div className="bulk-actions-toolbar">
+            <div className="bulk-left">
+              <span className="selection-count">
+                {selectedRegIds.length > 0
+                  ? `Selected ${selectedRegIds.length} registrant(s)`
+                  : 'Select rows for bulk check-in'}
+              </span>
+            </div>
+
+            <div className="bulk-right-buttons">
+              <button
+                type="button"
+                className="btn-bulk btn-bulk-present"
+                onClick={() => handleBulkAttendanceUpdate(true)}
+                disabled={selectedRegIds.length === 0}
+              >
+                ✓ Mark Selected Present
+              </button>
+
+              <button
+                type="button"
+                className="btn-bulk btn-bulk-absent"
+                onClick={() => handleBulkAttendanceUpdate(false)}
+                disabled={selectedRegIds.length === 0}
+              >
+                ✕ Mark Selected Absent
+              </button>
+
+              <button
+                type="button"
+                className="btn-bulk btn-bulk-page-present"
+                onClick={handleMarkPageAllPresent}
+                disabled={attendanceData.length === 0}
+              >
+                ⚡ Mark Page All Present
+              </button>
+            </div>
+          </div>
+
+          {/* Registrants Attendance Data Table */}
+          <div className="table-responsive-wrapper">
+            {isLoading ? (
+              <div className="table-loading-spinner">
+                <div className="spinner"></div>
+                <p>Loading attendance records...</p>
+              </div>
+            ) : attendanceData.length === 0 ? (
+              <div className="table-empty-state">
+                <div className="empty-icon">👥</div>
+                <h3>No registrants found</h3>
+                <p>No RSVPs match your current search and filter criteria.</p>
+                {search || rsvpFilter !== 'all' || attendanceFilter !== 'all' ? (
+                  <button
+                    type="button"
+                    className="btn-reset-filters"
+                    onClick={() => {
+                      setSearch('');
+                      setRsvpFilter('all');
+                      setAttendanceFilter('all');
+                    }}
+                  >
+                    Reset All Filters
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <table className="attendance-table">
+                <thead>
+                  <tr>
+                    <th className="th-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={isAllPageSelected}
+                        onChange={handleSelectAllOnPage}
+                        title="Select/Deselect all on current page"
+                      />
+                    </th>
+                    <th>Registrant Details</th>
+                    <th>Ticket Type</th>
+                    <th>RSVP Status</th>
+                    <th>Attendance Status</th>
+                    <th>Check-in Timestamp</th>
+                    <th>Audit Details</th>
+                    <th className="th-actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendanceData.map((record) => {
+                    const regId = record._id || record.id;
+                    const isSelected = selectedRegIds.includes(regId);
+                    const isPresent = Boolean(record.statusPresent);
+                    const isWaitlist = (record.rsvpStatus || '').toLowerCase() === 'waitlist';
+
+                    return (
+                      <tr
+                        key={regId}
+                        className={`tr-row ${isPresent ? 'row-present' : 'row-absent'} ${
+                          isSelected ? 'row-selected' : ''
+                        }`}
+                      >
+                        <td className="td-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleSelectRow(regId, isWaitlist)}
+                            disabled={isWaitlist}
+                            title={isWaitlist ? 'Waitlisted residents cannot be checked in' : 'Select resident'}
+                          />
+                        </td>
+
+                        <td className="td-user">
+                          <div className="user-avatar-name">
+                            <div className={`avatar-circle ${isPresent ? 'avatar-green' : 'avatar-gray'}`}>
+                              {record.fullName ? record.fullName.charAt(0).toUpperCase() : 'U'}
+                            </div>
+                            <div className="user-info">
+                              <span className="user-name">{record.fullName}</span>
+                              <span className="user-email">{record.email}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="td-ticket">
+                          <span className="ticket-badge">
+                            {record.ticketType || 'standard'} ({record.attendees || 1})
+                          </span>
+                        </td>
+
+                        <td className="td-rsvp">
+                          <span className={`rsvp-badge ${isWaitlist ? 'badge-waitlist' : 'badge-confirmed'}`}>
+                            {isWaitlist ? '⏳ Waitlist' : '✅ Confirmed RSVP'}
+                          </span>
+                        </td>
+
+                        <td className="td-status">
+                          <span className={`status-pill ${isPresent ? 'pill-present' : 'pill-absent'}`}>
+                            {isWaitlist ? 'Not eligible' : isPresent ? '● Present' : '○ Absent'}
+                          </span>
+                        </td>
+
+                        <td className="td-timestamp">
+                          <span className={`timestamp-text ${record.checkInAt ? 'text-highlight' : 'text-dim'}`}>
+                            {formatTimestamp(record.checkInAt)}
+                          </span>
+                        </td>
+
+                        <td className="td-audit">
+                          <span className="audit-text" title={record.markedBy || 'N/A'}>
+                            {record.markedBy ? record.markedBy.split(' ')[0] : 'System'}
+                          </span>
+                        </td>
+
+                        <td className="td-actions">
+                          <button
+                            type="button"
+                            className={`btn-toggle-status ${isPresent ? 'btn-mark-absent' : 'btn-mark-present'}`}
+                            onClick={() => handleToggleSingleAttendance(regId, isPresent, record.fullName)}
+                            disabled={isWaitlist}
+                            aria-pressed={isPresent}
+                            aria-label={isWaitlist
+                              ? `${record.fullName || 'Resident'} is waitlisted and cannot be checked in`
+                              : `Mark ${record.fullName || 'attendee'} as ${isPresent ? 'Absent' : 'Present'}`}
+                          >
+                            {isWaitlist ? 'Awaiting promotion' : isPresent ? 'Mark Absent ✕' : 'Mark Present ✓'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Pagination Controls */}
+          {pagination.totalPages > 1 && (
+            <div className="pagination-bar">
+              <div className="pagination-info">
+                Showing page <strong>{pagination.page}</strong> of <strong>{pagination.totalPages}</strong> ({pagination.total} total registrants)
+              </div>
+
+              <div className="pagination-controls">
+                <button
+                  type="button"
+                  className="page-btn"
+                  disabled={page <= 1}
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                >
+                  ◀ Previous
+                </button>
+
+                <div className="page-numbers">
+                  {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      className={`page-num-btn ${page === p ? 'active' : ''}`}
+                      onClick={() => setPage(p)}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  className="page-btn"
+                  disabled={page >= pagination.totalPages}
+                  onClick={() => setPage((prev) => Math.min(pagination.totalPages, prev + 1))}
+                >
+                  Next ▶
+                </button>
+
+                <div className="page-size-selector">
+                  <span className="size-label">Per page:</span>
+                  <select
+                    className="size-select"
+                    value={limit}
+                    onChange={(e) => {
+                      setLimit(Number(e.target.value));
+                      setPage(1);
+                    }}
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      ))}
+
+      {/* Real-time Audit Trail Panel */}
+      {workspaceTab === 'attendance' && showAuditLogs && userRole === 'organizer' && (
+        <div className="audit-log-panel" id="audit-log-panel" role="region" aria-label="Event Audit Trail">
+          <div className="audit-panel-header">
+            <h3>📜 Event Check-in Audit Trail Log</h3>
+            <button
+              type="button"
+              className="btn-close-audit"
+              onClick={() => setShowAuditLogs(false)}
+              aria-label="Close audit log panel"
+            >
+              ✕ Close
+            </button>
+          </div>
+
+          <div className="audit-log-content">
+            {auditLogs.length === 0 ? (
+              <p className="no-audit-logs">No audit entries recorded for this event yet.</p>
+            ) : (
+              <div className="audit-logs-list">
+                {auditLogs.map((log, index) => (
+                  <div key={log.id || log._id || index} className="audit-log-item">
+                    <div className="audit-log-icon">
+                      {log.statusPresent ? '🟢' : '🔴'}
+                    </div>
+                    <div className="audit-log-details">
+                      <div className="audit-log-title">
+                        <strong>{log.attendeeName || 'Attendee'}</strong> was marked{' '}
+                        <span className={log.statusPresent ? 'text-green' : 'text-amber'}>
+                          {log.statusPresent ? 'PRESENT' : 'ABSENT'}
+                        </span>
+                      </div>
+                      <div className="audit-log-meta">
+                        <span>Email: {log.attendeeEmail || 'N/A'}</span> •{' '}
+                        <span>Performed by: {log.performedBy || 'Organizer Admin'}</span> •{' '}
+                        <span>Role: {log.userRole || 'organizer'}</span>
+                      </div>
+                    </div>
+                    <div className="audit-log-time">
+                      {formatTimestamp(log.timestamp || log.checkInAt || log.createdAt)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default OrganizerCheckIn;

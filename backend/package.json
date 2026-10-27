@@ -1,28 +1,39 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend API for Tier 2/3/4 Local Event & Community Portal",
   "main": "server.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "test": "jest --runInBand --forceExit"
+    "dev": "nodemon server.js",
+    "build": "node -e \"console.log('✅ Backend build check successful: CommonJS server ready.')\"",
+    "seed": "node seed.js",
+    "migrate:rsvps": "node scripts/migrateLegacyRsvps.js",
+    "test": "jest --runInBand --forceExit",
+    "test:flow": "node test-auth-flow.js",
+    "test:all": "node test-auth-flow.js && node test-profile-flow.js",
+    "test:auth": "jest tests/authSecurity.test.js --runInBand --forceExit",
+    "test:integration": "jest tests/authSecurity.test.js tests/authAndRsvp.test.js --runInBand --forceExit",
+    "test:shreya": "jest tests/authAndRsvp.test.js tests/authSecurity.test.js tests/typeaheadSuggest.test.js --runInBand --forceExit",
+    "test:typeahead": "jest tests/typeaheadSuggest.test.js --runInBand --forceExit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.8.0"
+    "mongodb-memory-server": "^11.2.0",
+    "mongoose": "^9.8.1",
+    "nodemailer": "^9.0.3",
+    "openai": "^6.49.0"
   },
   "devDependencies": {
     "jest": "^30.4.2",
-    "mongodb-memory-server": "^11.2.0",
     "supertest": "^7.2.2"
   }
 }

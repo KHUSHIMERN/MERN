@@ -1,40 +1,177 @@
 const mongoose = require('mongoose');
 
-const EventSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: true,
+const eventSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      required: [true, 'Event title is required'],
+      trim: true,
+    },
+    title_hi: {
+      type: String,
+      trim: true,
+    },
+    description: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    description_hi: {
+      type: String,
+      trim: true,
+    },
+    category: {
+      type: String,
+      required: [true, 'Category is required'],
+      default: 'general',
+    },
+    location: {
+      type: mongoose.Schema.Types.Mixed,
+      default: 'Online',
+    },
+    city: {
+      type: String,
+      default: 'Jaipur',
+    },
+    tier: {
+      type: String,
+      enum: ['Tier 2', 'Tier 3', 'Tier 4'],
+      default: 'Tier 2',
+    },
+    startDate: {
+      type: Date,
+      required: false,
+    },
+    endDate: {
+      type: Date,
+    },
+    date: {
+      type: String,
+    },
+    time: {
+      type: String,
+    },
+    timezone: {
+      type: String,
+      default: 'Asia/Kolkata',
+      trim: true,
+      validate: {
+        validator: function (v) {
+          if (!v) return true;
+          try {
+            Intl.DateTimeFormat(undefined, { timeZone: v });
+            return true;
+          } catch (e) {
+            return false;
+          }
+        },
+        message: props => `${props.value} is not a valid IANA timezone identifier`,
+      },
+    },
+    organizer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: false,
+    },
+    organizerName: {
+      type: String,
+      default: 'Community Organizer',
+    },
+    organizerId: {
+      type: mongoose.Schema.Types.Mixed,
+    },
+    capacity: {
+      type: Number,
+      default: 100,
+    },
+    attendeesCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    rsvpedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    attendees: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+        },
+        registeredAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    checkedInCount: {
+      type: Number,
+      default: 0,
+    },
+    checkedInUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    waitlistCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    waitlistUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    tags: {
+      type: [String],
+      default: [],
+    },
+    imageUrl: {
+      type: String,
+      default: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80',
+      trim: true,
+    },
+    imageUrlAlt: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    image: {
+      type: String,
+      default: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80',
+    },
+    language: {
+      type: String,
+      default: 'en',
+    },
+    isFeatured: {
+      type: Boolean,
+      default: false,
+    },
+    published: {
+      type: Boolean,
+      default: true,
+    },
   },
-  description: {
-    type: String,
-  },
-  location: {
-    type: String,
-    required: true,
-  },
-  date: {
-    type: Date,
-    required: true,
-  },
-  organizer: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-  },
-  capacity: {
-    type: Number,
-    required: true,
-  },
-  tags: {
-    type: [String],
-    default: [],
-  },
-  language: {
-    type: String,
-    default: 'en',
+  {
+    timestamps: true,
   }
-}, {
-  timestamps: true
-});
+);
 
-module.exports = mongoose.model('Event', EventSchema);
+eventSchema.index({ title: 'text', description: 'text' }, { language_override: 'none' });
+eventSchema.index({ tags: 1 });
+eventSchema.index({ category: 1 });
+eventSchema.index({ city: 1 });
+eventSchema.index({ startDate: 1 });
+eventSchema.index({ language: 1 });
+eventSchema.index({ published: 1 });
+eventSchema.index({ category: 1, city: 1, startDate: 1, language: 1 });
+
+const Event = mongoose.models.Event || mongoose.model('Event', eventSchema);
+module.exports = Event;

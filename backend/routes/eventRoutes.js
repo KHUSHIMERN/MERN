@@ -4,8 +4,30 @@ const jwt = require('jsonwebtoken');
 const Event = require('../models/Event');
 const RSVP = require('../models/RSVP');
 const SuggestionAnalytics = require('../models/SuggestionAnalytics');
-const { requireAuth, requireRole, JWT_SECRET: AUTH_JWT_SECRET } = require('../middleware/auth');
+const {
+  auth,
+  optionalAuth,
+  requireVerified,
+  requireRole,
+  JWT_SECRET: AUTH_JWT_SECRET
+} = require('../middleware/auth');
+const {
+  getEvents,
+  getEventById,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  publishEvent,
+  searchEvents
+} = require('../controllers/eventController');
+const {
+  getEventAttendance,
+  updateEventAttendance,
+  exportEventAttendance,
+  getAttendanceAuditLogs
+} = require('../controllers/attendanceController');
 
+const privileged = [auth, requireVerified, requireRole('organizer', 'admin')];
 const JWT_SECRET = AUTH_JWT_SECRET || process.env.JWT_SECRET || 'supersecretkey';
 
 // Helper to safely extract optional authenticated user
@@ -16,8 +38,8 @@ const getOptionalUser = (req) => {
     try {
       const token = authHeader.split(' ')[1];
       const decoded = jwt.verify(token, JWT_SECRET);
-      if (decoded && decoded.id) {
-        return { _id: decoded.id, id: decoded.id };
+      if (decoded && (decoded.id || decoded._id)) {
+        return { _id: decoded.id || decoded._id, id: decoded.id || decoded._id };
       }
     } catch (_) {
       // Ignore token verification failures for optional routes
@@ -30,76 +52,6 @@ const getOptionalUser = (req) => {
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-
-// Create event - Restricted to Organizers and Admins
-router.post('/', requireAuth, requireRole(['organizer', 'admin']), async (req, res) => {
-  try {
-    const { title, description, location, date, capacity, tags, language } = req.body;
-
-    if (!title || !location || !date || !capacity) {
-      return res.status(400).json({ message: 'Title, location, date, and capacity are required.' });
-    }
-
-    const event = new Event({
-      title,
-      description,
-      location,
-      date: new Date(date),
-      organizer: req.user._id,
-      capacity: Number(capacity),
-      tags: Array.isArray(tags) ? tags.map(t => String(t).trim()).filter(Boolean) : [],
-      language: language ? String(language).trim().toLowerCase() : 'en'
-    });
-
-    await event.save();
-    return res.status(201).json({ message: 'Event created successfully', event });
-  } catch (error) {
-    console.error('Create Event Error:', error);
-    return res.status(500).json({ message: 'Failed to create event', error: error.message });
-  }
-});
-
-// List all events
-router.get('/', requireAuth, async (req, res) => {
-  try {
-    const events = await Event.find().populate('organizer', 'name email').sort({ date: 1 });
-    
-    // Dynamically fetch RSVP details for each event
-    const enrichedEvents = await Promise.all(events.map(async (event) => {
-      const rsvps = await RSVP.find({ eventId: event._id }).sort({ createdAt: 1 });
-      const confirmedCount = rsvps.filter(r => r.status === 'confirmed').length;
-      const waitlistCount = rsvps.filter(r => r.status === 'waitlist').length;
-      
-      let userRegistrationStatus = 'none';
-      let userWaitlistPosition = 0;
-      
-      if (req.user) {
-        const userRSVP = rsvps.find(r => r.userId.toString() === req.user._id.toString());
-        if (userRSVP) {
-          userRegistrationStatus = userRSVP.status;
-          if (userRegistrationStatus === 'waitlist') {
-            const waitlistList = rsvps.filter(r => r.status === 'waitlist');
-            userWaitlistPosition = waitlistList.findIndex(r => r.userId.toString() === req.user._id.toString()) + 1;
-          }
-        }
-      }
-      
-      const eventObj = event.toJSON();
-      return {
-        ...eventObj,
-        rsvpCount: confirmedCount,
-        waitlistCount,
-        userRegistrationStatus,
-        userWaitlistPosition
-      };
-    }));
-
-    return res.status(200).json(enrichedEvents);
-  } catch (error) {
-    console.error('List Events Error:', error);
-    return res.status(500).json({ message: 'Failed to list events', error: error.message });
-  }
-});
 
 // Search and suggestion endpoint for Typeahead
 // Returns up to 10 deduplicated suggestions by searching titles and tags,
@@ -290,46 +242,19 @@ router.post('/suggest/analytics', async (req, res) => {
   }
 });
 
-// Get a single event details
-router.get('/:id', requireAuth, async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id).populate('organizer', 'name email');
-    if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
-    }
-    
-    const rsvps = await RSVP.find({ eventId: event._id }).sort({ createdAt: 1 });
-    const confirmedCount = rsvps.filter(r => r.status === 'confirmed').length;
-    const waitlistCount = rsvps.filter(r => r.status === 'waitlist').length;
-    
-    let userRegistrationStatus = 'none';
-    let userWaitlistPosition = 0;
-    
-    if (req.user) {
-      const userRSVP = rsvps.find(r => r.userId.toString() === req.user._id.toString());
-      if (userRSVP) {
-        userRegistrationStatus = userRSVP.status;
-        if (userRegistrationStatus === 'waitlist') {
-          const waitlistList = rsvps.filter(r => r.status === 'waitlist');
-          userWaitlistPosition = waitlistList.findIndex(r => r.userId.toString() === req.user._id.toString()) + 1;
-        }
-      }
-    }
-    
-    const eventObj = event.toJSON();
-    const enrichedEvent = {
-      ...eventObj,
-      rsvpCount: confirmedCount,
-      waitlistCount,
-      userRegistrationStatus,
-      userWaitlistPosition
-    };
-    
-    return res.status(200).json(enrichedEvent);
-  } catch (error) {
-    console.error('Get Event Error:', error);
-    return res.status(500).json({ message: 'Failed to fetch event details', error: error.message });
-  }
-});
+// General Event REST API Endpoints
+router.get('/', optionalAuth, getEvents);
+router.post('/', ...privileged, createEvent);
+router.get('/search', searchEvents);
+router.get('/:id', optionalAuth, getEventById);
+router.put('/:id', ...privileged, updateEvent);
+router.delete('/:id', ...privileged, deleteEvent);
+router.patch('/:id/publish', ...privileged, publishEvent);
+
+// Organizer-only Attendance Tracking & Check-in Endpoints
+router.get('/:id/attendance', ...privileged, getEventAttendance);
+router.patch('/:id/attendance', ...privileged, updateEventAttendance);
+router.get('/:id/attendance/export', ...privileged, exportEventAttendance);
+router.get('/:id/attendance/audit-logs', ...privileged, getAttendanceAuditLogs);
 
 module.exports = router;

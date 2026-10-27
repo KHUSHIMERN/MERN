@@ -1,71 +1,34 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import {
-  Sparkles,
-  Calendar,
-  MapPin,
-  Ticket,
-  CheckCircle,
-  RefreshCw,
-  AlertCircle,
-  Filter,
-  X,
-  SlidersHorizontal,
-  Compass
-} from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { useNotifications } from '../context/NotificationContext';
+import { confirmedCount, hasActiveRsvp, isEventFull, rsvpStatus, rsvpStatusLabel } from '../utils/rsvpState';
+import { Sparkles, RefreshCw, AlertCircle, Filter, MapPin, Calendar, Globe, RotateCcw, X, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { recordInteraction } from '../utils/recommendationApi';
 
-const POPULAR_TAGS = ['Tech', 'AI', 'Jobs', 'Health', 'Workshop', 'Cultural', 'Community', 'Youth'];
-
-const RADIUS_OPTIONS = [
-  { label: 'Any Distance', value: '' },
-  { label: 'Within 5 km', value: '5' },
-  { label: 'Within 10 km', value: '10' },
-  { label: 'Within 25 km', value: '25' },
-  { label: 'Within 50 km', value: '50' }
-];
-
-export function EventList({ onRegisterEvent, onSelectEvent }) {
+export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
   const { t } = useTranslation();
   const { user, fetchProfile } = useAuth();
-
-  // Helper to parse query parameters from URL on initialization
-  const getInitialParams = () => {
-    if (typeof window === 'undefined') {
-      return { category: 'all', search: '', tags: [], startDate: '', endDate: '', radius: '' };
-    }
-    const params = new URLSearchParams(window.location.search);
-    const tagsParam = params.get('tags');
-    return {
-      category: params.get('category') || 'all',
-      search: params.get('search') || params.get('q') || '',
-      tags: tagsParam ? tagsParam.split(',').map((t) => t.trim()).filter(Boolean) : [],
-      startDate: params.get('startDate') || '',
-      endDate: params.get('endDate') || '',
-      radius: params.get('radius') || ''
-    };
-  };
-
-  const initial = getInitialParams();
+  const showToast = useToast();
+  const { refreshNotifications } = useNotifications();
 
   const [events, setEvents] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
   const [recSource, setRecSource] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Filter states
-  const [searchTerm, setSearchTerm] = useState(initial.search);
-  const [selectedCategory, setSelectedCategory] = useState(initial.category);
-  const [selectedTags, setSelectedTags] = useState(initial.tags);
-  const [startDate, setStartDate] = useState(initial.startDate);
-  const [endDate, setEndDate] = useState(initial.endDate);
-  const [locationRadius, setLocationRadius] = useState(initial.radius);
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(
-    Boolean(initial.tags.length || initial.startDate || initial.endDate || initial.radius)
-  );
-
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
+  const [languageFilter, setLanguageFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(6);
+  const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [rsvpLoadingId, setRsvpLoadingId] = useState(null);
 
   const categories = [
@@ -74,49 +37,23 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
     { key: 'Skill Workshops', label: 'Skill Workshops' },
     { key: 'Health & Wellness', label: 'Health & Wellness' },
     { key: 'Cultural Festivals', label: 'Cultural Festivals' },
-    { key: 'Civic & Community', label: 'Civic & Community' }
+    { key: 'Civic & Community', label: 'Civic & Community' },
   ];
 
-  // Synchronize state to URL query string for bookmarkable/shareable links (AC 4)
-  const syncUrlParams = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams();
+  const languages = [
+    { key: 'all', label: 'All Languages' },
+    { key: 'en', label: 'English (en)' },
+    { key: 'hi', label: 'Hindi (hi)' },
+    { key: 'kn', label: 'Kannada (kn)' },
+  ];
 
-    if (selectedCategory && selectedCategory !== 'all') {
-      params.set('category', selectedCategory);
-    }
-    if (searchTerm.trim()) {
-      params.set('search', searchTerm.trim());
-    }
-    if (selectedTags.length > 0) {
-      params.set('tags', selectedTags.join(','));
-    }
-    if (startDate) {
-      params.set('startDate', startDate);
-    }
-    if (endDate) {
-      params.set('endDate', endDate);
-    }
-    if (locationRadius) {
-      params.set('radius', locationRadius);
-    }
-
-    const newQuery = params.toString();
-    const newRelativePathQuery = window.location.pathname + (newQuery ? `?${newQuery}` : '');
-    window.history.replaceState(null, '', newRelativePathQuery);
-  }, [selectedCategory, searchTerm, selectedTags, startDate, endDate, locationRadius]);
-
-  useEffect(() => {
-    syncUrlParams();
-    fetchEventsAndRecommendations();
-  }, [selectedCategory, searchTerm, selectedTags, startDate, endDate, locationRadius, syncUrlParams]);
-
-  const fetchEventsAndRecommendations = async () => {
+  const fetchEventsAndRecommendations = React.useCallback(async () => {
     try {
+      void refreshKey;
       setLoading(true);
       setError(null);
 
-      // Build query params with all active filters
+      // Build combined query parameters
       const params = {};
       if (selectedCategory !== 'all') {
         params.category = selectedCategory;
@@ -124,32 +61,45 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
       if (searchTerm.trim()) {
         params.search = searchTerm.trim();
       }
-      if (selectedTags.length > 0) {
-        params.tags = selectedTags.join(',');
+      if (locationFilter.trim()) {
+        params.location = locationFilter.trim();
       }
-      if (startDate) {
-        params.startDate = startDate;
+      if (startDateFilter) {
+        params.startDate = startDateFilter;
       }
-      if (endDate) {
-        params.endDate = endDate;
+      if (endDateFilter) {
+        params.endDate = endDateFilter;
       }
-      if (locationRadius) {
-        params.radius = locationRadius;
-        // Default center point coordinates for Tier-2 location matching
-        params.lat = 26.9124;
-        params.lng = 75.7873;
+      if (languageFilter !== 'all') {
+        params.language = languageFilter;
       }
+      params.page = page;
+      params.pageSize = pageSize;
 
       const eventsRes = await axios.get('/api/events', { params });
-      const fetchedEvents =
-        eventsRes.data.events ||
-        eventsRes.data.data ||
-        (Array.isArray(eventsRes.data) ? eventsRes.data : []);
+      const fetchedEvents = eventsRes.data.events || eventsRes.data.data || (Array.isArray(eventsRes.data) ? eventsRes.data : []);
       setEvents(fetchedEvents);
 
-      // Fetch AI Recommendations
+      if (eventsRes.data.total !== undefined) {
+        setPagination({
+          total: Number(eventsRes.data.total) || fetchedEvents.length,
+          totalPages: Number(eventsRes.data.totalPages) || 1,
+        });
+      } else {
+        setPagination({
+          total: fetchedEvents.length,
+          totalPages: 1,
+        });
+      }
+
+      // Fetch AI Recommendations ΓÇö pass user city/language so server can personalise
       try {
-        const recRes = await axios.get('/api/recommendations');
+        const recParams = { limit: 4 };
+        const userCity = user?.city;
+        const userLanguage = user?.preferredLanguage || user?.language;
+        if (userCity) recParams.city = userCity;
+        if (userLanguage) recParams.language = userLanguage;
+        const recRes = await axios.get('/api/recommendations', { params: recParams });
         setRecommendations(recRes.data.recommendations || []);
         setRecSource(recRes.data.source || '');
       } catch (recErr) {
@@ -161,51 +111,125 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
     } finally {
       setLoading(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory, searchTerm, locationFilter, startDateFilter, endDateFilter, languageFilter, page, pageSize, refreshKey, user?._id]);
 
-  const handleToggleTag = (tag) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
-  };
+  useEffect(() => {
+    fetchEventsAndRecommendations();
+  }, [fetchEventsAndRecommendations]);
 
-  const handleClearAllFilters = () => {
-    setSelectedCategory('all');
+  // Compute active filters list for visual tags
+  const activeFilters = [];
+  if (searchTerm.trim()) {
+    activeFilters.push({
+      id: 'search',
+      label: `Search: "${searchTerm.trim()}"`,
+      clear: () => { setSearchTerm(''); setPage(1); }
+    });
+  }
+  if (selectedCategory !== 'all') {
+    activeFilters.push({
+      id: 'category',
+      label: `Category: ${selectedCategory}`,
+      clear: () => { setSelectedCategory('all'); setPage(1); }
+    });
+  }
+  if (locationFilter.trim()) {
+    activeFilters.push({
+      id: 'location',
+      label: `Location: ${locationFilter.trim()}`,
+      clear: () => { setLocationFilter(''); setPage(1); }
+    });
+  }
+  if (startDateFilter) {
+    activeFilters.push({
+      id: 'startDate',
+      label: `From: ${startDateFilter}`,
+      clear: () => { setStartDateFilter(''); setPage(1); }
+    });
+  }
+  if (endDateFilter) {
+    activeFilters.push({
+      id: 'endDate',
+      label: `To: ${endDateFilter}`,
+      clear: () => { setEndDateFilter(''); setPage(1); }
+    });
+  }
+  if (languageFilter !== 'all') {
+    const langLabel = languages.find((l) => l.key === languageFilter)?.label || languageFilter;
+    activeFilters.push({
+      id: 'language',
+      label: `Language: ${langLabel}`,
+      clear: () => { setLanguageFilter('all'); setPage(1); }
+    });
+  }
+
+  const handleResetAllFilters = () => {
     setSearchTerm('');
-    setSelectedTags([]);
-    setStartDate('');
-    setEndDate('');
-    setLocationRadius('');
+    setSelectedCategory('all');
+    setLocationFilter('');
+    setStartDateFilter('');
+    setEndDateFilter('');
+    setLanguageFilter('all');
+    setPage(1);
   };
 
-  const hasActiveFilters =
-    selectedCategory !== 'all' ||
-    searchTerm.trim() !== '' ||
-    selectedTags.length > 0 ||
-    startDate !== '' ||
-    endDate !== '' ||
-    locationRadius !== '';
+  const handleCategorySelect = (key) => {
+    setSelectedCategory(key);
+    setPage(1);
+    // Record filter interaction
+    if (user?._id && key !== 'all') {
+      recordInteraction({
+        userId: user._id,
+        interactionType: 'filter',
+        category: key,
+        city: user?.city || '',
+        language: user?.preferredLanguage || 'en',
+        metadata: { filterType: 'category', value: key },
+      });
+    }
+  };
 
   const handleToggleRsvp = async (evt) => {
     if (!user) {
-      if (onRegisterEvent) onRegisterEvent(evt);
+      showToast('Please log in with a verified account to RSVP.', 'info');
+      onRequireLogin?.();
       return;
     }
 
     const eventId = evt._id || evt.id;
-    const isAlreadyRsvped = isUserRsvped(evt);
+    const isAlreadyRsvped = hasActiveRsvp(evt) || isUserRsvped(evt);
 
     try {
       setRsvpLoadingId(eventId);
       if (isAlreadyRsvped) {
         await axios.delete(`/api/events/${eventId}/rsvp`);
+        showToast('RSVP cancelled successfully.', 'success');
       } else {
-        await axios.post(`/api/events/${eventId}/rsvp`);
+        const response = await axios.post(`/api/events/${eventId}/rsvp`);
+        if (response.data?.status === 'waitlist') {
+          showToast(`Event is full. You joined the waitlist at position ${response.data.waitlistPosition}.`, 'warning');
+        } else {
+          showToast('Your RSVP is confirmed.', 'success');
+        }
+        // Record RSVP interaction to improve future recommendations
+        recordInteraction({
+          userId: user._id,
+          eventId: eventId,
+          interactionType: 'rsvp',
+          category: evt.category || '',
+          city: evt.city || user?.city || '',
+          language: evt.language || user?.preferredLanguage || 'en',
+          metadata: { source: 'event-list' },
+        });
       }
-      await fetchProfile();
-      await fetchEventsAndRecommendations();
+      await Promise.allSettled([
+        fetchProfile(),
+        fetchEventsAndRecommendations(),
+        refreshNotifications({ quiet: true }),
+      ]);
     } catch (err) {
-      alert(err.response?.data?.message || 'RSVP operation failed.');
+      showToast(err.response?.data?.message || 'RSVP operation failed.', 'error');
     } finally {
       setRsvpLoadingId(null);
     }
@@ -213,13 +237,10 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
 
   const isUserRsvped = (evt) => {
     if (!user) return false;
+    if (hasActiveRsvp(evt)) return true;
     const eventId = (evt._id || evt.id)?.toString();
-    const userRsvps = (user.rsvpedEvents || []).map((id) =>
-      typeof id === 'object' ? id._id?.toString() : id?.toString()
-    );
-    const attendeeUsers = (evt.attendees || []).map((a) =>
-      typeof a.user === 'object' ? a.user?._id?.toString() : a.user?.toString()
-    );
+    const userRsvps = (user.rsvpedEvents || []).map((id) => (typeof id === 'object' ? id._id?.toString() : id?.toString()));
+    const attendeeUsers = (evt.attendees || []).map((a) => (typeof a.user === 'object' ? a.user?._id?.toString() : a.user?.toString()));
     return userRsvps.includes(eventId) || attendeeUsers.includes(user._id?.toString());
   };
 
@@ -228,10 +249,7 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
       <div className="section-header">
         <h2 className="section-title">{t('events.sectionTitle', 'Upcoming Community Events')}</h2>
         <p className="section-subtitle">
-          {t(
-            'events.sectionSubtitle',
-            'Find events tailored to your interests and connect with like-minded people in your city.'
-          )}
+          {t('events.sectionSubtitle', 'Find events tailored to your interests and connect with like-minded people in your city.')}
         </p>
       </div>
 
@@ -244,22 +262,13 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
             border: '1px solid rgba(99, 102, 241, 0.3)',
             borderRadius: '16px',
             padding: '20px 24px',
-            marginBottom: '32px'
+            marginBottom: '32px',
           }}
         >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              color: '#818cf8',
-              fontWeight: '700',
-              marginBottom: '12px'
-            }}
-          >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#818cf8', fontWeight: '700', marginBottom: '12px' }}>
             <Sparkles size={20} color="#a78bfa" />
             <span>
-              {recSource === 'openai' ? '🤖 AI Recommended for You' : '🎯 Tailored Hyperlocal Recommendations'}
+              {recSource === 'openai' ? '≡ƒñû AI Recommended for You' : '≡ƒÄ» Tailored Hyperlocal Recommendations'}
             </span>
           </div>
 
@@ -277,30 +286,19 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
                     border: '1px solid rgba(255, 255, 255, 0.08)',
                     display: 'flex',
                     flexDirection: 'column',
-                    justifyContent: 'space-between'
+                    justify: 'space-between',
                   }}
                 >
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                       <span style={{ fontSize: '11px', fontWeight: '700', color: '#38bdf8', textTransform: 'uppercase' }}>
-                        {recEvt.category} • {recEvt.city}
+                        {recEvt.category} ΓÇó {recEvt.city}
                       </span>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: '800',
-                          background: 'rgba(168, 85, 247, 0.2)',
-                          color: '#c084fc',
-                          padding: '2px 8px',
-                          borderRadius: '10px'
-                        }}
-                      >
+                      <span style={{ fontSize: '11px', fontWeight: '800', background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', padding: '2px 8px', borderRadius: '10px' }}>
                         {rec.matchScore}% Match
                       </span>
                     </div>
-                    <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#fff', marginBottom: '4px' }}>
-                      {recEvt.title}
-                    </h4>
+                    <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#fff', marginBottom: '4px' }}>{recEvt.title}</h4>
                     <p style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', marginBottom: '10px' }}>
                       "{rec.reason}"
                     </p>
@@ -311,7 +309,7 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
                     onClick={() => handleToggleRsvp(recEvt)}
                     style={{ fontSize: '12px', padding: '6px 12px', width: '100%', justifyContent: 'center' }}
                   >
-                    {isUserRsvped(recEvt) ? '✓ Registered' : 'Quick RSVP'}
+                    {isUserRsvped(recEvt) ? 'Γ£ô Registered' : 'Quick RSVP'}
                   </button>
                 </div>
               );
@@ -320,245 +318,201 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
         </div>
       )}
 
-      {/* Controls Bar: Search + Category Filters */}
+      {/* Controls Bar: Search + Category Filters + Advanced Multi-Criteria Panel */}
       <div className="events-controls">
-        <div className="search-bar">
-          <span className="search-icon">🔍</span>
-          <input
-            type="text"
-            className="search-input"
-            placeholder={t('events.searchPlaceholder', 'Search events by title, keyword, city...')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {searchTerm && (
-            <button type="button" className="clear-search-btn" onClick={() => setSearchTerm('')}>
-              ✕
-            </button>
-          )}
+        <div className="search-bar-row">
+          <div className="search-bar">
+            <span className="search-icon" aria-hidden="true">≡ƒöì</span>
+            <input
+              type="text"
+              className="search-input"
+              placeholder={t('events.searchPlaceholder', 'Search events by title, city, or category...')}
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
+              aria-label="Search events"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                className="clear-search-btn"
+                onClick={() => {
+                  setSearchTerm('');
+                  setPage(1);
+                }}
+                aria-label="Clear search input"
+              >
+                Γ£ò
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className={`advanced-filter-toggle-btn ${showAdvancedFilters ? 'active' : ''}`}
+            onClick={() => setShowAdvancedFilters((prev) => !prev)}
+            aria-expanded={showAdvancedFilters}
+            aria-label="Toggle advanced filters panel"
+          >
+            <SlidersHorizontal size={18} />
+            <span>Filters</span>
+            {(locationFilter || startDateFilter || endDateFilter || languageFilter !== 'all') && (
+              <span className="filter-count-badge">
+                {[Boolean(locationFilter), Boolean(startDateFilter), Boolean(endDateFilter), languageFilter !== 'all'].filter(Boolean).length}
+              </span>
+            )}
+          </button>
         </div>
 
-        <div className="category-filter-tabs" style={{ flexWrap: 'wrap' }}>
+        {/* Category Tabs */}
+        <div className="category-filter-tabs" style={{ flexWrap: 'wrap' }} role="tablist" aria-label="Event category filters">
           {categories.map((cat) => (
             <button
               key={cat.key}
               type="button"
+              role="tab"
+              aria-selected={selectedCategory === cat.key}
               className={`category-tab ${selectedCategory === cat.key ? 'active' : ''}`}
-              onClick={() => setSelectedCategory(cat.key)}
+              onClick={() => handleCategorySelect(cat.key)}
             >
               {cat.label}
             </button>
           ))}
-          <button
-            type="button"
-            className={`category-tab ${showAdvancedFilters ? 'active' : ''}`}
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              borderStyle: 'dashed'
-            }}
-          >
-            <SlidersHorizontal size={14} /> Advanced Filters
-          </button>
         </div>
-      </div>
 
-      {/* Advanced Multi-Criteria Filter Panel */}
-      {showAdvancedFilters && (
-        <div
-          className="advanced-filters-panel animate-fade-in"
-          style={{
-            background: 'rgba(30, 41, 59, 0.6)',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: '14px',
-            padding: '16px 20px',
-            marginBottom: '24px'
-          }}
-        >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '14px' }}>
-            {/* Start Date */}
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: '4px' }}>
-                From Date:
-              </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  background: 'rgba(15, 23, 42, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  borderRadius: '8px',
-                  color: '#f8fafc',
-                  fontSize: '0.88rem',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
+        {/* Collapsible Advanced Filters Drawer */}
+        {showAdvancedFilters && (
+          <div className="advanced-filters-panel animate-fade-in" role="region" aria-label="Advanced multi-criteria filters">
+            <div className="filter-grid">
+              {/* Location / City Filter */}
+              <div className="filter-field-group">
+                <label htmlFor="filter-location" className="filter-label">
+                  <MapPin size={15} /> City / Location:
+                </label>
+                <input
+                  id="filter-location"
+                  type="text"
+                  className="filter-input"
+                  placeholder="e.g. Bengaluru, Jaipur, Mysuru"
+                  value={locationFilter}
+                  onChange={(e) => {
+                    setLocationFilter(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
 
-            {/* End Date */}
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: '4px' }}>
-                To Date:
-              </label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  background: 'rgba(15, 23, 42, 0.8)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  borderRadius: '8px',
-                  color: '#f8fafc',
-                  fontSize: '0.88rem',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
+              {/* Start Date Filter */}
+              <div className="filter-field-group">
+                <label htmlFor="filter-start-date" className="filter-label">
+                  <Calendar size={15} /> From Date:
+                </label>
+                <input
+                  id="filter-start-date"
+                  type="date"
+                  className="filter-input"
+                  value={startDateFilter}
+                  onChange={(e) => {
+                    setStartDateFilter(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
 
-            {/* Location Radius */}
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', marginBottom: '4px' }}>
-                Location Distance:
-              </label>
-              <select
-                value={locationRadius}
-                onChange={(e) => setLocationRadius(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  background: '#0f172a',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  borderRadius: '8px',
-                  color: '#f8fafc',
-                  fontSize: '0.88rem',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              >
-                {RADIUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              {/* End Date Filter */}
+              <div className="filter-field-group">
+                <label htmlFor="filter-end-date" className="filter-label">
+                  <Calendar size={15} /> To Date:
+                </label>
+                <input
+                  id="filter-end-date"
+                  type="date"
+                  className="filter-input"
+                  value={endDateFilter}
+                  onChange={(e) => {
+                    setEndDateFilter(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
+
+              {/* Language Filter */}
+              <div className="filter-field-group">
+                <label htmlFor="filter-language" className="filter-label">
+                  <Globe size={15} /> Language:
+                </label>
+                <select
+                  id="filter-language"
+                  className="filter-select"
+                  value={languageFilter}
+                  onChange={(e) => {
+                    setLanguageFilter(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  {languages.map((lang) => (
+                    <option key={lang.key} value={lang.key}>
+                      {lang.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Page Size Selector */}
+              <div className="filter-field-group">
+                <label htmlFor="filter-page-size" className="filter-label">
+                  <Filter size={15} /> Items per page:
+                </label>
+                <select
+                  id="filter-page-size"
+                  className="filter-select"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                >
+                  <option value={6}>6 events</option>
+                  <option value={12}>12 events</option>
+                  <option value={24}>24 events</option>
+                </select>
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Multi-Select Tag Matching Chips */}
-          <div>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: '8px' }}>
-              Filter by Tags (Multi-Select):
-            </span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {POPULAR_TAGS.map((tag) => {
-                const isSelected = selectedTags.includes(tag.toLowerCase());
-                return (
+        {/* Active Filter Chips / Pills Bar */}
+        {activeFilters.length > 0 && (
+          <div className="active-filters-bar animate-fade-in" aria-label="Active filters">
+            <span className="active-filters-label">Active filters ({activeFilters.length}):</span>
+            <div className="active-filters-list">
+              {activeFilters.map((flt) => (
+                <span key={flt.id} className="active-filter-pill">
+                  {flt.label}
                   <button
-                    key={tag}
                     type="button"
-                    onClick={() => handleToggleTag(tag.toLowerCase())}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '5px 12px',
-                      borderRadius: '20px',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      background: isSelected ? 'rgba(99, 102, 241, 0.35)' : 'rgba(255, 255, 255, 0.05)',
-                      color: isSelected ? '#a5b4fc' : '#94a3b8',
-                      border: `1px solid ${isSelected ? 'rgba(99, 102, 241, 0.6)' : 'rgba(255, 255, 255, 0.1)'}`
-                    }}
+                    className="remove-filter-btn"
+                    onClick={flt.clear}
+                    aria-label={`Remove ${flt.id} filter`}
                   >
-                    #{tag}
-                    {isSelected && <X size={12} />}
+                    <X size={14} />
                   </button>
-                );
-              })}
+                </span>
+              ))}
+              <button
+                type="button"
+                className="reset-all-filters-btn"
+                onClick={handleResetAllFilters}
+                aria-label="Reset all filters"
+              >
+                <RotateCcw size={14} /> Reset All
+              </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Active Filters Bar with Reset Option */}
-      {hasActiveFilters && (
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '20px',
-            padding: '10px 14px',
-            background: 'rgba(99, 102, 241, 0.1)',
-            borderRadius: '10px',
-            border: '1px solid rgba(99, 102, 241, 0.2)'
-          }}
-        >
-          <span style={{ fontSize: '0.8rem', color: '#a5b4fc', fontWeight: 700 }}>Active Filters:</span>
-          {selectedCategory !== 'all' && (
-            <span style={{ fontSize: '0.75rem', background: '#1e293b', color: '#f8fafc', padding: '3px 8px', borderRadius: '6px' }}>
-              Category: {selectedCategory}
-            </span>
-          )}
-          {searchTerm && (
-            <span style={{ fontSize: '0.75rem', background: '#1e293b', color: '#f8fafc', padding: '3px 8px', borderRadius: '6px' }}>
-              Keyword: "{searchTerm}"
-            </span>
-          )}
-          {selectedTags.map((t) => (
-            <span key={t} style={{ fontSize: '0.75rem', background: '#1e293b', color: '#a5b4fc', padding: '3px 8px', borderRadius: '6px' }}>
-              #{t}
-            </span>
-          ))}
-          {startDate && (
-            <span style={{ fontSize: '0.75rem', background: '#1e293b', color: '#f8fafc', padding: '3px 8px', borderRadius: '6px' }}>
-              From: {startDate}
-            </span>
-          )}
-          {endDate && (
-            <span style={{ fontSize: '0.75rem', background: '#1e293b', color: '#f8fafc', padding: '3px 8px', borderRadius: '6px' }}>
-              To: {endDate}
-            </span>
-          )}
-          {locationRadius && (
-            <span style={{ fontSize: '0.75rem', background: '#1e293b', color: '#f8fafc', padding: '3px 8px', borderRadius: '6px' }}>
-              Radius: {locationRadius} km
-            </span>
-          )}
-
-          <button
-            type="button"
-            onClick={handleClearAllFilters}
-            style={{
-              marginLeft: 'auto',
-              background: 'transparent',
-              border: 'none',
-              color: '#f87171',
-              fontSize: '0.8rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-          >
-            ✕ Clear All Filters
-          </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Loading & Error States */}
       {loading ? (
@@ -575,46 +529,23 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
           </button>
         </div>
       ) : events.length === 0 ? (
-        /* Empty State Screen with one-click Clear Filters */
-        <div className="no-events-box animate-fade-in" style={{ padding: '48px 24px', textAlign: 'center' }}>
-          <Compass size={40} style={{ color: '#64748b', marginBottom: '12px' }} />
-          <h3 style={{ color: '#f8fafc', marginBottom: '6px', fontSize: '1.2rem' }}>
-            {t('events.noResults', 'No events found matching your filter combination')}
-          </h3>
-          <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '18px' }}>
-            Try broadening your search keyword, adjusting the date range, or removing selected tags.
-          </p>
-          {hasActiveFilters && (
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={handleClearAllFilters}
-              style={{ padding: '8px 20px', fontSize: '0.88rem' }}
-            >
-              Reset / Clear All Filters
-            </button>
-          )}
+        <div className="no-events-box">
+          <p>{t('events.noResults', 'No events found matching your search or category filter.')}</p>
         </div>
       ) : (
-        /* Event Cards Grid */
-        <div className="events-grid">
+        <div className="events-grid-wrapper">
+          <div className="events-grid">
           {events.map((evt) => {
-            const seatsRemaining = Math.max(0, (evt.capacity || 100) - (evt.attendees?.length || 0));
-            const isRsvped = isUserRsvped(evt);
-
-            const displayPlace =
-              typeof evt.location === 'object' && evt.location !== null
-                ? evt.location.placeName || evt.city || 'Community Hall'
-                : evt.location || evt.city || 'Community Hall';
+            const seatsRemaining = Math.max(0, (evt.capacity || 100) - confirmedCount(evt));
+            const isRsvped = hasActiveRsvp(evt) || isUserRsvped(evt);
+            const status = rsvpStatus(evt);
+            const full = isEventFull(evt);
 
             return (
               <div className="event-card animate-fade-in" key={evt._id || evt.id}>
                 <div className="card-image-wrapper">
                   <img
-                    src={
-                      evt.image ||
-                      'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600&auto=format&fit=crop&q=80'
-                    }
+                    src={evt.image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600&auto=format&fit=crop&q=80'}
                     alt={evt.title}
                     className="card-image"
                   />
@@ -631,60 +562,42 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
                         borderRadius: '20px',
                         fontSize: '11px',
                         fontWeight: '700',
-                        backdropFilter: 'blur(4px)'
+                        backdropFilter: 'blur(4px)',
                       }}
                     >
-                      {evt.tier} • {evt.city}
+                      {evt.tier} ΓÇó {evt.city}
                     </span>
                   )}
                 </div>
                 <div className="card-body">
                   <h3 className="card-title">{evt.title}</h3>
+                  <span className={`rsvp-state-badge ${status === 'waitlist' ? 'waitlist' : status === 'confirmed' ? 'confirmed' : full ? 'full' : ''}`}>
+                    {rsvpStatusLabel(evt)}
+                  </span>
                   <p className="card-description">{evt.description}</p>
-
-                  {/* Tag Chips list on Card (Story 3 AC 3) */}
-                  {Array.isArray(evt.tags) && evt.tags.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', margin: '8px 0 12px' }}>
-                      {evt.tags.slice(0, 4).map((tag, idx) => (
-                        <span
-                          key={idx}
-                          style={{
-                            fontSize: '10px',
-                            background: 'rgba(99, 102, 241, 0.15)',
-                            color: '#a5b4fc',
-                            border: '1px solid rgba(99, 102, 241, 0.3)',
-                            padding: '2px 8px',
-                            borderRadius: '10px',
-                            fontWeight: 600
-                          }}
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
 
                   <div className="card-meta">
                     <div className="meta-item">
-                      <span className="meta-label">📅 Date:</span>
+                      <span className="meta-label">≡ƒôà Date:</span>
                       <span className="meta-value">
-                        {evt.date || (evt.startDate ? new Date(evt.startDate).toLocaleDateString() : 'Upcoming')}{' '}
-                        {evt.time ? `(${evt.time})` : ''}
+                        {evt.date || (evt.startDate ? new Date(evt.startDate).toLocaleDateString() : 'Upcoming')} {evt.time ? `(${evt.time})` : ''}
                       </span>
                     </div>
                     <div className="meta-item">
-                      <span className="meta-label">📍 Location:</span>
+                      <span className="meta-label">≡ƒôì Location:</span>
                       <span className="meta-value">
-                        {displayPlace} {evt.city ? `(${evt.city})` : ''}
+                        {typeof evt.location === 'object' && evt.location !== null
+                          ? (evt.location.placeName || 'Online')
+                          : (evt.location || 'Online')} {evt.city ? `(${evt.city})` : ''}
                       </span>
                     </div>
                     <div className="meta-item">
-                      <span className="meta-label">🎟️</span>
+                      <span className="meta-label">≡ƒÄƒ∩╕Å</span>
                       <span className="meta-value highlight-seats">{seatsRemaining} seats remaining</span>
                     </div>
                     {evt.organizerName && (
                       <div className="meta-item">
-                        <span className="meta-label">👤 Organizer:</span>
+                        <span className="meta-label">≡ƒæñ Organizer:</span>
                         <span className="meta-value">{evt.organizerName}</span>
                       </div>
                     )}
@@ -699,13 +612,15 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
                       style={{
                         background: isRsvped ? 'rgba(16, 185, 129, 0.2)' : undefined,
                         color: isRsvped ? '#34d399' : undefined,
-                        border: isRsvped ? '1px solid #10b981' : undefined
+                        border: isRsvped ? '1px solid #10b981' : undefined,
                       }}
                     >
                       {rsvpLoadingId === (evt._id || evt.id)
                         ? 'Updating...'
+                        : !isRsvped && full
+                        ? 'Join Waitlist'
                         : isRsvped
-                        ? '✓ RSVPed (Cancel)'
+                        ? 'Γ£ô RSVPed (Cancel)'
                         : user
                         ? 'Register / RSVP'
                         : 'Register Now'}
@@ -714,7 +629,20 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
                     <button
                       type="button"
                       className="btn-secondary card-btn"
-                      onClick={() => onSelectEvent && onSelectEvent(evt)}
+                      onClick={() => {
+                        // Record click/view interaction
+                        if (user?._id) {
+                          recordInteraction({
+                            userId: user._id,
+                            eventId: evt._id || evt.id,
+                            interactionType: 'click',
+                            category: evt.category || '',
+                            city: evt.city || user?.city || '',
+                            language: evt.language || user?.preferredLanguage || 'en',
+                          });
+                        }
+                        onSelectEvent && onSelectEvent(evt);
+                      }}
                     >
                       View Details
                     </button>
@@ -724,8 +652,39 @@ export function EventList({ onRegisterEvent, onSelectEvent }) {
             );
           })}
         </div>
-      )}
-    </section>
+
+        {/* Pagination Controls Bar */}
+        {pagination.totalPages > 1 && (
+          <div className="pagination-bar" role="navigation" aria-label="Events pagination">
+            <button
+              type="button"
+              className="pagination-btn"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              aria-label="Previous page"
+            >
+              <ChevronLeft size={16} /> Previous
+            </button>
+
+            <span className="pagination-status">
+              Page <strong>{page}</strong> of <strong>{pagination.totalPages}</strong>
+              <span className="pagination-total-count">({pagination.total} events)</span>
+            </span>
+
+            <button
+              type="button"
+              className="pagination-btn"
+              disabled={page >= pagination.totalPages}
+              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+              aria-label="Next page"
+            >
+              Next <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
+      </div>
+    )}
+  </section>
   );
 }
 

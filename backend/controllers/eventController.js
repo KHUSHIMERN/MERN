@@ -1,7 +1,12 @@
-const mongoose = require('mongoose');
-const { isConnectedToMongoDB } = require('../config/db');
+﻿const mongoose = require('mongoose');
 const Event = require('../models/Event');
 const { INITIAL_EVENTS } = require('../data/seedEvents');
+const {
+  enrichEventsWithRsvp,
+  migrateLegacyRsvpsForEvent,
+} = require('../services/rsvpService');
+
+const isConnectedToMongoDB = () => mongoose.connection.readyState === 1;
 
 const getCategoryMatchPatterns = (cat) => {
   if (!cat || String(cat).toLowerCase() === 'all') return [];
@@ -24,24 +29,9 @@ const getCategoryMatchPatterns = (cat) => {
   return [cat];
 };
 
-const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
-  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
-  const R = 6371; // Earth radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-};
-
 /**
  * GET /api/events
- * Fetch all events with category, tags, date range, published, search, organizerId, geo-radius, and pagination.
+ * Fetch all events with category, tags, date range, published, and search filter support.
  */
 const getEvents = async (req, res, next) => {
   try {
@@ -52,57 +42,69 @@ const getEvents = async (req, res, next) => {
       startDate,
       endDate,
       search,
-      organizerId,
-      organizer,
-      lat,
-      latitude,
-      lng,
-      longitude,
-      radius,
-      radiusKm,
-      page,
-      limit,
-      pageSize
+      location,
+      city,
+      language,
+      page: reqPage,
+      pageSize: reqPageSize,
+      limit: reqLimit
     } = req.query;
 
-    const orgFilter = (organizerId || organizer || '').toString().trim();
-    const centerLat = lat !== undefined ? Number(lat) : latitude !== undefined ? Number(latitude) : null;
-    const centerLng = lng !== undefined ? Number(lng) : longitude !== undefined ? Number(longitude) : null;
-    const maxRadius = radius !== undefined ? Number(radius) : radiusKm !== undefined ? Number(radiusKm) : null;
+    const hasPagination = reqPage !== undefined || reqPageSize !== undefined || reqLimit !== undefined;
+    const page = Math.max(1, parseInt(reqPage, 10) || 1);
+    const pageSize = Math.max(1, parseInt(reqPageSize || reqLimit, 10) || 10);
 
-    if (isConnectedToMongoDB) {
-      const query = {};
+    if (isConnectedToMongoDB()) {
+      const andConditions = [];
 
+      // 1. Category filter
       if (category && String(category).toLowerCase() !== 'all') {
         const patterns = getCategoryMatchPatterns(category);
         const regexList = patterns.map((p) => new RegExp(p, 'i'));
-        query.$or = [
-          { category: { $in: regexList } },
-          { title: { $in: regexList } },
-          { tags: { $in: regexList } }
-        ];
+        andConditions.push({
+          $or: [
+            { category: { $in: regexList } },
+            { title: { $in: regexList } },
+            { tags: { $in: regexList } }
+          ]
+        });
       }
 
-      if (published !== undefined && published !== 'all') {
-        query.published = String(published).toLowerCase() === 'true';
+      // 2. Location / City filter
+      const locTerm = (location || city || '').trim();
+      if (locTerm && locTerm.toLowerCase() !== 'all') {
+        const locRegex = new RegExp(locTerm, 'i');
+        andConditions.push({
+          $or: [
+            { city: locRegex },
+            { 'location.placeName': locRegex },
+            { location: locRegex }
+          ]
+        });
       }
 
-      if (orgFilter) {
-        const orgOr = [{ organizerId: orgFilter }, { organizerName: orgFilter }];
-        if (mongoose.Types.ObjectId.isValid(orgFilter)) {
-          orgOr.push({ organizer: new mongoose.Types.ObjectId(orgFilter) });
-          orgOr.push({ organizerId: new mongoose.Types.ObjectId(orgFilter) });
-        }
-        if (query.$and) {
-          query.$and.push({ $or: orgOr });
-        } else if (query.$or) {
-          query.$and = [{ $or: query.$or }, { $or: orgOr }];
-          delete query.$or;
+      // 3. Language filter
+      if (language && String(language).toLowerCase() !== 'all') {
+        const langClean = language.trim();
+        const langRegex = new RegExp(`^${langClean}$`, 'i');
+        if (langClean.toLowerCase() === 'hi') {
+          andConditions.push({
+            $or: [
+              { language: langRegex },
+              { title_hi: { $exists: true, $ne: '' } }
+            ]
+          });
         } else {
-          query.$or = orgOr;
+          andConditions.push({ language: langRegex });
         }
       }
 
+      // 4. Published filter
+      if (published !== undefined && published !== 'all') {
+        andConditions.push({ published: String(published).toLowerCase() === 'true' });
+      }
+
+      // 5. Tags filter
       if (tags) {
         const tagList = Array.isArray(tags)
           ? tags
@@ -111,73 +113,71 @@ const getEvents = async (req, res, next) => {
               .map((t) => t.trim())
               .filter(Boolean);
         if (tagList.length > 0) {
-          const tagRegexes = tagList.map((t) => new RegExp(`^${t}$`, 'i'));
-          query.tags = { $in: tagRegexes };
+          andConditions.push({ tags: { $in: tagList } });
         }
       }
 
+      // 6. Date Range filter (startDate / endDate)
       if (startDate || endDate) {
-        query.startDate = {};
-        if (startDate) query.startDate.$gte = new Date(startDate);
+        const dateCond = {};
+        if (startDate) {
+          const sDate = new Date(startDate);
+          if (!isNaN(sDate.getTime())) {
+            dateCond.$gte = sDate;
+          }
+        }
         if (endDate) {
           let eDate = new Date(endDate);
           if (typeof endDate === 'string' && endDate.length === 10) {
             eDate = new Date(`${endDate}T23:59:59.999Z`);
           }
-          query.startDate.$lte = eDate;
+          if (!isNaN(eDate.getTime())) {
+            dateCond.$lte = eDate;
+          }
+        }
+        if (Object.keys(dateCond).length > 0) {
+          andConditions.push({ startDate: dateCond });
         }
       }
 
+      // 7. Search text filter
       if (search && search.trim()) {
         const regex = new RegExp(search.trim(), 'i');
-        const searchCond = [
-          { title: regex },
-          { description: regex },
-          { 'location.placeName': regex },
-          { city: regex },
-          { tags: regex }
-        ];
-        if (query.$and) {
-          query.$and.push({ $or: searchCond });
-        } else if (query.$or) {
-          query.$and = [{ $or: query.$or }, { $or: searchCond }];
-          delete query.$or;
-        } else {
-          query.$or = searchCond;
-        }
-      }
-
-      let events = await Event.find(query).sort({ startDate: 1, createdAt: -1 });
-
-      if (centerLat !== null && centerLng !== null && maxRadius !== null && !isNaN(maxRadius)) {
-        events = events.filter((e) => {
-          const eLat = e.location?.latitude ?? (e.latitude != null ? Number(e.latitude) : null);
-          const eLng = e.location?.longitude ?? (e.longitude != null ? Number(e.longitude) : null);
-          if (eLat == null || eLng == null) return false;
-          const dist = calculateDistanceKm(centerLat, centerLng, eLat, eLng);
-          return dist !== null && dist <= maxRadius;
+        andConditions.push({
+          $or: [
+            { title: regex },
+            { description: regex },
+            { city: regex },
+            { 'location.placeName': regex },
+            { tags: regex }
+          ]
         });
       }
 
-      const totalCount = events.length;
-      const reqLimit = parseInt(limit || pageSize, 10);
-      const reqPage = Math.max(1, parseInt(page, 10) || 1);
+      const query = andConditions.length > 0 ? { $and: andConditions } : {};
 
-      let paginated = events;
-      let totalPages = 1;
-      if (reqLimit > 0) {
-        totalPages = Math.ceil(totalCount / reqLimit) || 1;
-        const startIndex = (reqPage - 1) * reqLimit;
-        paginated = events.slice(startIndex, startIndex + reqLimit);
+      const total = await Event.countDocuments(query);
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+      let eventQuery = Event.find(query).sort({ startDate: 1, createdAt: -1 });
+      if (hasPagination) {
+        const skip = (page - 1) * pageSize;
+        eventQuery = eventQuery.skip(skip).limit(pageSize);
       }
+
+      const events = await eventQuery;
+      await Promise.all(events.map((event) => migrateLegacyRsvpsForEvent(event)));
+      const enriched = await enrichEventsWithRsvp(events, req.user?._id);
 
       return res.json({
         success: true,
-        count: totalCount,
-        page: reqPage,
-        totalPages,
-        data: paginated,
-        events: paginated
+        count: enriched.length,
+        total,
+        page: hasPagination ? page : 1,
+        pageSize: hasPagination ? pageSize : total,
+        totalPages: hasPagination ? totalPages : 1,
+        data: enriched,
+        events: enriched
       });
     }
 
@@ -197,18 +197,31 @@ const getEvents = async (req, res, next) => {
       );
     }
 
+    const locTerm = (location || city || '').trim();
+    if (locTerm && locTerm.toLowerCase() !== 'all') {
+      const locRegex = new RegExp(locTerm, 'i');
+      results = results.filter((e) => {
+        const cityMatch = e.city && locRegex.test(e.city);
+        const placeMatch = typeof e.location === 'object' && e.location?.placeName && locRegex.test(e.location.placeName);
+        const strLocMatch = typeof e.location === 'string' && locRegex.test(e.location);
+        return cityMatch || placeMatch || strLocMatch;
+      });
+    }
+
+    if (language && String(language).toLowerCase() !== 'all') {
+      const langClean = language.trim().toLowerCase();
+      results = results.filter((e) => {
+        const evLang = (e.language || 'en').toLowerCase();
+        if (langClean === 'hi') {
+          return evLang === 'hi' || Boolean(e.title_hi);
+        }
+        return evLang === langClean;
+      });
+    }
+
     if (published !== undefined && published !== 'all') {
       const isPub = String(published).toLowerCase() === 'true';
       results = results.filter((e) => Boolean(e.published) === isPub);
-    }
-
-    if (orgFilter) {
-      results = results.filter(
-        (e) =>
-          String(e.organizerId || '').toLowerCase() === orgFilter.toLowerCase() ||
-          String(e.organizer || '').toLowerCase() === orgFilter.toLowerCase() ||
-          String(e.organizerName || '').toLowerCase() === orgFilter.toLowerCase()
-      );
     }
 
     if (tags) {
@@ -220,16 +233,16 @@ const getEvents = async (req, res, next) => {
             .filter(Boolean);
       if (tagList.length > 0) {
         results = results.filter(
-          (e) => Array.isArray(e.tags) && e.tags.some((t) => tagList.includes(String(t).toLowerCase()))
+          (e) => Array.isArray(e.tags) && e.tags.some((t) => tagList.includes(t.toLowerCase()))
         );
       }
     }
 
     if (startDate) {
       const start = new Date(startDate).getTime();
-      results = results.filter(
-        (e) => e.startDate && new Date(e.startDate).getTime() >= start
-      );
+      if (!isNaN(start)) {
+        results = results.filter((e) => e.startDate && new Date(e.startDate).getTime() >= start);
+      }
     }
 
     if (endDate) {
@@ -238,7 +251,9 @@ const getEvents = async (req, res, next) => {
         eDate = new Date(`${endDate}T23:59:59.999Z`);
       }
       const end = eDate.getTime();
-      results = results.filter((e) => e.startDate && new Date(e.startDate).getTime() <= end);
+      if (!isNaN(end)) {
+        results = results.filter((e) => e.startDate && new Date(e.startDate).getTime() <= end);
+      }
     }
 
     if (search && search.trim()) {
@@ -246,42 +261,32 @@ const getEvents = async (req, res, next) => {
       results = results.filter((e) => {
         const titleMatch = e.title && e.title.toLowerCase().includes(term);
         const descMatch = e.description && e.description.toLowerCase().includes(term);
-        const locString = typeof e.location === 'object' ? (e.location?.placeName || '') : String(e.location || '');
+        const cityMatch = e.city && e.city.toLowerCase().includes(term);
+        const locString = typeof e.location === 'object' ? e.location.placeName : String(e.location);
         const locMatch = locString && locString.toLowerCase().includes(term);
-        const tagMatch = Array.isArray(e.tags) && e.tags.some((t) => String(t).toLowerCase().includes(term));
-        return titleMatch || descMatch || locMatch || tagMatch;
+        const tagMatch = Array.isArray(e.tags) && e.tags.some((t) => t.toLowerCase().includes(term));
+        return titleMatch || descMatch || cityMatch || locMatch || tagMatch;
       });
     }
 
-    if (centerLat !== null && centerLng !== null && maxRadius !== null && !isNaN(maxRadius)) {
-      results = results.filter((e) => {
-        const eLat = e.location?.latitude ?? (e.latitude != null ? Number(e.latitude) : null);
-        const eLng = e.location?.longitude ?? (e.longitude != null ? Number(e.longitude) : null);
-        if (eLat == null || eLng == null) return false;
-        const dist = calculateDistanceKm(centerLat, centerLng, eLat, eLng);
-        return dist !== null && dist <= maxRadius;
-      });
-    }
+    const total = results.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-    const totalCount = results.length;
-    const reqLimit = parseInt(limit || pageSize, 10);
-    const reqPage = Math.max(1, parseInt(page, 10) || 1);
-
-    let paginated = results;
-    let totalPages = 1;
-    if (reqLimit > 0) {
-      totalPages = Math.ceil(totalCount / reqLimit) || 1;
-      const startIndex = (reqPage - 1) * reqLimit;
-      paginated = results.slice(startIndex, startIndex + reqLimit);
+    let paginatedResults = results;
+    if (hasPagination) {
+      const skip = (page - 1) * pageSize;
+      paginatedResults = results.slice(skip, skip + pageSize);
     }
 
     return res.json({
       success: true,
-      count: totalCount,
-      page: reqPage,
-      totalPages,
-      data: paginated,
-      events: paginated
+      count: paginatedResults.length,
+      total,
+      page: hasPagination ? page : 1,
+      pageSize: hasPagination ? pageSize : total,
+      totalPages: hasPagination ? totalPages : 1,
+      data: paginatedResults,
+      events: paginatedResults
     });
   } catch (error) {
     next(error);
@@ -298,7 +303,7 @@ const searchEvents = async (req, res, next) => {
     const queryTerm = String(q).trim();
 
     if (!queryTerm) {
-      if (isConnectedToMongoDB) {
+      if (isConnectedToMongoDB()) {
         const allEvents = await Event.find({ published: true }).sort({ startDate: 1 });
         return res.json({ success: true, query: '', count: allEvents.length, data: allEvents });
       }
@@ -306,7 +311,7 @@ const searchEvents = async (req, res, next) => {
       return res.json({ success: true, query: '', count: allEvents.length, data: allEvents });
     }
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const escapedTerm = queryTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escapedTerm, 'i');
       const mongoQuery = {
@@ -348,7 +353,7 @@ const getEventById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       let event = null;
       if (mongoose.Types.ObjectId.isValid(id)) {
         event = await Event.findById(id);
@@ -360,7 +365,9 @@ const getEventById = async (req, res, next) => {
       if (!event) {
         return res.status(404).json({ success: false, message: 'Event not found' });
       }
-      return res.json({ success: true, data: event });
+      await migrateLegacyRsvpsForEvent(event);
+      const [enriched] = await enrichEventsWithRsvp([event], req.user?._id);
+      return res.json({ success: true, data: enriched, ...enriched });
     }
 
     const event = INITIAL_EVENTS.find((e) => e.id === id || e.itemKey === id || e._id === id);
@@ -382,7 +389,7 @@ const createEvent = async (req, res, next) => {
     const {
       title,
       description,
-      organizerId,
+      organizerId: requestedOrganizerId,
       category,
       tags,
       startDate,
@@ -390,19 +397,18 @@ const createEvent = async (req, res, next) => {
       location,
       published,
       image,
+      imageUrl,
+      imageUrlAlt,
       itemKey,
       date,
       seatsLeft
     } = req.body;
 
-    const resolvedOrganizerId =
-      (organizerId && String(organizerId).trim()) ||
-      (req.user && (req.user._id || req.user.id)?.toString()) ||
-      (req.body.organizer && String(req.body.organizer).trim()) ||
-      'organizer-default';
+    const organizerId = req.user?._id?.toString() || requestedOrganizerId;
 
-    // Required fields validation (title and startDate)
-    if (!title || !title.trim() || !startDate) {
+    // The authenticated identity is authoritative; requestedOrganizerId is
+    // retained only for compatibility with legacy internal callers.
+    if (!title || !title.trim() || !organizerId || !startDate) {
       return res.status(400).json({
         success: false,
         message: 'Validation Error: Required fields title and startDate must be provided.'
@@ -454,28 +460,30 @@ const createEvent = async (req, res, next) => {
       ? tags.split(',').map((t) => t.trim()).filter(Boolean)
       : [];
 
+    const finalImage = imageUrl || image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87';
+
     const newEventData = {
       id: `evt-${Date.now()}`,
       itemKey: itemKey || `evt_${Date.now()}`,
       title: title.trim(),
       description: description || '',
-      organizerId: resolvedOrganizerId,
-      organizer: mongoose.Types.ObjectId.isValid(resolvedOrganizerId) ? resolvedOrganizerId : undefined,
-      organizerName: req.body.organizerName || req.user?.name || 'Community Organizer',
+      organizerId: organizerId.trim(),
       category: category || 'general',
       tags: formattedTags,
       startDate: parsedStart,
       endDate: parsedEnd,
       location: locationObj,
       published: Boolean(published),
-      image: image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87',
+      image: finalImage,
+      imageUrl: finalImage,
+      imageUrlAlt: (imageUrlAlt || '').trim(),
       date: date || parsedStart.toISOString().split('T')[0],
       seatsLeft: seatsLeft !== undefined ? Number(seatsLeft) : 50,
       createdAt: new Date(),
       updatedAt: new Date()
     };
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       const createdEvent = await Event.create(newEventData);
       return res.status(201).json({
         success: true,
@@ -526,27 +534,7 @@ const updateEvent = async (req, res, next) => {
       }
     }
 
-    if (updatePayload.tags !== undefined) {
-      updatePayload.tags = Array.isArray(updatePayload.tags)
-        ? updatePayload.tags
-        : typeof updatePayload.tags === 'string'
-        ? updatePayload.tags.split(',').map((t) => t.trim()).filter(Boolean)
-        : [];
-    }
-
-    if (updatePayload.location !== undefined) {
-      if (typeof updatePayload.location === 'object' && updatePayload.location !== null) {
-        updatePayload.location = {
-          placeName: updatePayload.location.placeName || '',
-          latitude: updatePayload.location.latitude !== undefined ? Number(updatePayload.location.latitude) : null,
-          longitude: updatePayload.location.longitude !== undefined ? Number(updatePayload.location.longitude) : null
-        };
-      } else if (typeof updatePayload.location === 'string') {
-        updatePayload.location = { placeName: updatePayload.location, latitude: null, longitude: null };
-      }
-    }
-
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       let updated = null;
       if (mongoose.Types.ObjectId.isValid(id)) {
         updated = await Event.findByIdAndUpdate(id, { $set: updatePayload }, { new: true, runValidators: true });
@@ -600,7 +588,7 @@ const deleteEvent = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       let deleted = null;
       if (mongoose.Types.ObjectId.isValid(id)) {
         deleted = await Event.findByIdAndDelete(id);
@@ -657,7 +645,7 @@ const publishEvent = async (req, res, next) => {
       }
     }
 
-    if (isConnectedToMongoDB) {
+    if (isConnectedToMongoDB()) {
       let event = null;
       if (mongoose.Types.ObjectId.isValid(id)) {
         event = await Event.findById(id);
@@ -710,30 +698,6 @@ const publishEvent = async (req, res, next) => {
     next(error);
   }
 };
-const rsvpEvent = async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Event not found' });
-    }
-
-    if (event.attendeesCount >= event.capacity) {
-      return res.status(400).json({ success: false, message: 'Event is fully booked' });
-    }
-
-    event.attendeesCount += 1;
-    await event.save();
-
-    res.json({
-      success: true,
-      message: 'RSVP confirmed successfully',
-      attendeesCount: event.attendeesCount
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
 // @desc    Get attendance metrics for an organizer (Task 1 of Story 3)
 // @route   GET /organizer/:id/attendance-metrics
 const getOrganizerAttendanceMetrics = async (req, res) => {
@@ -1021,9 +985,6 @@ module.exports = {
   updateEvent,
   deleteEvent,
   publishEvent,
-  rsvpEvent,
   getOrganizerAttendanceMetrics,
   exportOrganizerAttendanceMetricsCSV
 };
-
-

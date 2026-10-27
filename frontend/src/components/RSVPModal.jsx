@@ -49,10 +49,34 @@ export default function RSVPModal({ event, activeTimezone, userLocale, open, onC
   const nameError = touched.name && !name.trim() ? t('fieldRequired') : '';
   const emailError = touched.email && !email.trim() ? t('fieldRequired') : '';
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setTouched({ name: true, email: true });
     if (name.trim() && email.trim()) {
+      try {
+        const token = localStorage.getItem('cc_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const eventId = event._id || event.id || event.itemKey;
+        await fetch(`/api/events/${eventId}/rsvp`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ fullName: name.trim(), email: email.trim() })
+        });
+        await fetch('/api/registrations', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            eventId,
+            fullName: name.trim(),
+            email: email.trim(),
+            agreeTerms: true
+          })
+        });
+      } catch (err) {
+        console.warn('RSVP API submission notice:', err.message);
+      }
       setConfirmed(true);
     }
   };

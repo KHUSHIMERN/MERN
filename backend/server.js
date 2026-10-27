@@ -1,3 +1,4 @@
+const fs = require('fs');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const app = require('./app');
@@ -9,8 +10,14 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await connectDB();
+    if (fs.existsSync('./seed.js')) {
+      const seedData = require('./seed');
+      if (typeof seedData === 'function') {
+        await seedData();
+      }
+    }
     return app.listen(PORT, () => {
-      console.log(`Backend server running on http://localhost:${PORT}`);
+      console.log(`✨ Server running in ${process.env.NODE_ENV || 'development'} mode on http://localhost:${PORT}`);
       console.log(`API endpoint: http://localhost:${PORT}/api`);
     });
   } catch (error) {
@@ -20,7 +27,7 @@ const startServer = async () => {
   }
 };
 
-if (require.main === module) {
+if (require.main === module && process.env.NODE_ENV !== 'test') {
   startServer();
 }
 

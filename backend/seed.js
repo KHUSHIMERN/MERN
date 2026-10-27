@@ -91,6 +91,12 @@ const seedData = async () => {
 
     // 2. Seed Unified Events (Combining DEV-KHUSHI and QA event attributes)
     if (existingEvents === 0) {
+      const fallbackOrganizer = organizer || (await User.findOne({ role: 'organizer' })) || (await User.findOne());
+      const fallbackResident = resident || (await User.findOne({ role: 'resident' })) || (await User.findOne());
+
+      const organizerId = fallbackOrganizer ? fallbackOrganizer._id : new mongoose.Types.ObjectId();
+      const residentId = fallbackResident ? fallbackResident._id : new mongoose.Types.ObjectId();
+
       const unifiedEvents = [
         {
           title: 'Tier-2 Youth Job Fair & Skill Expo 2026',
@@ -106,12 +112,12 @@ const seedData = async () => {
           date: '2026-08-15',
           time: '10:00 AM - 05:00 PM',
           timezone: 'Asia/Kolkata',
-          organizer: organizer._id,
+          organizer: organizerId,
           organizerName: 'Rajasthan Skill Development Mission',
           capacity: 500,
           attendeesCount: 142,
-          attendees: [{ user: resident._id }],
-          rsvpedUsers: [resident._id],
+          attendees: [{ user: residentId }],
+          rsvpedUsers: [residentId],
           imageUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800',
           image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800',
           imageUrlAlt: 'Crowd of young job seekers interacting with recruiters at youth job fair booths',
@@ -133,7 +139,7 @@ const seedData = async () => {
           date: '2026-08-20',
           time: '02:00 PM - 05:00 PM EST',
           timezone: 'America/New_York',
-          organizer: organizer._id,
+          organizer: organizerId,
           organizerName: 'OpenSource Community Global',
           capacity: 1000,
           attendeesCount: 680,
@@ -160,7 +166,7 @@ const seedData = async () => {
           date: '2026-09-01',
           time: '09:00 AM - 03:00 PM',
           timezone: 'Asia/Kolkata',
-          organizer: organizer._id,
+          organizer: organizerId,
           organizerName: 'Indore Youth Welfare Forum & Red Cross',
           capacity: 300,
           attendeesCount: 95,
@@ -187,7 +193,7 @@ const seedData = async () => {
           date: '2026-09-10',
           time: '04:00 PM - 07:30 PM BST',
           timezone: 'Europe/London',
-          organizer: organizer._id,
+          organizer: organizerId,
           organizerName: 'Global Small Business Forum',
           capacity: 250,
           attendeesCount: 110,
@@ -214,7 +220,7 @@ const seedData = async () => {
           date: '2026-09-25',
           time: '05:30 PM - 10:00 PM',
           timezone: 'Asia/Kolkata',
-          organizer: organizer._id,
+          organizer: organizerId,
           organizerName: 'Bihar Cultural Academy',
           capacity: 800,
           attendeesCount: 420,
@@ -241,7 +247,7 @@ const seedData = async () => {
           date: '2026-08-12',
           time: '08:00 AM - 12:00 PM',
           timezone: 'Asia/Kolkata',
-          organizer: organizer._id,
+          organizer: organizerId,
           organizerName: 'Green Bhopal Action Club',
           capacity: 200,
           attendeesCount: 45,

@@ -403,3 +403,4 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
 }
 
 export default EventRegistrationForm;
+

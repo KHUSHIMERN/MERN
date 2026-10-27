@@ -7,14 +7,18 @@ const {
   updateEvent,
   deleteEvent,
   publishEvent,
-  searchEvents
+  searchEvents,
+  getOrganizerAttendanceMetrics,
+  exportOrganizerAttendanceMetricsCSV
 } = require('../controllers/eventController');
+
 const {
   getEventAttendance,
   updateEventAttendance,
   exportEventAttendance,
   getAttendanceAuditLogs
 } = require('../controllers/attendanceController');
+
 const { auth, optionalAuth, requireVerified, requireRole } = require('../middleware/auth');
 const privileged = [auth, requireVerified, requireRole('organizer', 'admin')];
 
@@ -22,6 +26,11 @@ const privileged = [auth, requireVerified, requireRole('organizer', 'admin')];
 router.get('/', optionalAuth, getEvents);
 router.post('/', ...privileged, createEvent);
 router.get('/search', searchEvents);
+
+// Organizer attendance metrics endpoints
+router.get('/organizer/:id/attendance-metrics/export', exportOrganizerAttendanceMetricsCSV);
+router.get('/organizer/:id/attendance-metrics', getOrganizerAttendanceMetrics);
+
 router.get('/:id', optionalAuth, getEventById);
 router.put('/:id', ...privileged, updateEvent);
 router.delete('/:id', ...privileged, deleteEvent);

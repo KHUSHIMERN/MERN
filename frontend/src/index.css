@@ -29,13 +29,7 @@
   --bg-glass: rgba(15, 23, 42, 0.85);
   --bg-input: rgba(15, 23, 42, 0.8);
 
-  --border-color: rgba(255, 255, 255, 0.1);
   --border-focus: #6366f1;
-  --border-highlight: rgba(99, 102, 241, 0.4);
-
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
 
   --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
   --accent-hover: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #c026d3 100%);
@@ -63,6 +57,7 @@
   --font-heading: 'Space Grotesk', system-ui, -apple-system, sans-serif;
 }
 
+/* Ensure root font-size scales with browser zoom & default font preferences (WCAG 1.4.4) */
 html {
   font-size: 100%;
   box-sizing: border-box;

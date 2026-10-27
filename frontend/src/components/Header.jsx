@@ -8,6 +8,9 @@ import { useTimezone } from '../context/TimezoneContext';
 import { useNotifications } from '../context/NotificationContext';
 import { getTimezoneOffsetLabel } from '../utils/dateUtils';
 
+/**
+ * Header — sticky global navigation bar.
+ */
 export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNotificationEvent, user, logout, view, setView }) {
   const { t } = useTranslation();
   const { activeTimezone } = useTimezone();

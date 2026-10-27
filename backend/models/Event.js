@@ -24,6 +24,14 @@ const EventSchema = new mongoose.Schema({
   capacity: {
     type: Number,
     required: true,
+  },
+  tags: {
+    type: [String],
+    default: [],
+  },
+  language: {
+    type: String,
+    default: 'en',
   }
 }, {
   timestamps: true

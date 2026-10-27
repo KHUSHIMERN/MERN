@@ -1,0 +1,17 @@
+{
+  "name": "pulse-event-mern",
+  "version": "1.0.0",
+  "description": "PulseEvent - Community Event Management MERN Platform",
+  "scripts": {
+    "start:backend": "npm --prefix backend start",
+    "dev:backend": "npm --prefix backend run dev",
+    "test:backend": "npm --prefix backend test",
+    "start:frontend": "npm --prefix frontend dev",
+    "dev:frontend": "npm --prefix frontend dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "lint:frontend": "npm --prefix frontend run lint"
+  },
+  "keywords": ["mern", "react", "express", "mongodb", "typeahead"],
+  "author": "",
+  "license": "ISC"
+}

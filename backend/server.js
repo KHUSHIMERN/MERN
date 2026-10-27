@@ -68,7 +68,9 @@ const seedDatabase = async () => {
         location: 'City Convention Center, Tier 2 Hub',
         date: new Date('2026-09-15T10:00:00Z'),
         organizer: organizer._id,
-        capacity: 2 // Small capacity to test waitlist easily
+        capacity: 2, // Small capacity to test waitlist easily
+        tags: ['tech', 'careers', 'networking'],
+        language: 'en'
       },
       {
         title: 'Community Blood Donation Camp',
@@ -76,7 +78,9 @@ const seedDatabase = async () => {
         location: 'Town Hall, Sector-4',
         date: new Date('2026-08-20T09:00:00Z'),
         organizer: organizer._id,
-        capacity: 10
+        capacity: 10,
+        tags: ['health', 'community', 'donation'],
+        language: 'hi'
       },
       {
         title: 'Free Skill-Building Workshop',
@@ -84,7 +88,9 @@ const seedDatabase = async () => {
         location: 'Government ITI Lab, Block-A',
         date: new Date('2026-08-05T14:00:00Z'),
         organizer: organizer._id,
-        capacity: 1 // Single spot capacity to demonstrate waitlist queue instantly
+        capacity: 1, // Single spot capacity to demonstrate waitlist queue instantly
+        tags: ['education', 'web-dev', 'workshop'],
+        language: 'en'
       }
     ];
 
@@ -96,7 +102,19 @@ const seedDatabase = async () => {
 
 // Start Server
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n[PORT CONFLICT] Port ${PORT} is already in use by another process.`);
+      console.error(`To resolve this conflict:`);
+      console.error(`  1. Terminate the process using port ${PORT} (e.g. netstat -ano | findstr :${PORT} then taskkill /PID <PID> /F)`);
+      console.error(`  2. Or specify a different port: set PORT=5001 && node server.js\n`);
+      process.exit(1);
+    } else {
+      console.error('Server error:', err);
+    }
   });
 });

@@ -15,10 +15,13 @@ import {
   Inbox,
   Sparkles,
   Lock,
-  Mail
+  Mail,
+  Tag,
+  Globe
 } from 'lucide-react';
+import Typeahead from './components/Typeahead';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 axios.defaults.withCredentials = true;
 
 // In-memory access token storage
@@ -110,6 +113,11 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
+  // Search & Typeahead Filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTagFilter, setActiveTagFilter] = useState(null);
+  const [preferredLanguage, setPreferredLanguage] = useState('en');
+
   // New event form state
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newEvent, setNewEvent] = useState({
@@ -117,7 +125,9 @@ function App() {
     description: '',
     location: '',
     date: '',
-    capacity: 5
+    capacity: 5,
+    tags: '',
+    language: 'en'
   });
 
   // UI Toast states
@@ -182,7 +192,7 @@ function App() {
         const profileRes = await axios.get(`${API_BASE_URL}/auth/me`);
         setCurrentUser(profileRes.data.user);
         addToast(`Welcome back, ${profileRes.data.user.name}!`, 'success');
-      } catch (err) {
+      } catch {
         console.log('No active session.');
       } finally {
         setIsAppLoading(false);
@@ -374,7 +384,15 @@ function App() {
     }
 
     try {
-      await axios.post(`${API_BASE_URL}/events`, newEvent);
+      const payload = {
+        ...newEvent,
+        tags: typeof newEvent.tags === 'string' 
+          ? newEvent.tags.split(',').map(t => t.trim()).filter(Boolean)
+          : (newEvent.tags || []),
+        language: newEvent.language ? newEvent.language.trim().toLowerCase() : 'en'
+      };
+
+      await axios.post(`${API_BASE_URL}/events`, payload);
       addToast('Event created successfully!', 'success');
       setShowCreateForm(false);
       setNewEvent({
@@ -382,7 +400,9 @@ function App() {
         description: '',
         location: '',
         date: '',
-        capacity: 5
+        capacity: 5,
+        tags: '',
+        language: 'en'
       });
       fetchEvents();
     } catch (err) {
@@ -391,11 +411,48 @@ function App() {
     }
   };
 
-  // Helper to formats date nicely
+  // Typeahead Suggestion Handlers
+  const handleSelectSuggestion = (suggestion) => {
+    if (suggestion.type === 'title') {
+      setSearchQuery(suggestion.text);
+      setActiveTagFilter(null);
+      if (suggestion.eventId) {
+        setSelectedEventId(suggestion.eventId);
+        addToast(`Selected event: "${suggestion.text}"`, 'info');
+      }
+    } else if (suggestion.type === 'tag') {
+      setActiveTagFilter(suggestion.text.toLowerCase());
+      setSearchQuery(suggestion.text);
+      addToast(`Filtered by tag: #${suggestion.text}`, 'info');
+    }
+  };
+
+  const handleSearchSubmit = (term) => {
+    setSearchQuery(term);
+    if (!term) {
+      setActiveTagFilter(null);
+    }
+  };
+
+  // Helper to format date nicely
   const formatDate = (dateString) => {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     return new Date(dateString).toLocaleDateString('en-US', options);
   };
+
+  // Filter events based on active Typeahead search and tag selection
+  const displayedEvents = events.filter((ev) => {
+    if (!searchQuery && !activeTagFilter) return true;
+    const q = (searchQuery || '').toLowerCase().trim();
+    const matchesTitle = ev.title ? ev.title.toLowerCase().includes(q) : false;
+    const matchesDesc = ev.description ? ev.description.toLowerCase().includes(q) : false;
+    const matchesTags = Array.isArray(ev.tags) && ev.tags.some(t => t.toLowerCase().includes(q));
+    const matchesActiveTag = activeTagFilter 
+      ? (Array.isArray(ev.tags) && ev.tags.map(t => t.toLowerCase()).includes(activeTagFilter))
+      : true;
+
+    return (matchesTitle || matchesDesc || matchesTags) && matchesActiveTag;
+  });
 
   if (isAppLoading) {
     return (
@@ -493,6 +550,55 @@ function App() {
                 )}
               </div>
 
+              {/* Typeahead Search Bar */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '320px', maxWidth: '700px' }}>
+                  <Typeahead
+                    apiBaseUrl={API_BASE_URL}
+                    placeholder="Search events by title or tags (e.g. react, design)..."
+                    debounceMs={200}
+                    language={preferredLanguage}
+                    onSelect={handleSelectSuggestion}
+                    onSearch={handleSearchSubmit}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} title="Prioritize suggestions in your preferred language">
+                    <Globe size={16} color="var(--text-secondary)" />
+                    <select
+                      value={preferredLanguage}
+                      onChange={(e) => setPreferredLanguage(e.target.value)}
+                      aria-label="Filter language preference"
+                      style={{
+                        background: 'rgba(18, 16, 32, 0.85)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        borderRadius: '8px',
+                        padding: '10px 10px',
+                        color: '#f3f4f6',
+                        fontSize: '0.85rem',
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="en" style={{ background: '#121020' }}>EN</option>
+                      <option value="hi" style={{ background: '#121020' }}>HI</option>
+                      <option value="es" style={{ background: '#121020' }}>ES</option>
+                      <option value="fr" style={{ background: '#121020' }}>FR</option>
+                      <option value="de" style={{ background: '#121020' }}>DE</option>
+                    </select>
+                  </div>
+                </div>
+                {(searchQuery || activeTagFilter) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    <span>Active filter: <strong style={{ color: '#a78bfa' }}>{searchQuery || activeTagFilter}</strong></span>
+                    <button
+                      onClick={() => { setSearchQuery(''); setActiveTagFilter(null); }}
+                      style={{ background: 'rgba(255,255,255,0.08)', border: 'none', color: '#f3f4f6', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem' }}
+                    >
+                      Clear filter
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Create Event Form Overlay */}
               {showCreateForm && (currentUser.role === 'organizer' || currentUser.role === 'admin') && (
                 <form onSubmit={handleCreateEvent} className="glass-card animate-fade-in" style={{ padding: '2rem', border: '1px solid rgba(139, 92, 246, 0.25)' }}>
@@ -543,6 +649,41 @@ function App() {
                     </div>
                   </div>
 
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem', marginBottom: '1.2rem' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Tags (comma-separated)</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. react, tech, workshop"
+                        value={newEvent.tags || ''}
+                        onChange={e => setNewEvent({...newEvent, tags: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Language</label>
+                      <select 
+                        value={newEvent.language || 'en'}
+                        onChange={e => setNewEvent({...newEvent, language: e.target.value})}
+                        style={{
+                          width: '100%',
+                          height: '42px',
+                          padding: '0 0.8rem',
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          outline: 'none'
+                        }}
+                      >
+                        <option value="en" style={{ background: '#121020' }}>English (EN)</option>
+                        <option value="es" style={{ background: '#121020' }}>Spanish (ES)</option>
+                        <option value="fr" style={{ background: '#121020' }}>French (FR)</option>
+                        <option value="hi" style={{ background: '#121020' }}>Hindi (HI)</option>
+                        <option value="de" style={{ background: '#121020' }}>German (DE)</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div style={{ marginBottom: '1.5rem' }}>
                     <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Description</label>
                     <textarea 
@@ -565,14 +706,23 @@ function App() {
               )}
 
               {/* Events Grid */}
-              {events.length === 0 ? (
+              {displayedEvents.length === 0 ? (
                 <div className="glass-card" style={{ padding: '4rem 2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                   <Calendar size={48} color="rgba(255,255,255,0.06)" style={{ marginBottom: '1rem' }} />
-                  <p>No upcoming events listed yet.</p>
+                  <p>{events.length === 0 ? 'No upcoming events listed yet.' : `No events found matching "${searchQuery || activeTagFilter}".`}</p>
+                  {(searchQuery || activeTagFilter) && (
+                    <button
+                      onClick={() => { setSearchQuery(''); setActiveTagFilter(null); }}
+                      className="glow-btn"
+                      style={{ marginTop: '1rem', padding: '0.5rem 1.2rem', fontSize: '0.85rem' }}
+                    >
+                      Show all events
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  {events.map(ev => {
+                  {displayedEvents.map(ev => {
                     const isSelected = selectedEventId === ev._id;
                     
                     return (
@@ -592,9 +742,30 @@ function App() {
                         {/* Left Block: Info */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                           <div>
-                            <h3 style={{ fontSize: '1.4rem', color: '#fff', marginBottom: '0.4rem' }}>{ev.title}</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                              <h3 style={{ fontSize: '1.4rem', color: '#fff' }}>{ev.title}</h3>
+                              <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: '9999px', background: 'rgba(255,255,255,0.08)', color: '#d1d5db', border: '1px solid rgba(255,255,255,0.15)', textTransform: 'uppercase', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <Globe size={11} /> {ev.language || 'en'}
+                              </span>
+                            </div>
                             <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>{ev.description}</p>
                           </div>
+
+                          {/* Tags */}
+                          {Array.isArray(ev.tags) && ev.tags.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                              {ev.tags.map((tag, tIdx) => (
+                                <span 
+                                  key={tIdx} 
+                                  onClick={(e) => { e.stopPropagation(); setActiveTagFilter(tag.toLowerCase()); setSearchQuery(tag); }}
+                                  style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: '9999px', background: 'rgba(16, 185, 129, 0.15)', color: '#6ee7b7', border: '1px solid rgba(16, 185, 129, 0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
+                                  title={`Filter by tag #${tag}`}
+                                >
+                                  <Tag size={11} /> {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Metadata blocks */}
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>

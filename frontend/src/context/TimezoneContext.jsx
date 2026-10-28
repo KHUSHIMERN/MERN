@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import authenticatedFetch from '../utils/authenticatedFetch';
+import { useAuth } from './AuthContext';
 import { getUserBrowserTimezone, getUserBrowserLocale } from '../utils/dateUtils';
 
 const TimezoneContext = createContext();
@@ -6,6 +8,7 @@ const TimezoneContext = createContext();
 const STORAGE_KEY = 'user_timezone_override';
 
 export function TimezoneProvider({ children }) {
+  const { user } = useAuth();
   const detectedTimezone = getUserBrowserTimezone();
   const userLocale = getUserBrowserLocale();
 
@@ -24,12 +27,13 @@ export function TimezoneProvider({ children }) {
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        const res = await fetch('/api/users/profile');
+        if (!user) return;
+        const res = await authenticatedFetch('/api/users/me');
         if (res.ok) {
           const json = await res.json();
-          if (json.data && json.data.preferredTimezone) {
-            setOverrideTimezoneState(json.data.preferredTimezone);
-            localStorage.setItem(STORAGE_KEY, json.data.preferredTimezone);
+          if (json.user?.preferredTimezone) {
+            setOverrideTimezoneState(json.user.preferredTimezone);
+            localStorage.setItem(STORAGE_KEY, json.user.preferredTimezone);
           }
         }
       } catch (e) {
@@ -38,7 +42,7 @@ export function TimezoneProvider({ children }) {
     };
 
     fetchUserProfile();
-  }, []);
+  }, [user]);
 
   const setManualTimezone = async (tz) => {
     if (!tz || tz === detectedTimezone) {
@@ -52,8 +56,8 @@ export function TimezoneProvider({ children }) {
       setOverrideTimezoneState(tz);
 
       // Save to profile API
-      await fetch('/api/users/profile', {
-        method: 'PATCH',
+      if (user) await authenticatedFetch('/api/users/me', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ preferredTimezone: tz })
       });
@@ -67,8 +71,8 @@ export function TimezoneProvider({ children }) {
       localStorage.removeItem(STORAGE_KEY);
       setOverrideTimezoneState(null);
 
-      await fetch('/api/users/profile', {
-        method: 'PATCH',
+      if (user) await authenticatedFetch('/api/users/me', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ preferredTimezone: null })
       });

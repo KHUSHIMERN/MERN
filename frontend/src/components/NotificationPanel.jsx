@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Bell, X, Check, Trash2, ExternalLink } from 'lucide-react';
+import { Bell, X, Check, CheckCheck, Trash2, ExternalLink } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 
 /**
@@ -11,7 +11,7 @@ import { useNotifications } from '../context/NotificationContext';
  *   onOpenEvent     {function} - Called with an event object when user clicks a notification
  */
 function NotificationPanel({ open, onClose, onOpenEvent }) {
-  const { notifications, markRead, dismiss, refreshNotifications } = useNotifications();
+  const { notifications, unreadCount, loading, markRead, markAllRead, dismiss, refreshNotifications } = useNotifications();
   const panelRef = useRef(null);
 
   // Refresh when opening
@@ -23,16 +23,18 @@ function NotificationPanel({ open, onClose, onOpenEvent }) {
 
   // Close on Escape
   useEffect(() => {
+    if (!open) return undefined;
     const handler = (e) => {
-      if (e.key === 'Escape' && open) onClose();
+      if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', handler);
+    panelRef.current?.focus();
     return () => document.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
   // Close on outside click
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
     const handler = (e) => {
       if (panelRef.current && !panelRef.current.contains(e.target)) {
         onClose();
@@ -46,9 +48,10 @@ function NotificationPanel({ open, onClose, onOpenEvent }) {
   if (!open) return null;
 
   const handleNotifClick = async (notif) => {
-    if (!notif.read) await markRead(notif._id);
-    if (notif.eventId && onOpenEvent) {
-      onOpenEvent(notif.eventId);
+    const id = notif._id || notif.id;
+    if (!notif.read && !notif.isRead) await markRead(id);
+    if ((notif.eventId || notif.event) && onOpenEvent) {
+      onOpenEvent(notif.event || notif.eventId);
       onClose();
     }
   };
@@ -73,6 +76,7 @@ function NotificationPanel({ open, onClose, onOpenEvent }) {
         role="dialog"
         aria-modal="true"
         aria-label="Notifications"
+        tabIndex={-1}
         style={{
           position: 'fixed',
           top: 0,
@@ -99,22 +103,48 @@ function NotificationPanel({ open, onClose, onOpenEvent }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f8fafc', fontWeight: '700', fontSize: '16px' }}>
             <Bell size={20} color="#6366f1" />
             Notifications
+            {unreadCount > 0 && (
+              <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '400' }}>{unreadCount} unread</span>
+            )}
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close notifications"
-            style={{
-              background: 'none', border: 'none', color: '#94a3b8',
-              cursor: 'pointer', padding: '4px', borderRadius: '6px',
-            }}
-          >
-            <X size={20} />
-          </button>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllRead}
+                aria-label="Mark all as read"
+                title="Mark all as read"
+                style={{
+                  background: 'none', border: 'none', color: '#6366f1',
+                  cursor: 'pointer', padding: '4px 8px', borderRadius: '6px',
+                  display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px',
+                }}
+              >
+                <CheckCheck size={16} /> Mark all read
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              aria-label="Close notifications"
+              style={{
+                background: 'none', border: 'none', color: '#94a3b8',
+                cursor: 'pointer', padding: '4px', borderRadius: '6px',
+              }}
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-          {notifications.length === 0 ? (
+          {loading ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              height: '200px', color: '#475569', fontSize: '14px',
+            }}>
+              Loading notifications...
+            </div>
+          ) : notifications.length === 0 ? (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', height: '200px', color: '#475569', gap: '10px',
@@ -123,80 +153,85 @@ function NotificationPanel({ open, onClose, onOpenEvent }) {
               <p style={{ fontSize: '14px' }}>No notifications yet.</p>
             </div>
           ) : (
-            notifications.map((notif) => (
-              <div
-                key={notif._id || notif.id}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: '12px',
-                  padding: '14px 20px',
-                  borderBottom: '1px solid rgba(255,255,255,0.05)',
-                  background: notif.read ? 'transparent' : 'rgba(99,102,241,0.07)',
-                  cursor: notif.eventId ? 'pointer' : 'default',
-                  transition: 'background 0.15s',
-                }}
-                onClick={() => handleNotifClick(notif)}
-              >
-                {/* Unread dot */}
-                <span style={{
-                  width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, marginTop: '5px',
-                  background: notif.read ? 'transparent' : '#6366f1',
-                }} />
+            notifications.map((notif) => {
+              const id = notif._id || notif.id;
+              const isRead = notif.read || notif.isRead;
+              return (
+                <div
+                  key={id}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: '12px',
+                    padding: '12px 16px',
+                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    background: isRead ? 'transparent' : 'rgba(99,102,241,0.05)',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => handleNotifClick(notif)}
+                >
+                  {/* Unread dot */}
+                  <span style={{
+                    width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, marginTop: '5px',
+                    background: isRead ? 'transparent' : '#6366f1',
+                  }} />
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {notif.title && (
-                    <p style={{ fontSize: '13px', fontWeight: '700', color: '#f8fafc', marginBottom: '2px' }}>
-                      {notif.title}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {notif.title && (
+                      <p style={{ fontSize: '13px', fontWeight: '700', color: '#f8fafc', marginBottom: '2px' }}>
+                        {notif.title}
+                      </p>
+                    )}
+                    <p style={{ fontSize: '13px', color: '#94a3b8', lineHeight: '1.5', margin: 0 }}>
+                      {notif.message || notif.body || notif.payload?.message || 'New notification'}
                     </p>
-                  )}
-                  <p style={{ fontSize: '13px', color: '#94a3b8', lineHeight: '1.5', margin: 0 }}>
-                    {notif.message || notif.body || 'New notification'}
-                  </p>
-                  {notif.createdAt && (
-                    <p style={{ fontSize: '11px', color: '#475569', marginTop: '4px' }}>
-                      {new Date(notif.createdAt).toLocaleString()}
-                    </p>
-                  )}
-                </div>
+                    {notif.createdAt && (
+                      <p style={{ fontSize: '11px', color: '#475569', marginTop: '4px' }}>
+                        {new Date(notif.createdAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
 
-                {/* Action buttons */}
-                <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                  {!notif.read && (
-                    <button
-                      aria-label="Mark as read"
-                      onClick={(e) => { e.stopPropagation(); markRead(notif._id); }}
-                      style={{
-                        background: 'none', border: 'none', color: '#6366f1',
-                        cursor: 'pointer', padding: '4px', borderRadius: '4px',
-                      }}
-                    >
-                      <Check size={14} />
-                    </button>
-                  )}
-                  {notif.eventId && (
-                    <button
-                      aria-label="Open event"
-                      onClick={(e) => { e.stopPropagation(); handleNotifClick(notif); }}
-                      style={{
-                        background: 'none', border: 'none', color: '#38bdf8',
-                        cursor: 'pointer', padding: '4px', borderRadius: '4px',
-                      }}
-                    >
-                      <ExternalLink size={14} />
-                    </button>
-                  )}
-                  <button
-                    aria-label="Dismiss notification"
-                    onClick={(e) => { e.stopPropagation(); dismiss(notif._id); }}
-                    style={{
-                      background: 'none', border: 'none', color: '#ef4444',
-                      cursor: 'pointer', padding: '4px', borderRadius: '4px',
-                    }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {/* Action buttons */}
+                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    {!isRead && (
+                      <button
+                        aria-label="Mark as read"
+                        onClick={(e) => { e.stopPropagation(); markRead(id); }}
+                        style={{
+                          background: 'none', border: 'none', color: '#6366f1',
+                          cursor: 'pointer', padding: '4px', borderRadius: '4px',
+                        }}
+                      >
+                        <Check size={14} />
+                      </button>
+                    )}
+                    {(notif.eventId || notif.event) && (
+                      <button
+                        aria-label="Open event"
+                        onClick={(e) => { e.stopPropagation(); handleNotifClick(notif); }}
+                        style={{
+                          background: 'none', border: 'none', color: '#38bdf8',
+                          cursor: 'pointer', padding: '4px', borderRadius: '4px',
+                        }}
+                      >
+                        <ExternalLink size={14} />
+                      </button>
+                    )}
+                    {dismiss && (
+                      <button
+                        aria-label="Dismiss notification"
+                        onClick={(e) => { e.stopPropagation(); dismiss(id); }}
+                        style={{
+                          background: 'none', border: 'none', color: '#ef4444',
+                          cursor: 'pointer', padding: '4px', borderRadius: '4px',
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

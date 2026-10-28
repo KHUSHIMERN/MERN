@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 const app = require('../server.js');
 const http = require('http');
 

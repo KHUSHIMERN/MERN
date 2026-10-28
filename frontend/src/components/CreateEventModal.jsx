@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import authenticatedFetch from '../utils/authenticatedFetch';
 import {
   Dialog,
   DialogTitle,
@@ -13,6 +14,7 @@ import {
   Typography
 } from '@mui/material';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
@@ -27,6 +29,7 @@ const IANA_TIMEZONES = [
 
 export default function CreateEventModal({ open, onClose, onEventCreated }) {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     title: '',
     title_hi: '',
@@ -38,7 +41,7 @@ export default function CreateEventModal({ open, onClose, onEventCreated }) {
     startDate: '',
     endDate: '',
     timezone: 'Asia/Kolkata',
-    organizer: 'Local Skill Mission',
+    organizer: user?.name || 'Local Skill Mission',
     capacity: 100,
     imageUrl: '',
     imageUrlAlt: ''
@@ -83,12 +86,14 @@ export default function CreateEventModal({ open, onClose, onEventCreated }) {
     try {
       const payload = {
         ...formData,
+        organizerId: user?._id || user?.name || formData.organizer,
+        organizer: user?.name || formData.organizer,
         startDate: new Date(formData.startDate).toISOString(),
         endDate: formData.endDate ? new Date(formData.endDate).toISOString() : undefined,
         capacity: Number(formData.capacity)
       };
 
-      const res = await fetch('/api/events', {
+      const res = await authenticatedFetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -96,7 +101,7 @@ export default function CreateEventModal({ open, onClose, onEventCreated }) {
 
       if (res.ok) {
         const json = await res.json();
-        onEventCreated(json.data);
+        onEventCreated(json.data || json.event);
         onClose();
       } else {
         const json = await res.json();

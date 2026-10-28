@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
@@ -92,7 +92,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
         });
       }
 
-      // Fetch AI Recommendations ΓÇö pass user city/language so server can personalise
+      // Fetch AI Recommendations — pass user city/language so server can personalise
       try {
         const recParams = { limit: 4 };
         const userCity = user?.city;
@@ -322,7 +322,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
       <div className="events-controls">
         <div className="search-bar-row">
           <div className="search-bar">
-            <span className="search-icon" aria-hidden="true">≡ƒöì</span>
+            <span className="search-icon" aria-hidden="true">🔍</span>
             <input
               type="text"
               className="search-input"
@@ -344,7 +344,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
                 }}
                 aria-label="Clear search input"
               >
-                Γ£ò
+                ✕
               </button>
             )}
           </div>

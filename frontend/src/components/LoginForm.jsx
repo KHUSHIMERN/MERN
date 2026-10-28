@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { Mail, Lock, LogIn, AlertCircle, CheckCircle, Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export default function LoginForm({ onSwitchToRegister, onLoginSuccess, hideCardWrapper = false }) {
-  const { login, resendVerification } = useAuth();
+export default function LoginForm({ onSwitchToRegister, onLoginSuccess, hideCardWrapper = false, initialEmail = '' }) {
+  const { login, resendVerification, verifyEmail } = useAuth();
   const [formData, setFormData] = useState({
-    email: '',
+    email: initialEmail,
     password: '',
   });
 
@@ -15,6 +15,12 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess, hideCard
   const [isUnverified, setIsUnverified] = useState(false);
   const [resendStatus, setResendStatus] = useState('');
   const [userProfile, setUserProfile] = useState(null);
+  const [verificationLink, setVerificationLink] = useState('');
+  const [verificationToken, setVerificationToken] = useState('');
+
+  React.useEffect(() => {
+    if (initialEmail) setFormData((current) => ({ ...current, email: initialEmail }));
+  }, [initialEmail]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -22,6 +28,8 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess, hideCard
     setApiError('');
     setIsUnverified(false);
     setResendStatus('');
+    setVerificationLink('');
+    setVerificationToken('');
   };
 
   const handleSubmit = async (e) => {
@@ -66,9 +74,28 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess, hideCard
     setResendStatus('Sending...');
     const res = await resendVerification(formData.email.trim());
     if (res.success) {
-      setResendStatus('Verification email sent! Check your inbox or simulated link.');
+      setResendStatus('Verification email sent! Check your inbox or use the development link below.');
+      const data = res.data || {};
+      setVerificationLink(data.backendVerifyLink || data.verificationLink || '');
+      setVerificationToken(data.verificationToken || '');
     } else {
       setResendStatus(res.message || 'Failed to resend verification.');
+    }
+  };
+
+  const handleVerifyNow = async () => {
+    if (!verificationToken) return;
+    setResendStatus('Verifying account...');
+    const result = await verifyEmail(verificationToken);
+    if (result.success) {
+      setIsUnverified(false);
+      setApiError('');
+      setVerificationLink('');
+      setVerificationToken('');
+      setApiSuccess('Email verified. You can sign in now.');
+      setResendStatus('');
+    } else {
+      setResendStatus(result.message);
     }
   };
 
@@ -96,6 +123,16 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess, hideCard
                 <Send size={12} /> Resend Verification Link
               </button>
               {resendStatus && <div style={{ fontSize: '0.8rem', marginTop: '6px', color: '#f87171' }}>{resendStatus}</div>}
+              {verificationLink && (
+                <a href={verificationLink} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: '8px', color: '#fca5a5', fontWeight: 700 }}>
+                  Open verification link
+                </a>
+              )}
+              {verificationToken && (
+                <button type="button" className="btn-secondary" onClick={handleVerifyNow} style={{ marginTop: '8px', fontSize: '0.8rem', padding: '5px 10px' }}>
+                  <CheckCircle size={13} /> Verify Account Now
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -174,4 +211,3 @@ export default function LoginForm({ onSwitchToRegister, onLoginSuccess, hideCard
 
   return <div className="auth-card">{content}</div>;
 }
-

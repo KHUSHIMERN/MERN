@@ -2,7 +2,24 @@
  * rsvpState.js
  * Pure utility functions for computing RSVP status from event data.
  * No side-effects; safe to use in components and unit tests.
+ * Supports both DEV-AMRITA (rsvpedUsers/attendees arrays) and QA
+ * (userRegistrationStatus / confirmedCount fields) data shapes.
  */
+
+/**
+ * Returns the current user's RSVP status for the event:
+ *  'confirmed' | 'waitlist' | 'none'
+ *
+ * Requires the event to have been enriched server-side with
+ * `userRsvpStatus` or `userRegistrationStatus`.
+ */
+export function rsvpStatus(evt) {
+  if (!evt) return 'none';
+  const status = evt.userRsvpStatus || evt.userRegistrationStatus;
+  if (status === 'confirmed') return 'confirmed';
+  if (status === 'waitlist') return 'waitlist';
+  return 'none';
+}
 
 /**
  * Returns the number of confirmed (non-waitlist) attendees for an event.
@@ -10,6 +27,9 @@
  */
 export function confirmedCount(evt) {
   if (!evt) return 0;
+
+  // QA shape: explicit confirmedCount field
+  if (typeof evt.confirmedCount === 'number') return evt.confirmedCount;
 
   // Prefer the explicit attendeesCount field when it is set
   if (typeof evt.attendeesCount === 'number' && evt.attendeesCount > 0) {
@@ -54,26 +74,21 @@ export function isEventFull(evt) {
 }
 
 /**
- * Returns the current user's RSVP status for the event:
- *  'confirmed' | 'waitlist' | 'none'
- *
- * Requires the event to have been enriched server-side with
- * `userRsvpStatus` (set by rsvpService.enrichEventsWithRsvp).
- */
-export function rsvpStatus(evt) {
-  if (!evt) return 'none';
-  if (evt.userRsvpStatus === 'confirmed') return 'confirmed';
-  if (evt.userRsvpStatus === 'waitlist') return 'waitlist';
-  return 'none';
-}
-
-/**
  * Returns true if the current user has an active RSVP (confirmed or waitlist).
- * Relies on the server-enriched `userRsvpStatus` field.
  */
 export function hasActiveRsvp(evt) {
   const s = rsvpStatus(evt);
   return s === 'confirmed' || s === 'waitlist';
+}
+
+/**
+ * Returns the label for the RSVP action button.
+ */
+export function rsvpLabel(evt) {
+  const status = rsvpStatus(evt);
+  if (status === 'confirmed') return 'Cancel RSVP';
+  if (status === 'waitlist') return 'Cancel RSVP';
+  return isEventFull(evt) ? 'Join Waitlist' : 'RSVP';
 }
 
 /**
@@ -83,8 +98,8 @@ export function rsvpStatusLabel(evt) {
   const status = rsvpStatus(evt);
   const full = isEventFull(evt);
 
-  if (status === 'confirmed') return '✓ Registered';
-  if (status === 'waitlist') return '⏳ Waitlisted';
+  if (status === 'confirmed') return '✅ Registered';
+  if (status === 'waitlist') return `⏳ Waitlisted — Position ${evt.userWaitlistPosition || '?'}`;
   if (full) return '🔴 Full';
   return '';
 }

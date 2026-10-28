@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 
 const ToastContext = createContext(null);
 
@@ -11,6 +11,7 @@ let _toastId = 0;
  */
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const timerRef = useRef(null);
 
   const showToast = useCallback((message, type = 'info', duration = 4000) => {
     const id = ++_toastId;
@@ -25,10 +26,10 @@ export function ToastProvider({ children }) {
   }, []);
 
   const colorMap = {
-    success: { bg: '#10b981', icon: '✓' },
-    error:   { bg: '#ef4444', icon: '✕' },
-    warning: { bg: '#f59e0b', icon: '⚠' },
-    info:    { bg: '#6366f1', icon: 'ℹ' },
+    success: { bg: '#10b981', icon: '✅' },
+    error:   { bg: '#ef4444', icon: '❌' },
+    warning: { bg: '#f59e0b', icon: '⚠️' },
+    info:    { bg: '#6366f1', icon: 'ℹ️' },
   };
 
   return (
@@ -89,7 +90,7 @@ export function ToastProvider({ children }) {
                     flexShrink: 0,
                   }}
                 >
-                  ×
+                  ✕
                 </button>
               </div>
             );

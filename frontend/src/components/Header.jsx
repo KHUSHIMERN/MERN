@@ -8,6 +8,9 @@ import { useTimezone } from '../context/TimezoneContext';
 import { useNotifications } from '../context/NotificationContext';
 import { getTimezoneOffsetLabel } from '../utils/dateUtils';
 
+/**
+ * Header — sticky global navigation bar.
+ */
 export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNotificationEvent, user, logout, view, setView }) {
   const { t } = useTranslation();
   const { activeTimezone } = useTimezone();
@@ -105,7 +108,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNot
                   </button>
                   {accountOpen && (
                     <div className="account-dropdown" role="menu">
-                      <button type="button" role="menuitem" onClick={() => navigate('profile')}><User size={17} /> Profile &amp; Settings</button>
+                      <button type="button" role="menuitem" onClick={() => navigate('profile')}><User size={17} /> Profile & Settings</button>
                       {user.role === 'admin' && <button type="button" role="menuitem" onClick={() => navigate('admin-requests')}><Shield size={17} /> Admin Requests</button>}
                       <button type="button" role="menuitem" className="account-logout" onClick={handleLogout}><LogOut size={17} /> Logout</button>
                     </div>
@@ -139,7 +142,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNot
             {canOrganize && <button type="button" onClick={() => { onOpenRegisterModal?.(); setMobileOpen(false); }}>Create Event</button>}
             {user ? (
               <>
-                <button type="button" onClick={() => navigate('profile')}>Profile &amp; Settings</button>
+                <button type="button" onClick={() => navigate('profile')}>Profile & Settings</button>
                 {user.role === 'admin' && <button type="button" onClick={() => navigate('admin-requests')}>Admin Requests</button>}
               </>
             ) : <button type="button" onClick={() => navigate('login')}>Log In / Register</button>}

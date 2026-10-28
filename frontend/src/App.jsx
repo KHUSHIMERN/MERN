@@ -4,6 +4,8 @@ import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import { TimezoneProvider } from './context/TimezoneContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { ToastProvider } from './context/ToastContext';
+import { NotificationProvider } from './context/NotificationContext';
 import RegisterForm from './components/RegisterForm';
 import LoginForm from './components/LoginForm';
 import AuthPage from './components/AuthPage';
@@ -106,6 +108,7 @@ function AppContent() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenRegisterModal={() => handleOpenRegisterModal()}
+        onOpenNotificationEvent={(evt) => handleOpenRegisterModal(evt)}
         user={user}
         logout={logout}
         view={view}
@@ -184,9 +187,13 @@ export function App() {
         <CssBaseline />
         <LanguageProvider>
           <AuthProvider>
-            <TimezoneProvider>
-              <AppContent />
-            </TimezoneProvider>
+            <ToastProvider>
+              <NotificationProvider>
+                <TimezoneProvider>
+                  <AppContent />
+                </TimezoneProvider>
+              </NotificationProvider>
+            </ToastProvider>
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>

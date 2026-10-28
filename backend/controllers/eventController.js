@@ -1,10 +1,16 @@
-onst mongoose = require('mongoose');
+const mongoose = require('mongoose');
 const Event = require('../models/Event');
 const { INITIAL_EVENTS } = require('../data/seedEvents');
-const {
-  enrichEventsWithRsvp,
-  migrateLegacyRsvpsForEvent,
-} = require('../services/rsvpService');
+// rsvpService: graceful fallback when service module is unavailable
+let enrichEventsWithRsvp, migrateLegacyRsvpsForEvent;
+try {
+  const rsvpService = require('../services/rsvpService');
+  enrichEventsWithRsvp = rsvpService.enrichEventsWithRsvp;
+  migrateLegacyRsvpsForEvent = rsvpService.migrateLegacyRsvpsForEvent;
+} catch {
+  enrichEventsWithRsvp = async (events) => events;
+  migrateLegacyRsvpsForEvent = async () => {};
+}
 
 const isConnectedToMongoDB = () => mongoose.connection.readyState === 1;
 

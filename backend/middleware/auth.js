@@ -66,4 +66,29 @@ const requireRole = (...roles) => {
   };
 };
 
-module.exports = { auth, requireVerified, requireRole, JWT_SECRET };
+// Optional auth: attaches req.user if a valid token is present, but does not block unauthenticated requests
+const optionalAuth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let token = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.query && req.query.token) {
+      token = req.query.token;
+    }
+
+    if (token) {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const user = await User.findById(decoded.id);
+      if (user) {
+        req.user = user;
+      }
+    }
+  } catch {
+    // Invalid/expired token — silently ignore for optional auth
+  }
+  next();
+};
+
+module.exports = { auth, optionalAuth, requireVerified, requireRole, JWT_SECRET };

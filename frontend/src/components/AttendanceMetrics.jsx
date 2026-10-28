@@ -112,6 +112,10 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
     setLoading(true);
     setError(null);
     try {
+      const token = localStorage.getItem('cc_token');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       // Try multiple endpoint patterns for robustness
       const endpoints = [
         `/api/organizer/${organizerId}/attendance-metrics?limit=${limit}`,
@@ -193,6 +197,10 @@ export default function AttendanceMetrics({ organizerId = 'organizer_1', initial
 
   const handleExportCSV = async () => {
     try {
+      const token = localStorage.getItem('cc_token');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const exportEndpoints = [
         `/api/organizer/${organizerId}/attendance-metrics/export?limit=${limit}`,
         `/organizer/${organizerId}/attendance-metrics/export?limit=${limit}`,

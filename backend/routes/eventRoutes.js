@@ -18,14 +18,18 @@ const {
   updateEvent,
   deleteEvent,
   publishEvent,
-  searchEvents
+  searchEvents,
+  getOrganizerAttendanceMetrics,
+  exportOrganizerAttendanceMetricsCSV
 } = require('../controllers/eventController');
+
 const {
   getEventAttendance,
   updateEventAttendance,
   exportEventAttendance,
   getAttendanceAuditLogs
 } = require('../controllers/attendanceController');
+
 
 const privileged = [auth, requireVerified, requireRole('organizer', 'admin')];
 const JWT_SECRET = AUTH_JWT_SECRET || process.env.JWT_SECRET || 'supersecretkey';
@@ -246,6 +250,11 @@ router.post('/suggest/analytics', async (req, res) => {
 router.get('/', optionalAuth, getEvents);
 router.post('/', ...privileged, createEvent);
 router.get('/search', searchEvents);
+
+// Organizer attendance metrics endpoints
+router.get('/organizer/:id/attendance-metrics/export', exportOrganizerAttendanceMetricsCSV);
+router.get('/organizer/:id/attendance-metrics', getOrganizerAttendanceMetrics);
+
 router.get('/:id', optionalAuth, getEventById);
 router.put('/:id', ...privileged, updateEvent);
 router.delete('/:id', ...privileged, deleteEvent);

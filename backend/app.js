@@ -72,4 +72,7 @@ app.get('/', (req, res) => {
   });
 });
 
+// Error Handling Middleware
+app.use(require('./middleware/errorHandler'));
+
 module.exports = app;

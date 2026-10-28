@@ -40,14 +40,15 @@ const registerForEvent = async (req, res, next) => {
       });
     }
 
-    memoryRegistrations.push(regRecord);
+    if (memoryRegistrations) memoryRegistrations.push(regRecord);
     return res.status(201).json({
       success: true,
       message: 'Registration successful! Details sent to your email.',
       data: regRecord
     });
   } catch (error) {
-    next(error);
+    if (next) return next(error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -62,9 +63,10 @@ const getRegistrations = async (req, res, next) => {
       return res.json({ success: true, count: records.length, data: records });
     }
 
-    return res.json({ success: true, count: memoryRegistrations.length, data: memoryRegistrations });
+    return res.json({ success: true, count: (memoryRegistrations || []).length, data: memoryRegistrations || [] });
   } catch (error) {
-    next(error);
+    if (next) return next(error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 

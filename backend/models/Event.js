@@ -1,5 +1,14 @@
 const mongoose = require('mongoose');
 
+const locationSchema = new mongoose.Schema(
+  {
+    placeName: { type: String, default: '' },
+    latitude: { type: Number, default: null },
+    longitude: { type: Number, default: null }
+  },
+  { _id: false }
+);
+
 const eventSchema = new mongoose.Schema(
   {
     title: {
@@ -40,10 +49,11 @@ const eventSchema = new mongoose.Schema(
     },
     startDate: {
       type: Date,
-      required: false,
+      default: Date.now,
     },
     endDate: {
       type: Date,
+      default: null,
     },
     date: {
       type: String,
@@ -79,6 +89,7 @@ const eventSchema = new mongoose.Schema(
     },
     organizerId: {
       type: mongoose.Schema.Types.Mixed,
+      default: 'org-admin',
     },
     capacity: {
       type: Number,
@@ -128,13 +139,17 @@ const eventSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    published: {
+      type: Boolean,
+      default: true,
+    },
     tags: {
       type: [String],
       default: [],
     },
     imageUrl: {
       type: String,
-      default: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80',
+      default: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87',
       trim: true,
     },
     imageUrlAlt: {
@@ -144,7 +159,7 @@ const eventSchema = new mongoose.Schema(
     },
     image: {
       type: String,
-      default: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80',
+      default: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87',
     },
     language: {
       type: String,
@@ -154,9 +169,19 @@ const eventSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    published: {
-      type: Boolean,
-      default: true,
+    itemKey: {
+      type: String,
+      default: null,
+    },
+    id: {
+      type: String,
+      default: function () {
+        return this._id ? this._id.toString() : null;
+      },
+    },
+    seatsLeft: {
+      type: Number,
+      default: 50,
     },
   },
   {
@@ -164,8 +189,19 @@ const eventSchema = new mongoose.Schema(
   }
 );
 
-eventSchema.index({ title: 'text', description: 'text' }, { language_override: 'none' });
+eventSchema.pre('validate', function () {
+  if (!this.startDate && this.date) {
+    this.startDate = new Date(this.date);
+  }
+});
+
+eventSchema.index(
+  { title: 'text', description: 'text' },
+  { language_override: 'none' }
+);
 eventSchema.index({ tags: 1 });
+eventSchema.index({ published: 1, startDate: 1 });
+eventSchema.index({ category: 1, published: 1 });
 eventSchema.index({ category: 1 });
 eventSchema.index({ city: 1 });
 eventSchema.index({ startDate: 1 });
@@ -174,4 +210,30 @@ eventSchema.index({ published: 1 });
 eventSchema.index({ category: 1, city: 1, startDate: 1, language: 1 });
 
 const Event = mongoose.models.Event || mongoose.model('Event', eventSchema);
+
+// Ensure legacy text index with default language_override: "language" is dropped if present
+if (mongoose.connection) {
+  const dropLegacyIndex = async () => {
+    try {
+      const collection = mongoose.connection.collection('events');
+      const indexes = await collection.indexes();
+      const legacyTextIndex = indexes.find(
+        (idx) => idx.name === 'title_text_description_text' && idx.language_override !== 'none'
+      );
+      if (legacyTextIndex) {
+        await collection.dropIndex('title_text_description_text');
+        await Event.syncIndexes();
+      }
+    } catch (err) {
+      // Ignore if index does not exist or collection is not initialized yet
+    }
+  };
+
+  if (mongoose.connection.readyState === 1) {
+    dropLegacyIndex();
+  } else {
+    mongoose.connection.once('connected', dropLegacyIndex);
+  }
+}
+
 module.exports = Event;

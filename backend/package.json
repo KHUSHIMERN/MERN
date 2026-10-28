@@ -11,6 +11,8 @@
     "seed": "node seed.js",
     "migrate:rsvps": "node scripts/migrateLegacyRsvps.js",
     "test": "jest --runInBand --forceExit",
+    "test:api": "node tests/runApiTests.js",
+    "test:auth-flow": "node test-auth-flow.js",
     "test:flow": "node test-auth-flow.js",
     "test:all": "node test-auth-flow.js && node test-profile-flow.js",
     "test:auth": "jest tests/authSecurity.test.js --runInBand --forceExit",

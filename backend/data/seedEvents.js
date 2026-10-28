@@ -383,4 +383,8 @@ const memoryAuditLogs = [
   }
 ];
 
-module.exports = { INITIAL_EVENTS, memoryRegistrations, memoryAuditLogs };
+module.exports = {
+  INITIAL_EVENTS,
+  memoryRegistrations,
+  memoryAuditLogs
+};

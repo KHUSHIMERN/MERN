@@ -15,6 +15,7 @@ import HeroSection from './components/HeroSection';
 import EventList from './components/EventList';
 import AIRecommendationSection from './components/AIRecommendationSection';
 import OrganizerCheckIn from './components/OrganizerCheckIn';
+import OrganizerDashboard from './components/OrganizerDashboard';
 import EventRegistrationForm from './components/EventRegistrationForm';
 import FallbackTestDemo from './components/FallbackTestDemo';
 import Footer from './components/Footer';
@@ -22,6 +23,7 @@ import Typeahead from './components/Typeahead';
 import { Globe } from 'lucide-react';
 import './App.css';
 
+// MUI Theme — rem-based typography so all sizes scale with browser zoom (WCAG 1.4.4)
 const theme = createTheme({
   palette: {
     mode: 'dark',
@@ -74,7 +76,7 @@ const theme = createTheme({
 function AppContent() {
   const { t } = useTranslation();
   const { user, loading: authLoading, logout } = useAuth();
-  const [view, setView] = useState(() => new URLSearchParams(window.location.search).get('verified') === 'true' ? 'login' : 'register');
+  const [view, setView] = useState(() => new URLSearchParams(window.location.search).get('verified') === 'true' ? 'login' : 'events');
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedEventForModal, setSelectedEventForModal] = useState(null);
@@ -184,18 +186,18 @@ function AppContent() {
         )}
 
         {view === 'admin-requests' && (
-          <AdminRoleRequests onNavigateHome={() => setView('profile')} />
+          <AdminRoleRequests onNavigateHome={() => setView('events')} />
         )}
 
         {view === 'events' && (
           <>
-            <HeroSection
-              onExplore={handleExploreClick}
-              onRegister={() => handleOpenRegisterModal()}
-            />
-
             {activeTab === 'events' && (
               <>
+                <HeroSection
+                  onExplore={handleExploreClick}
+                  onRegister={() => handleOpenRegisterModal()}
+                />
+
                 {/* AI Recommendations — shown above the events list, visible to all users.
                     Authenticated users get personalised results; guests get popular local events. */}
                 <AIRecommendationSection
@@ -264,6 +266,12 @@ function AppContent() {
 
             {activeTab === 'checkin' && (
               <OrganizerCheckIn />
+            )}
+
+            {activeTab === 'organizer-dashboard' && (
+              <OrganizerDashboard
+                onNavigateHome={() => setActiveTab('events')}
+              />
             )}
 
             {activeTab === 'fallbackDemo' && <FallbackTestDemo />}

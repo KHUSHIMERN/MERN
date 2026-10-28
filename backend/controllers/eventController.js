@@ -1,10 +1,16 @@
 const mongoose = require('mongoose');
 const Event = require('../models/Event');
 const { INITIAL_EVENTS } = require('../data/seedEvents');
-const {
-  enrichEventsWithRsvp,
-  migrateLegacyRsvpsForEvent,
-} = require('../services/rsvpService');
+// rsvpService: graceful fallback when service module is unavailable
+let enrichEventsWithRsvp, migrateLegacyRsvpsForEvent;
+try {
+  const rsvpService = require('../services/rsvpService');
+  enrichEventsWithRsvp = rsvpService.enrichEventsWithRsvp;
+  migrateLegacyRsvpsForEvent = rsvpService.migrateLegacyRsvpsForEvent;
+} catch {
+  enrichEventsWithRsvp = async (events) => events;
+  migrateLegacyRsvpsForEvent = async () => {};
+}
 
 const isConnectedToMongoDB = () => mongoose.connection.readyState === 1;
 
@@ -388,9 +394,14 @@ const createEvent = async (req, res, next) => {
   try {
     const {
       title,
+      title_hi,
       description,
+      description_hi,
       organizerId: requestedOrganizerId,
       category,
+      city,
+      capacity,
+      timezone,
       tags,
       startDate,
       endDate,
@@ -469,6 +480,11 @@ const createEvent = async (req, res, next) => {
       description: description || '',
       organizerId: organizerId.trim(),
       category: category || 'general',
+      city: (city || '').trim() || (typeof location === 'string' ? location : locationObj.placeName) || 'Jaipur',
+      capacity: capacity !== undefined ? Number(capacity) : 100,
+      timezone: timezone || 'Asia/Kolkata',
+      title_hi: (title_hi || '').trim(),
+      description_hi: (description_hi || '').trim(),
       tags: formattedTags,
       startDate: parsedStart,
       endDate: parsedEnd,

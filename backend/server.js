@@ -17,7 +17,7 @@ const startServer = async () => {
       }
     }
     return app.listen(PORT, () => {
-      console.log(`✨ Server running in ${process.env.NODE_ENV || 'development'} mode on http://localhost:${PORT}`);
+      console.log(`✅ Server running in ${process.env.NODE_ENV || 'development'} mode on http://localhost:${PORT}`);
       console.log(`API endpoint: http://localhost:${PORT}/api`);
     });
   } catch (error) {

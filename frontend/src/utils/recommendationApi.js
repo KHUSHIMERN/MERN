@@ -1,7 +1,10 @@
 /**
  * recommendationApi.js
  * Thin client for the /api/recommendations microservice.
- * All calls reuse the shared axios instance (with auto-refreshed Bearer token).
+ * All calls reuse the shared axios instance.
+ *
+ * Fire-and-forget for interaction recording: errors are swallowed so they never
+ * interrupt the main UI flow.
  */
 import axios from 'axios';
 
@@ -25,22 +28,26 @@ export async function fetchRecommendations({ city = '', language = '', limit = 4
 }
 
 /**
- * Record a user interaction event so future recommendations improve.
+ * Record a user interaction (click, filter, RSVP, view) for recommendation training.
  *
- * @param {object} interaction
- * @param {string} interaction.userId          - MongoDB ObjectId string
- * @param {string} [interaction.eventId]       - MongoDB ObjectId string (null for search/filter)
- * @param {'view'|'click'|'rsvp'|'filter'|'search'} interaction.interactionType
- * @param {string} [interaction.category]
- * @param {string} [interaction.city]
- * @param {string} [interaction.language]      - 'en' | 'hi' | 'kn' …
- * @param {object} [interaction.metadata]      - arbitrary extra payload
+ * @param {Object} payload
+ * @param {string} payload.userId          - MongoDB ObjectId of the acting user
+ * @param {string} [payload.eventId]       - MongoDB ObjectId of the target event (optional)
+ * @param {string} payload.interactionType - 'click' | 'rsvp' | 'filter' | 'view' | 'search'
+ * @param {string} [payload.category]      - Event category
+ * @param {string} [payload.city]          - City context
+ * @param {string} [payload.language]      - Language code ('en', 'hi', …)
+ * @param {Object} [payload.metadata]      - Any extra key/value pairs
  */
-export async function recordInteraction(interaction) {
+export async function recordInteraction(payload) {
+  if (!payload?.userId) return; // Never fire for anonymous users
+
   try {
-    await axios.post('/api/recommendations/interactions', interaction);
+    await axios.post('/api/recommendations/interactions', payload);
   } catch (err) {
-    // Interaction tracking is non-critical — never surface to user
+    // Silently ignore — interaction recording is best-effort
     console.warn('[recommendations] recordInteraction failed silently:', err?.message);
   }
 }
+
+export default recordInteraction;

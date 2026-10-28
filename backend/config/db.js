@@ -96,4 +96,3 @@ Object.defineProperty(connectDB, "isConnectedToMongoDB", {
 module.exports = connectDB;
 module.exports.connectDB = connectDB;
 module.exports.isConnectedToMongoDB = isConnectedToMongoDB;
-

@@ -15,6 +15,7 @@ import HeroSection from './components/HeroSection';
 import EventList from './components/EventList';
 import AIRecommendationSection from './components/AIRecommendationSection';
 import OrganizerCheckIn from './components/OrganizerCheckIn';
+import OrganizerDashboard from './components/OrganizerDashboard';
 import EventRegistrationForm from './components/EventRegistrationForm';
 import FallbackTestDemo from './components/FallbackTestDemo';
 import Footer from './components/Footer';
@@ -187,6 +188,12 @@ function AppContent() {
 
             {activeTab === 'checkin' && (
               <OrganizerCheckIn />
+            )}
+
+            {activeTab === 'organizer-dashboard' && (
+              <OrganizerDashboard
+                onNavigateHome={() => setActiveTab('events')}
+              />
             )}
 
             {activeTab === 'fallbackDemo' && <FallbackTestDemo />}

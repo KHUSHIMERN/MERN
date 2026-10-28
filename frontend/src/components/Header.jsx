@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bell, ChevronDown, ClipboardCheck, LogOut, Menu, Plus, Shield, User, X } from 'lucide-react';
+import { Bell, ChevronDown, ClipboardCheck, LayoutDashboard, LogOut, Menu, Plus, Shield, User, X } from 'lucide-react';
 import { LanguageSelector } from './LanguageSelector';
 import TimezoneSelectorModal from './TimezoneSelectorModal';
 import NotificationPanel from './NotificationPanel';
@@ -76,6 +76,11 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNot
                 <ClipboardCheck size={17} /> {t('header.nav.checkin', 'Organizer Workspace')}
               </button>
             )}
+            {canOrganize && (
+              <button type="button" className={`nav-link ${view === 'events' && activeTab === 'organizer-dashboard' ? 'active' : ''}`} onClick={() => navigate('events', 'organizer-dashboard')}>
+                <LayoutDashboard size={17} /> {t('header.nav.organizerDashboard', 'My Dashboard')}
+              </button>
+            )}
           </nav>
 
           <div className="header-controls desktop-header-controls">
@@ -133,6 +138,7 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNot
           <nav className="mobile-navigation-drawer" aria-label="Mobile navigation">
             <button type="button" onClick={() => navigate('events', 'events')}>Events</button>
             {canOrganize && <button type="button" onClick={() => navigate('events', 'checkin')}>Organizer Workspace</button>}
+            {canOrganize && <button type="button" onClick={() => navigate('events', 'organizer-dashboard')}>📊 My Dashboard</button>}
             {canOrganize && <button type="button" onClick={() => { onOpenRegisterModal?.(); setMobileOpen(false); }}>Create Event</button>}
             {user ? (
               <>

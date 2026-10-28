@@ -268,7 +268,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#818cf8', fontWeight: '700', marginBottom: '12px' }}>
             <Sparkles size={20} color="#a78bfa" />
             <span>
-              {recSource === 'openai' ? '🤖 AI Recommended for You' : '🎯 Tailored Hyperlocal Recommendations'}
+              {recSource === 'openai' ? '≡ƒñû AI Recommended for You' : '≡ƒÄ» Tailored Hyperlocal Recommendations'}
             </span>
           </div>
 
@@ -292,7 +292,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                       <span style={{ fontSize: '11px', fontWeight: '700', color: '#38bdf8', textTransform: 'uppercase' }}>
-                        {recEvt.category} • {recEvt.city}
+                        {recEvt.category} ΓÇó {recEvt.city}
                       </span>
                       <span style={{ fontSize: '11px', fontWeight: '800', background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', padding: '2px 8px', borderRadius: '10px' }}>
                         {rec.matchScore}% Match
@@ -309,7 +309,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
                     onClick={() => handleToggleRsvp(recEvt)}
                     style={{ fontSize: '12px', padding: '6px 12px', width: '100%', justifyContent: 'center' }}
                   >
-                    {isUserRsvped(recEvt) ? '✓ Registered' : 'Quick RSVP'}
+                    {isUserRsvped(recEvt) ? 'Γ£ô Registered' : 'Quick RSVP'}
                   </button>
                 </div>
               );
@@ -565,7 +565,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
                         backdropFilter: 'blur(4px)',
                       }}
                     >
-                      {evt.tier} • {evt.city}
+                      {evt.tier} ΓÇó {evt.city}
                     </span>
                   )}
                 </div>
@@ -578,13 +578,13 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
 
                   <div className="card-meta">
                     <div className="meta-item">
-                      <span className="meta-label">📅 Date:</span>
+                      <span className="meta-label">≡ƒôà Date:</span>
                       <span className="meta-value">
                         {evt.date || (evt.startDate ? new Date(evt.startDate).toLocaleDateString() : 'Upcoming')} {evt.time ? `(${evt.time})` : ''}
                       </span>
                     </div>
                     <div className="meta-item">
-                      <span className="meta-label">📍 Location:</span>
+                      <span className="meta-label">≡ƒôì Location:</span>
                       <span className="meta-value">
                         {typeof evt.location === 'object' && evt.location !== null
                           ? (evt.location.placeName || 'Online')
@@ -592,12 +592,12 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
                       </span>
                     </div>
                     <div className="meta-item">
-                      <span className="meta-label">🎟️</span>
+                      <span className="meta-label">≡ƒÄƒ∩╕Å</span>
                       <span className="meta-value highlight-seats">{seatsRemaining} seats remaining</span>
                     </div>
                     {evt.organizerName && (
                       <div className="meta-item">
-                        <span className="meta-label">👤 Organizer:</span>
+                        <span className="meta-label">≡ƒæñ Organizer:</span>
                         <span className="meta-value">{evt.organizerName}</span>
                       </div>
                     )}
@@ -620,7 +620,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
                         : !isRsvped && full
                         ? 'Join Waitlist'
                         : isRsvped
-                        ? '✓ RSVPed (Cancel)'
+                        ? 'Γ£ô RSVPed (Cancel)'
                         : user
                         ? 'Register / RSVP'
                         : 'Register Now'}

@@ -1,5 +1,5 @@
 {
-  "name": "mern-events-backend",
+  "name": "backend",
   "version": "1.0.0",
   "description": "Backend API for Tier 2/3/4 Local Event & Community Portal",
   "main": "server.js",
@@ -10,10 +10,10 @@
     "build": "node -e \"console.log('✅ Backend build check successful: CommonJS server ready.')\"",
     "seed": "node seed.js",
     "migrate:rsvps": "node scripts/migrateLegacyRsvps.js",
-    "test": "node tests/runApiTests.js",
+    "test": "node test-auth-flow.js",
     "test:api": "node tests/runApiTests.js",
     "test:auth-flow": "node test-auth-flow.js",
-    "test:all": "node tests/runApiTests.js && node test-auth-flow.js",
+    "test:all": "node test-auth-flow.js && node test-profile-flow.js",
     "test:auth": "jest tests/authSecurity.test.js --runInBand --forceExit",
     "test:integration": "jest tests/authSecurity.test.js tests/authAndRsvp.test.js --runInBand --forceExit",
     "test:shreya": "jest tests/authAndRsvp.test.js tests/authSecurity.test.js --runInBand --forceExit"

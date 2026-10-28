@@ -168,4 +168,80 @@ router.get('/audit-logs', async (req, res) => {
   }
 });
 
+// @route   GET /api/admin/users
+// @desc    View list of registered users with optional filter (all, unverified, verified)
+// @access  Private (Admin only)
+router.get('/users', async (req, res) => {
+  try {
+    const { status, search } = req.query;
+    const query = {};
+
+    if (status === 'unverified') {
+      query.isVerified = false;
+    } else if (status === 'verified') {
+      query.isVerified = true;
+    }
+
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      query.$or = [{ name: searchRegex }, { email: searchRegex }, { city: searchRegex }];
+    }
+
+    const users = await User.find(query)
+      .select('-password -verificationToken')
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    return res.status(200).json({
+      success: true,
+      count: users.length,
+      users,
+    });
+  } catch (error) {
+    console.error('GET /api/admin/users Error:', error);
+    return res.status(500).json({ message: 'Server error fetching users.', error: error.message });
+  }
+});
+
+// @route   PATCH /api/admin/users/:id/verify
+// @desc    Admin manually verify or toggle verification for a user account
+// @access  Private (Admin only)
+router.patch('/users/:id/verify', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isVerified = true } = req.body;
+
+    const targetUser = await User.findById(id);
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    targetUser.isVerified = Boolean(isVerified);
+    if (targetUser.isVerified) {
+      targetUser.verificationToken = null;
+      targetUser.verificationTokenExpires = null;
+    }
+    await targetUser.save();
+
+    const auditLog = new AuditLog({
+      action: targetUser.isVerified ? 'USER_ACCOUNT_VERIFIED' : 'USER_ACCOUNT_UNVERIFIED',
+      adminId: req.user._id,
+      targetUserId: targetUser._id,
+      attendeeName: targetUser.name,
+      attendeeEmail: targetUser.email,
+      details: `Admin ${req.user.name} set verification status to ${targetUser.isVerified} for user ${targetUser.email}`,
+    });
+    await auditLog.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `User ${targetUser.name} (${targetUser.email}) verification status updated to: ${targetUser.isVerified ? 'Verified' : 'Unverified'}.`,
+      user: targetUser.toSafeObject(),
+    });
+  } catch (error) {
+    console.error('PATCH /api/admin/users/:id/verify Error:', error);
+    return res.status(500).json({ message: 'Server error updating user verification.', error: error.message });
+  }
+});
+
 module.exports = router;

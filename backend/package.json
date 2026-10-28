@@ -9,6 +9,7 @@
     "dev": "nodemon server.js",
     "build": "node -e \"console.log('✅ Backend build check successful: CommonJS server ready.')\"",
     "seed": "node seed.js",
+    "check-db": "node scripts/checkDb.js",
     "migrate:rsvps": "node scripts/migrateLegacyRsvps.js",
     "test": "node test-auth-flow.js",
     "test:all": "node test-auth-flow.js && node test-profile-flow.js",

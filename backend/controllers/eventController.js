@@ -1,6 +1,16 @@
 const mongoose = require('mongoose');
 const Event = require('../models/Event');
-const { INITIAL_EVENTS } = require('../data/seedEvents');
+const { INITIAL_EVENTS, memoryRegistrations } = require('../data/seedEvents');
+
+let parseNaturalLanguageQuery, isEventWithinTimeframe;
+try {
+  const aiController = require('./aiController');
+  parseNaturalLanguageQuery = aiController.parseNaturalLanguageQuery;
+  isEventWithinTimeframe = aiController.isEventWithinTimeframe;
+} catch {
+  // Graceful fallback
+}
+
 // rsvpService: graceful fallback when service module is unavailable
 let enrichEventsWithRsvp, migrateLegacyRsvpsForEvent;
 try {
@@ -17,8 +27,11 @@ const isConnectedToMongoDB = () => mongoose.connection.readyState === 1;
 const getCategoryMatchPatterns = (cat) => {
   if (!cat || String(cat).toLowerCase() === 'all') return [];
   const c = String(cat).toLowerCase();
-  if (c.includes('career') || c.includes('job') || c.includes('tech')) {
-    return ['tech', 'career', 'job', 'Career & Jobs', 'Tech & AI'];
+  if (c === 'tech' || c.includes('tech') || c.includes('ai')) {
+    return ['tech', 'Tech & AI', 'technology'];
+  }
+  if (c.includes('career') || c.includes('job')) {
+    return ['career', 'job', 'Career & Jobs'];
   }
   if (c.includes('workshop') || c.includes('skill')) {
     return ['workshop', 'skill', 'Skill Workshops', 'Workshops'];
@@ -315,6 +328,80 @@ const searchEvents = async (req, res, next) => {
       }
       const allEvents = INITIAL_EVENTS.filter((e) => Boolean(e.published));
       return res.json({ success: true, query: '', count: allEvents.length, data: allEvents });
+    }
+
+    // Natural-Language Event Search handling
+    const isNl = req.query.nl === 'true' || req.query.natural === 'true' || /\b(free|near me|in my city|this weekend|this month|job fairs|workshops near)\b/i.test(queryTerm);
+    if (isNl && typeof parseNaturalLanguageQuery === 'function') {
+      const parsed = parseNaturalLanguageQuery(queryTerm, req.query.location || 'Jaipur');
+      if (parsed.category || parsed.city || parsed.timeframe || parsed.isFree) {
+        let allEvents = [];
+        if (isConnectedToMongoDB()) {
+          allEvents = await Event.find({ published: true }).lean();
+        } else {
+          allEvents = INITIAL_EVENTS.filter((e) => Boolean(e.published)).map((e) => ({ ...e }));
+        }
+
+        const scored = allEvents.map((evt) => {
+          let score = 0;
+          const reasons = [];
+          const evCity = String(evt.city || evt.location?.placeName || '').toLowerCase();
+          const evCat = String(evt.category || '').toLowerCase();
+          const evTitle = String(evt.title || '').toLowerCase();
+          const evDesc = String(evt.description || '').toLowerCase();
+          const evTags = Array.isArray(evt.tags) ? evt.tags.map((t) => String(t).toLowerCase()) : [];
+          const evIsFree = evt.isFree !== false && (evt.price === 0 || !evt.price);
+
+          if (parsed.city) {
+            const pCity = parsed.city.toLowerCase();
+            if (evCity.includes(pCity) || pCity.includes(evCity)) {
+              score += 35;
+              reasons.push(`In ${parsed.city}`);
+            }
+          }
+          if (parsed.category) {
+            if (evCat.includes(parsed.category) || parsed.category.includes(evCat)) {
+              score += 30;
+              reasons.push(`Category: ${evt.category}`);
+            } else if (parsed.category === 'career' && (evCat.includes('career') || evCat.includes('job') || evTags.includes('job') || evTitle.includes('job'))) {
+              score += 30;
+              reasons.push('Career & Job Fair');
+            } else if (parsed.category === 'workshop' && (evCat.includes('workshop') || evTags.includes('workshop') || evTitle.includes('workshop'))) {
+              score += 30;
+              reasons.push('Workshop');
+            }
+          }
+          if (parsed.isFree) {
+            if (evIsFree || evTags.includes('free') || evDesc.includes('free') || evTitle.includes('free')) {
+              score += 20;
+              reasons.push('Free Entry');
+            }
+          }
+          if (parsed.timeframe && isEventWithinTimeframe) {
+            if (isEventWithinTimeframe(evt, parsed.timeframe)) {
+              score += 15;
+              reasons.push(`Happening ${parsed.timeframe}`);
+            }
+          }
+          let kwHits = 0;
+          parsed.keywords.forEach((kw) => {
+            if (evTitle.includes(kw) || evDesc.includes(kw) || evTags.includes(kw)) kwHits++;
+          });
+          if (kwHits > 0) score += Math.min(20, kwHits * 10);
+
+          return { event: { ...evt, matchScore: score, matchReasons: reasons }, score };
+        });
+
+        const matched = scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score).map((s) => s.event);
+        return res.json({
+          success: true,
+          nl: true,
+          query: queryTerm,
+          parsed,
+          count: matched.length,
+          data: matched,
+        });
+      }
     }
 
     if (isConnectedToMongoDB()) {
@@ -716,120 +803,237 @@ const publishEvent = async (req, res, next) => {
 };
 // @desc    Get attendance metrics for an organizer (Task 1 of Story 3)
 // @route   GET /organizer/:id/attendance-metrics
+async function computeOrganizerMetricsData(id, query = {}) {
+  const limitVal = query.limit !== undefined ? parseInt(query.limit, 10) : 0;
+  const dateFrom = query.startDate || query.from;
+  const dateTo = query.endDate || query.to;
+  const now = new Date();
+
+  let metrics = [];
+
+  if (isConnectedToMongoDB()) {
+    try {
+      const matchQuery = {};
+      if (id && id !== 'all' && id !== 'me') {
+        if (mongoose.Types.ObjectId.isValid(id)) {
+          const objId = new mongoose.Types.ObjectId(id);
+          matchQuery.$or = [{ organizerId: objId }, { organizerId: id }];
+        } else {
+          matchQuery.organizerId = id;
+        }
+      }
+
+      if (dateFrom || dateTo) {
+        matchQuery.startDate = {};
+        if (dateFrom) matchQuery.startDate.$gte = new Date(dateFrom);
+        if (dateTo) matchQuery.startDate.$lte = new Date(dateTo);
+      }
+
+      const pipeline = [
+        { $match: matchQuery },
+        { $sort: { startDate: -1 } }
+      ];
+
+      if (!isNaN(limitVal) && limitVal > 0) {
+        pipeline.push({ $limit: limitVal });
+      }
+
+      pipeline.push(
+        {
+          $project: {
+            eventId: '$_id',
+            title: 1,
+            date: '$startDate',
+            startDate: 1,
+            endDate: 1,
+            capacity: { $ifNull: ['$capacity', 100] },
+            confirmed: {
+              $max: [
+                {
+                  $cond: {
+                    if: { $isArray: '$rsvpedUsers' },
+                    then: { $size: '$rsvpedUsers' },
+                    else: 0
+                  }
+                },
+                { $ifNull: ['$attendeesCount', 0] }
+              ]
+            },
+            waitlist: {
+              $cond: {
+                if: { $gt: [{ $size: { $ifNull: ['$waitlistUsers', []] } }, 0] },
+                then: { $size: '$waitlistUsers' },
+                else: { $ifNull: ['$waitlistCount', 0] }
+              }
+            },
+            checkedIn: {
+              $cond: {
+                if: { $gt: [{ $size: { $ifNull: ['$checkedInUsers', []] } }, 0] },
+                then: { $size: '$checkedInUsers' },
+                else: { $ifNull: ['$checkedInCount', 0] }
+              }
+            }
+          }
+        },
+        {
+          $project: {
+            eventId: 1,
+            title: 1,
+            date: 1,
+            startDate: 1,
+            endDate: 1,
+            capacity: 1,
+            confirmed: 1,
+            waitlist: {
+              $max: [
+                '$waitlist',
+                { $max: [0, { $subtract: ['$confirmed', '$capacity'] }] }
+              ]
+            },
+            checkedIn: 1,
+            noShow: {
+              $cond: {
+                if: { $lt: [{ $ifNull: ['$endDate', '$startDate'] }, now] },
+                then: { $max: [0, { $subtract: ['$confirmed', '$checkedIn'] }] },
+                else: 0
+              }
+            },
+            attendanceRate: {
+              $cond: {
+                if: { $gt: ['$confirmed', 0] },
+                then: { $round: [{ $divide: ['$checkedIn', '$confirmed'] }, 4] },
+                else: '0%'
+              }
+            }
+          }
+        }
+      );
+
+      metrics = await Event.aggregate(pipeline);
+    } catch {
+      metrics = [];
+    }
+  }
+
+  // If MongoDB is not connected or returned empty array, use in-memory seed events
+  if (!metrics || metrics.length === 0) {
+    let sourceEvents = [...INITIAL_EVENTS];
+    if (id && id !== 'all' && id !== 'me') {
+      sourceEvents = sourceEvents.filter(
+        (e) =>
+          e.organizerId === id ||
+          String(e._id) === id ||
+          String(e.id) === id ||
+          String(e.organizer) === id
+      );
+    }
+
+    if (dateFrom) {
+      const fromTime = new Date(dateFrom).getTime();
+      if (!isNaN(fromTime)) {
+        sourceEvents = sourceEvents.filter((e) => new Date(e.startDate).getTime() >= fromTime);
+      }
+    }
+    if (dateTo) {
+      const toTime = new Date(dateTo).getTime();
+      if (!isNaN(toTime)) {
+        sourceEvents = sourceEvents.filter((e) => new Date(e.startDate).getTime() <= toTime);
+      }
+    }
+
+    metrics = sourceEvents.map((e) => {
+      const regs = (memoryRegistrations || []).filter(
+        (r) => r.eventId === e.id || r.eventId === String(e._id)
+      );
+      const regConfirmed = regs.filter((r) => r.rsvpStatus === 'confirmed').length;
+      const capacity = e.capacity || 100;
+      const confirmed =
+        regConfirmed > 0
+          ? regConfirmed
+          : e.seatsLeft !== undefined
+          ? Math.max(0, capacity - e.seatsLeft)
+          : e.attendeesCount || 0;
+
+      const waitlist =
+        regs.filter((r) => r.rsvpStatus === 'waitlist').length ||
+        e.waitlistCount ||
+        Math.max(0, confirmed - capacity);
+
+      const checkedIn =
+        regs.filter((r) => r.rsvpStatus === 'confirmed' && r.statusPresent).length ||
+        e.checkedInCount ||
+        0;
+
+      const isPast = new Date(e.endDate || e.startDate) < now;
+      const noShow = isPast ? Math.max(0, confirmed - checkedIn) : 0;
+      const attendanceRate =
+        confirmed > 0 ? Number((checkedIn / confirmed).toFixed(4)) : '0%';
+
+      return {
+        eventId: e.id || e._id,
+        id: e.id || e._id,
+        title: e.title,
+        date: e.startDate,
+        startDate: e.startDate,
+        endDate: e.endDate,
+        capacity,
+        confirmed,
+        waitlist,
+        checkedIn,
+        noShow,
+        attendanceRate,
+      };
+    });
+
+    metrics.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+
+    if (!isNaN(limitVal) && limitVal > 0) {
+      metrics = metrics.slice(0, limitVal);
+    }
+  }
+
+  // Calculate summary totals
+  const totalEvents = metrics.length;
+  const totalCapacity = metrics.reduce((acc, m) => acc + (m.capacity || 0), 0);
+  const totalRegistrations = metrics.reduce((acc, m) => acc + (m.confirmed || 0), 0);
+  const totalWaitlist = metrics.reduce((acc, m) => acc + (m.waitlist || 0), 0);
+  const totalCheckedIn = metrics.reduce((acc, m) => acc + (m.checkedIn || 0), 0);
+  const totalNoShow = metrics.reduce((acc, m) => acc + (m.noShow || 0), 0);
+
+  const overallRate =
+    totalRegistrations > 0
+      ? Number(((totalCheckedIn / totalRegistrations) * 100).toFixed(1))
+      : 0;
+  const capacityUtil =
+    totalCapacity > 0
+      ? Number(((totalRegistrations / totalCapacity) * 100).toFixed(1))
+      : 0;
+
+  const summary = {
+    totalEvents,
+    totalCapacity,
+    totalRegistrations,
+    totalWaitlist,
+    totalCheckedIn,
+    totalNoShow,
+    overallAttendanceRate: `${overallRate}%`,
+    capacityUtilization: `${capacityUtil}%`,
+  };
+
+  return { metrics, summary };
+}
+
+// @desc    Get attendance metrics for an organizer (Task 1 of Story 3)
+// @route   GET /organizer/:id/attendance-metrics
 const getOrganizerAttendanceMetrics = async (req, res) => {
   try {
     const { id } = req.params;
-    const limitVal = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 6;
-
-    const { startDate, endDate, from, to } = req.query;
-    const dateFrom = startDate || from;
-    const dateTo = endDate || to;
-
-    const matchQuery = {};
-
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      const objId = new mongoose.Types.ObjectId(id);
-      matchQuery.$or = [
-        { organizerId: objId },
-        { organizerId: id }
-      ];
-    } else {
-      matchQuery.organizerId = id;
-    }
-
-    if (dateFrom || dateTo) {
-      matchQuery.startDate = {};
-      if (dateFrom) matchQuery.startDate.$gte = new Date(dateFrom);
-      if (dateTo) matchQuery.startDate.$lte = new Date(dateTo);
-    }
-
-    const now = new Date();
-
-    const pipeline = [
-      { $match: matchQuery },
-      { $sort: { startDate: -1 } }
-    ];
-
-    if (!isNaN(limitVal) && limitVal > 0) {
-      pipeline.push({ $limit: limitVal });
-    }
-
-    pipeline.push(
-      {
-        $project: {
-          eventId: '$_id',
-          title: 1,
-          date: '$startDate',
-          startDate: 1,
-          endDate: 1,
-          capacity: { $ifNull: ['$capacity', 100] },
-          confirmed: {
-            $max: [
-              {
-                $cond: {
-                  if: { $isArray: '$rsvpedUsers' },
-                  then: { $size: '$rsvpedUsers' },
-                  else: 0
-                }
-              },
-              { $ifNull: ['$attendeesCount', 0] }
-            ]
-          },
-          waitlist: {
-            $cond: {
-              if: { $gt: [{ $size: { $ifNull: ['$waitlistUsers', []] } }, 0] },
-              then: { $size: '$waitlistUsers' },
-              else: { $ifNull: ['$waitlistCount', 0] }
-            }
-          },
-          checkedIn: {
-            $cond: {
-              if: { $gt: [{ $size: { $ifNull: ['$checkedInUsers', []] } }, 0] },
-              then: { $size: '$checkedInUsers' },
-              else: { $ifNull: ['$checkedInCount', 0] }
-            }
-          }
-        }
-      },
-      {
-        $project: {
-          eventId: 1,
-          title: 1,
-          date: 1,
-          startDate: 1,
-          endDate: 1,
-          capacity: 1,
-          confirmed: 1,
-          waitlist: {
-            $max: [
-              '$waitlist',
-              { $max: [0, { $subtract: ['$confirmed', '$capacity'] }] }
-            ]
-          },
-          checkedIn: 1,
-          noShow: {
-            $cond: {
-              if: { $lt: [{ $ifNull: ['$endDate', '$startDate'] }, now] },
-              then: { $max: [0, { $subtract: ['$confirmed', '$checkedIn'] }] },
-              else: 0
-            }
-          },
-          attendanceRate: {
-            $cond: {
-              if: { $gt: ['$confirmed', 0] },
-              then: { $round: [{ $divide: ['$checkedIn', '$confirmed'] }, 4] },
-              else: "0%"
-            }
-          }
-        }
-      }
-    );
-
-    const metrics = await Event.aggregate(pipeline);
+    const { metrics, summary } = await computeOrganizerMetricsData(id, req.query);
 
     res.json({
       success: true,
       count: metrics.length,
+      summary,
       data: metrics
     });
   } catch (error) {
@@ -842,118 +1046,7 @@ const getOrganizerAttendanceMetrics = async (req, res) => {
 const exportOrganizerAttendanceMetricsCSV = async (req, res) => {
   try {
     const { id } = req.params;
-    const limitVal = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 0;
-
-    const { startDate, endDate, from, to } = req.query;
-    const dateFrom = startDate || from;
-    const dateTo = endDate || to;
-
-    const matchQuery = {};
-
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      const objId = new mongoose.Types.ObjectId(id);
-      matchQuery.$or = [
-        { organizerId: objId },
-        { organizerId: id }
-      ];
-    } else {
-      matchQuery.organizerId = id;
-    }
-
-    if (dateFrom || dateTo) {
-      matchQuery.startDate = {};
-      if (dateFrom) matchQuery.startDate.$gte = new Date(dateFrom);
-      if (dateTo) matchQuery.startDate.$lte = new Date(dateTo);
-    }
-
-    const now = new Date();
-
-    const pipeline = [
-      { $match: matchQuery },
-      { $sort: { startDate: -1 } }
-    ];
-
-    if (!isNaN(limitVal) && limitVal > 0) {
-      pipeline.push({ $limit: limitVal });
-    }
-
-    pipeline.push(
-      {
-        $project: {
-          eventId: '$_id',
-          title: 1,
-          date: '$startDate',
-          startDate: 1,
-          endDate: 1,
-          capacity: { $ifNull: ['$capacity', 100] },
-          confirmed: {
-            $max: [
-              {
-                $cond: {
-                  if: { $isArray: '$rsvpedUsers' },
-                  then: { $size: '$rsvpedUsers' },
-                  else: 0
-                }
-              },
-              { $ifNull: ['$attendeesCount', 0] }
-            ]
-          },
-          waitlist: {
-            $cond: {
-              if: { $gt: [{ $size: { $ifNull: ['$waitlistUsers', []] } }, 0] },
-              then: { $size: '$waitlistUsers' },
-              else: { $ifNull: ['$waitlistCount', 0] }
-            }
-          },
-          checkedIn: {
-            $cond: {
-              if: { $gt: [{ $size: { $ifNull: ['$checkedInUsers', []] } }, 0] },
-              then: { $size: '$checkedInUsers' },
-              else: { $ifNull: ['$checkedInCount', 0] }
-            }
-          }
-        }
-      },
-      {
-        $project: {
-          eventId: 1,
-          title: 1,
-          date: 1,
-          startDate: 1,
-          endDate: 1,
-          capacity: 1,
-          confirmed: 1,
-          waitlist: {
-            $max: [
-              '$waitlist',
-              { $max: [0, { $subtract: ['$confirmed', '$capacity'] }] }
-            ]
-          },
-          checkedIn: 1,
-          noShow: {
-            $cond: {
-              if: { $lt: [{ $ifNull: ['$endDate', '$startDate'] }, now] },
-              then: { $max: [0, { $subtract: ['$confirmed', '$checkedIn'] }] },
-              else: 0
-            }
-          },
-          attendanceRate: {
-            $cond: {
-              if: { $gt: ['$confirmed', 0] },
-              then: { $round: [{ $divide: ['$checkedIn', '$confirmed'] }, 4] },
-              else: "0%"
-            }
-          }
-        }
-      }
-    );
-
-    let metrics = [];
-    try {
-      metrics = await Event.aggregate(pipeline);
-    } catch (e) {
-      metrics = [];
-    }
+    const { metrics } = await computeOrganizerMetricsData(id, req.query);
 
     const headers = ['Event ID', 'Event Title', 'Date', 'Capacity', 'Confirmed', 'Waitlist', 'Checked-In', 'No-Show', 'Attendance Rate (%)'];
     const csvRows = [headers.join(',')];
@@ -993,9 +1086,210 @@ const exportOrganizerAttendanceMetricsCSV = async (req, res) => {
   }
 };
 
+const CITY_PRESETS = [
+  { name: 'Bengaluru', lat: 12.9716, lng: 77.5946, state: 'Karnataka' },
+  { name: 'Mysuru', lat: 12.2958, lng: 76.6394, state: 'Karnataka' },
+  { name: 'Jaipur', lat: 26.9124, lng: 75.7873, state: 'Rajasthan' },
+  { name: 'Patna', lat: 25.5941, lng: 85.1376, state: 'Bihar' },
+  { name: 'Bhopal', lat: 23.2599, lng: 77.4126, state: 'Madhya Pradesh' },
+  { name: 'Chikkaballapur', lat: 13.4355, lng: 77.7315, state: 'Karnataka' }
+];
+
+function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function getEventCoordinates(event) {
+  if (!event) return null;
+  if (event.location && typeof event.location === 'object') {
+    const lat = Number(event.location.latitude);
+    const lng = Number(event.location.longitude);
+    if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+      return { lat, lng, placeName: event.location.placeName || '' };
+    }
+  }
+  if (event.latitude !== undefined && event.longitude !== undefined) {
+    const lat = Number(event.latitude);
+    const lng = Number(event.longitude);
+    if (!isNaN(lat) && !isNaN(lng)) {
+      return { lat, lng, placeName: typeof event.location === 'string' ? event.location : '' };
+    }
+  }
+  const cityPresets = {
+    bengaluru: { lat: 12.9716, lng: 77.5946 },
+    mysuru: { lat: 12.2958, lng: 76.6394 },
+    jaipur: { lat: 26.9124, lng: 75.7873 },
+    patna: { lat: 25.5941, lng: 85.1376 },
+    bhopal: { lat: 23.2599, lng: 77.4126 },
+    chikkaballapur: { lat: 13.4355, lng: 77.7315 },
+  };
+  const cityStr = (event.city || (typeof event.location === 'string' ? event.location : '') || '').toLowerCase();
+  for (const [key, coords] of Object.entries(cityPresets)) {
+    if (cityStr.includes(key)) {
+      return { lat: coords.lat, lng: coords.lng, placeName: event.city || key };
+    }
+  }
+  return null;
+}
+
+/**
+ * GET /api/events/nearby
+ * Explore nearby events with geospatial distance filtering and map coordinates
+ */
+const getNearbyEvents = async (req, res) => {
+  try {
+    const { lat, lng, radiusKm, category, search, city } = req.query;
+
+    let centerLat = null;
+    let centerLng = null;
+    let hasCenter = false;
+
+    if (lat !== undefined || lng !== undefined) {
+      if (lat === undefined || lng === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: 'Both lat and lng coordinates must be provided together.',
+        });
+      }
+      const parsedLat = parseFloat(lat);
+      const parsedLng = parseFloat(lng);
+      if (isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid latitude. Must be a number between -90 and 90.',
+        });
+      }
+      if (isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid longitude. Must be a number between -180 and 180.',
+        });
+      }
+      centerLat = parsedLat;
+      centerLng = parsedLng;
+      hasCenter = true;
+    } else if (city) {
+      const matchedCity = CITY_PRESETS.find(
+        (c) => c.name.toLowerCase() === String(city).trim().toLowerCase()
+      );
+      if (matchedCity) {
+        centerLat = matchedCity.lat;
+        centerLng = matchedCity.lng;
+        hasCenter = true;
+      }
+    }
+
+    let maxRadius = 50; // default 50 km
+    if (radiusKm !== undefined) {
+      const parsedRadius = parseFloat(radiusKm);
+      if (isNaN(parsedRadius) || parsedRadius <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'radiusKm must be a positive number.',
+        });
+      }
+      maxRadius = parsedRadius;
+    }
+
+    let allEvents = [];
+    if (isConnectedToMongoDB()) {
+      allEvents = await Event.find({ published: { $ne: false } }).lean();
+    } else {
+      allEvents = INITIAL_EVENTS.filter((e) => e.published !== false);
+    }
+
+    try {
+      allEvents = await enrichEventsWithRsvp(allEvents, req.user?._id);
+    } catch {
+      // Graceful fallback
+    }
+
+    if (category && String(category).toLowerCase() !== 'all') {
+      const patterns = getCategoryMatchPatterns(category);
+      const regexes = patterns.map((p) => new RegExp(p, 'i'));
+      allEvents = allEvents.filter((e) =>
+        regexes.some(
+          (r) =>
+            r.test(e.category) ||
+            r.test(e.title) ||
+            (Array.isArray(e.tags) && e.tags.some((t) => r.test(t)))
+        )
+      );
+    }
+
+    if (search && String(search).trim()) {
+      const s = String(search).trim().toLowerCase();
+      allEvents = allEvents.filter(
+        (e) =>
+          (e.title && e.title.toLowerCase().includes(s)) ||
+          (e.description && e.description.toLowerCase().includes(s)) ||
+          (e.city && e.city.toLowerCase().includes(s))
+      );
+    }
+
+    const mappedEvents = [];
+    for (const event of allEvents) {
+      const coords = getEventCoordinates(event);
+      if (!coords) continue;
+
+      let distanceKm = null;
+      let distanceFormatted = null;
+
+      if (hasCenter) {
+        distanceKm = calculateHaversineDistanceKm(centerLat, centerLng, coords.lat, coords.lng);
+        if (distanceKm > maxRadius) {
+          continue;
+        }
+        distanceFormatted =
+          distanceKm < 1
+            ? `${Math.round(distanceKm * 1000)} m away`
+            : `${distanceKm.toFixed(1)} km away`;
+      }
+
+      mappedEvents.push({
+        ...event,
+        coordinates: {
+          lat: coords.lat,
+          lng: coords.lng,
+          placeName: coords.placeName || (typeof event.location === 'object' ? event.location.placeName : event.location) || ''
+        },
+        distanceKm: distanceKm !== null ? Number(distanceKm.toFixed(1)) : null,
+        distanceFormatted,
+      });
+    }
+
+    if (hasCenter) {
+      mappedEvents.sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0));
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: mappedEvents.length,
+      radiusKm: hasCenter ? maxRadius : null,
+      center: hasCenter ? { lat: centerLat, lng: centerLng } : null,
+      cityPresets: CITY_PRESETS,
+      events: mappedEvents,
+    });
+  } catch (err) {
+    console.error('getNearbyEvents error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch nearby events' });
+  }
+};
+
 module.exports = {
   getEvents,
   searchEvents,
+  getNearbyEvents,
   getEventById,
   createEvent,
   updateEvent,

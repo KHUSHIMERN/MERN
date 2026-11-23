@@ -318,7 +318,15 @@ const getPersonalizedRecommendations = async ({
   const userCity = targetCity || user?.city || 'Jaipur';
   const userLanguage = targetLanguage || user?.preferredLanguage || user?.language || 'en';
   const userInterests = user?.interests || [];
+  const userPreferredCategories = user?.preferredCategories || [];
   const rsvpedEventIds = (user?.rsvpedEvents || []).map((id) => (typeof id === 'object' ? id._id?.toString() : id?.toString()));
+
+  // Resolve full details of previously registered events
+  const registeredEventsList = (user?.rsvpedEvents || []).map((item) => {
+    if (item && typeof item === 'object' && item.title) return item;
+    const idStr = (item?._id || item || '').toString();
+    return events.find((e) => (e._id || e.id || '').toString() === idStr) || null;
+  }).filter(Boolean);
 
   // 1. Fetch user's stored interaction history (views, RSVPs, searches, category filters)
   let userInteractions = [];
@@ -336,7 +344,8 @@ const getPersonalizedRecommendations = async ({
   const hasInteractions = userInteractions.length > 0;
   const hasRsvps = rsvpedEventIds.length > 0;
   const hasInterests = userInterests.length > 0;
-  const hasSufficientHistory = hasInteractions || hasRsvps || hasInterests;
+  const hasPreferredCategories = userPreferredCategories.length > 0;
+  const hasSufficientHistory = hasInteractions || hasRsvps || hasInterests || hasPreferredCategories;
 
   if (!hasSufficientHistory) {
     // Insufficient history: gracefully fall back to Popularity + Locality
@@ -355,11 +364,20 @@ const getPersonalizedRecommendations = async ({
   if (userInterests.length > 0) {
     profileTokens.push(`Interests: ${userInterests.join(' ')}`);
   }
+  if (userPreferredCategories.length > 0) {
+    profileTokens.push(`Preferred Categories: ${userPreferredCategories.join(' ')}`);
+  }
   if (userCity) {
     profileTokens.push(`City: ${userCity}`);
   }
   if (userLanguage) {
     profileTokens.push(`Language: ${userLanguage}`);
+  }
+  if (registeredEventsList.length > 0) {
+    const regTitles = registeredEventsList.map((e) => e.title || '').join(' ');
+    const regCats = registeredEventsList.map((e) => e.category || '').join(' ');
+    const regTags = registeredEventsList.flatMap((e) => (Array.isArray(e.tags) ? e.tags : [])).join(' ');
+    profileTokens.push(`Previous Registrations: ${regTitles} ${regCats} ${regTags}`);
   }
 
   // Factor in category weights from recent interactions
@@ -382,6 +400,9 @@ const getPersonalizedRecommendations = async ({
   const userProfileString = profileTokens.join(' ');
   const userVector = generateFeatureVector(userProfileString, 64);
 
+  // Helper for category normalization comparison
+  const normalizeCat = (c) => String(c || '').toLowerCase().trim();
+
   // 4. Compute Embedding Similarity for Each Candidate Event
   const now = Date.now();
   const scoredEvents = await Promise.all(
@@ -392,20 +413,54 @@ const getPersonalizedRecommendations = async ({
       let score = 0;
       const reasons = [];
 
-      // A. Vector Similarity Score (Weight: 45 points)
-      const simPoints = Math.round(similarity * 45);
+      // A. Vector Similarity Score (Weight: 35 points)
+      const simPoints = Math.round(similarity * 35);
       score += simPoints;
-      if (simPoints >= 25) {
+      if (simPoints >= 20) {
         reasons.push('High match with your profile & interests');
       }
 
-      // B. Category Interaction Affinity (Weight: 20 points)
-      if (userInterests.includes(event.category) || categoryWeights[event.category]) {
-        score += 20;
-        reasons.push(`Matches interest in ${event.category}`);
+      // B. Preferred Categories Match (Weight: 25 points)
+      const eventCatNorm = normalizeCat(event.category);
+      const matchedPreferredCat = userPreferredCategories.find(
+        (pc) => normalizeCat(pc) === eventCatNorm || eventCatNorm.includes(normalizeCat(pc))
+      );
+      if (matchedPreferredCat) {
+        score += 25;
+        reasons.push(`Matches preferred category: ${event.category}`);
       }
 
-      // C. Locality / City Match (Weight: 20 points)
+      // C. User Interests Match (Weight: 20 points)
+      const matchedInterest = userInterests.find((ui) => {
+        const uiNorm = normalizeCat(ui);
+        if (uiNorm === eventCatNorm || eventCatNorm.includes(uiNorm)) return true;
+        if (Array.isArray(event.tags) && event.tags.some((t) => normalizeCat(t) === uiNorm)) return true;
+        if (event.title && normalizeCat(event.title).includes(uiNorm)) return true;
+        return false;
+      });
+      if (matchedInterest) {
+        score += 20;
+        reasons.push(`Matches your interest in ${matchedInterest}`);
+      } else if (categoryWeights[event.category]) {
+        score += 15;
+        reasons.push(`Frequent category in your activity (${event.category})`);
+      }
+
+      // D. Previous Registrations Match (Weight: 20 points)
+      const matchedPastEvent = registeredEventsList.find((past) => {
+        if (!past) return false;
+        if (normalizeCat(past.category) === eventCatNorm) return true;
+        if (Array.isArray(past.tags) && Array.isArray(event.tags)) {
+          return past.tags.some((pt) => event.tags.some((et) => normalizeCat(pt) === normalizeCat(et)));
+        }
+        return false;
+      });
+      if (matchedPastEvent) {
+        score += 20;
+        reasons.push(`Based on your previous registration in "${matchedPastEvent.title}"`);
+      }
+
+      // E. Locality / City Match (Weight: 20 points)
       const evCity = String(event.city || '').toLowerCase();
       if (evCity === userCity.toLowerCase()) {
         score += 20;
@@ -415,14 +470,14 @@ const getPersonalizedRecommendations = async ({
         reasons.push(`${event.tier} community event`);
       }
 
-      // D. Language Awareness (Weight: 10 points)
+      // F. Language Awareness (Weight: 10 points)
       const evLang = String(event.language || 'en').toLowerCase();
       if (evLang === userLanguage.toLowerCase() || (userLanguage.toLowerCase() === 'hi' && event.title_hi)) {
         score += 10;
         reasons.push(`Offered in your language (${userLanguage.toUpperCase()})`);
       }
 
-      // E. Date Recency / Upcoming Boost (Weight: 5 points)
+      // G. Date Recency / Upcoming Boost (Weight: 5 points)
       const eventTime = event.startDate ? new Date(event.startDate).getTime() : now;
       if (eventTime >= now && eventTime <= now + 45 * 24 * 60 * 60 * 1000) {
         score += 5;
@@ -440,8 +495,13 @@ const getPersonalizedRecommendations = async ({
     })
   );
 
-  // Sort descending by match score
-  scoredEvents.sort((a, b) => b.matchScore - a.matchScore);
+  // Sort descending by match score, giving slight preference to unregistered events
+  scoredEvents.sort((a, b) => {
+    // If scores are equal or within 5 points, prioritize new events over already registered
+    const scoreA = a.matchScore - (a.isRsvped ? 5 : 0);
+    const scoreB = b.matchScore - (b.isRsvped ? 5 : 0);
+    return scoreB - scoreA;
+  });
   const topRecommendations = scoredEvents.slice(0, limit);
 
   metrics.totalLatencyMs += Date.now() - startTime;

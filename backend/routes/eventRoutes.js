@@ -8,6 +8,7 @@ const {
   deleteEvent,
   publishEvent,
   searchEvents,
+  getNearbyEvents,
   getOrganizerAttendanceMetrics,
   exportOrganizerAttendanceMetricsCSV
 } = require('../controllers/eventController');
@@ -19,6 +20,16 @@ const {
   getAttendanceAuditLogs
 } = require('../controllers/attendanceController');
 
+const {
+  createReport,
+  getUserReportForEvent,
+} = require('../controllers/reportController');
+
+const {
+  registerAsVolunteer,
+  getEventVolunteers,
+} = require('../controllers/volunteerController');
+
 const { auth, optionalAuth, requireVerified, requireRole } = require('../middleware/auth');
 const privileged = [auth, requireVerified, requireRole('organizer', 'admin')];
 
@@ -26,6 +37,15 @@ const privileged = [auth, requireVerified, requireRole('organizer', 'admin')];
 router.get('/', optionalAuth, getEvents);
 router.post('/', ...privileged, createEvent);
 router.get('/search', searchEvents);
+router.get('/nearby', optionalAuth, getNearbyEvents);
+
+// Event reporting & user report status (Feature 9)
+router.post('/:id/report', optionalAuth, createReport);
+router.get('/:id/my-report', optionalAuth, getUserReportForEvent);
+
+// Volunteer registration & listing (Feature 10)
+router.post('/:id/volunteer', optionalAuth, registerAsVolunteer);
+router.get('/:id/volunteers', optionalAuth, getEventVolunteers);
 
 // Organizer attendance metrics endpoints
 router.get('/organizer/:id/attendance-metrics/export', exportOrganizerAttendanceMetricsCSV);

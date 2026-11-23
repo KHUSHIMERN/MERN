@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
+import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 import { confirmedCount, hasActiveRsvp, isEventFull, rsvpStatus, rsvpStatusLabel } from '../utils/rsvpState';
-import { Sparkles, RefreshCw, AlertCircle, Filter, MapPin, Calendar, Globe, RotateCcw, X, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { RefreshCw, AlertCircle, Filter, MapPin, Calendar, Globe, RotateCcw, X, ChevronLeft, ChevronRight, SlidersHorizontal, ShieldCheck, Flag } from 'lucide-react';
 import { recordInteraction } from '../utils/recommendationApi';
+import ReportEventModal from './ReportEventModal';
 
 export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
   const { t } = useTranslation();
@@ -15,8 +17,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
   const { refreshNotifications } = useNotifications();
 
   const [events, setEvents] = useState([]);
-  const [recommendations, setRecommendations] = useState([]);
-  const [recSource, setRecSource] = useState('');
+  const [reportTargetEvent, setReportTargetEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,6 +31,95 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
   const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [rsvpLoadingId, setRsvpLoadingId] = useState(null);
+  const [nlParsed, setNlParsed] = useState(null);
+
+  const { lang } = useLanguage();
+  const currentLang = (lang || 'en').slice(0, 2);
+
+  const [showOriginalMap, setShowOriginalMap] = useState({});
+  const [dynamicTranslations, setDynamicTranslations] = useState({});
+  const [translatingIds, setTranslatingIds] = useState({});
+
+  const getEventDisplay = (evt) => {
+    const evtId = evt._id || evt.id;
+    const isOriginalForced = Boolean(showOriginalMap[evtId]);
+
+    if (isOriginalForced || currentLang === 'en') {
+      return {
+        title: evt.title,
+        description: evt.description,
+        isTranslated: false,
+        isShowingOriginal: true,
+        langLabel: 'English (Original)',
+      };
+    }
+
+    let title = evt.title;
+    let description = null;
+
+    if (currentLang === 'hi') {
+      title = evt.title_hi || evt.title;
+      description = evt.description_hi || dynamicTranslations[`${evtId}_hi`];
+    } else if (currentLang === 'kn') {
+      title = evt.title_kn || evt.title;
+      description = evt.description_kn || dynamicTranslations[`${evtId}_kn`];
+    }
+
+    if (description) {
+      return {
+        title,
+        description,
+        isTranslated: true,
+        isShowingOriginal: false,
+        langLabel: currentLang === 'hi' ? 'Hindi' : 'Kannada',
+      };
+    }
+
+    return {
+      title,
+      description: evt.description,
+      isTranslated: false,
+      isShowingOriginal: true,
+      langLabel: 'English (Original)',
+    };
+  };
+
+  const handleTranslateEvent = async (evt, targetLanguage = currentLang) => {
+    const evtId = evt._id || evt.id;
+    setTranslatingIds((prev) => ({ ...prev, [evtId]: true }));
+    try {
+      const res = await axios.post('/api/ai/translate', {
+        text: evt.description,
+        targetLang: targetLanguage,
+        sourceLang: 'en',
+        eventId: evtId,
+      });
+      if (res.data && res.data.success) {
+        setDynamicTranslations((prev) => ({
+          ...prev,
+          [`${evtId}_${targetLanguage}`]: res.data.translatedText,
+        }));
+        setShowOriginalMap((prev) => ({ ...prev, [evtId]: false }));
+        showToast(
+          targetLanguage === 'hi'
+            ? 'विवरण का हिंदी में अनुवाद किया गया'
+            : targetLanguage === 'kn'
+            ? 'ವಿವರಣೆಯನ್ನು ಕನ್ನಡಕ್ಕೆ ಅನುವಾದಿಸಲಾಗಿದೆ'
+            : 'Description translated successfully!',
+          'success'
+        );
+      }
+    } catch (err) {
+      console.error('Translation error:', err);
+      showToast('Failed to translate description. Please try again.', 'error');
+    } finally {
+      setTranslatingIds((prev) => ({ ...prev, [evtId]: false }));
+    }
+  };
+
+  const toggleShowOriginal = (evtId) => {
+    setShowOriginalMap((prev) => ({ ...prev, [evtId]: !prev[evtId] }));
+  };
 
   const categories = [
     { key: 'all', label: t('events.filterAll', 'All Events') },
@@ -52,6 +142,35 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
       void refreshKey;
       setLoading(true);
       setError(null);
+
+      const trimmedSearch = searchTerm.trim();
+      const isNaturalSentence =
+        trimmedSearch.split(/\s+/).length >= 3 ||
+        /\b(free|near me|in my city|this weekend|this month|job fairs|workshops near|festivals)\b/i.test(trimmedSearch);
+
+      // Check if user is using a natural language query sentence
+      if (trimmedSearch && isNaturalSentence) {
+        try {
+          const nlRes = await axios.post('/api/ai/nl-search', {
+            query: trimmedSearch,
+            userLocation: locationFilter || user?.city || 'Jaipur',
+            language: languageFilter !== 'all' ? languageFilter : 'en',
+          });
+          if (nlRes.data && nlRes.data.success) {
+            setNlParsed(nlRes.data.parsed);
+            setEvents(nlRes.data.events || []);
+            setPagination({
+              total: nlRes.data.count || (nlRes.data.events || []).length,
+              totalPages: 1,
+            });
+            return;
+          }
+        } catch (nlErr) {
+          console.warn('[NL Search] Fallback to standard filter query:', nlErr);
+        }
+      }
+
+      setNlParsed(null);
 
       // Build combined query parameters
       const params = {};
@@ -90,20 +209,6 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
           total: fetchedEvents.length,
           totalPages: 1,
         });
-      }
-
-      // Fetch AI Recommendations — pass user city/language so server can personalise
-      try {
-        const recParams = { limit: 4 };
-        const userCity = user?.city;
-        const userLanguage = user?.preferredLanguage || user?.language;
-        if (userCity) recParams.city = userCity;
-        if (userLanguage) recParams.language = userLanguage;
-        const recRes = await axios.get('/api/recommendations', { params: recParams });
-        setRecommendations(recRes.data.recommendations || []);
-        setRecSource(recRes.data.source || '');
-      } catch (recErr) {
-        console.warn('Recommendations fetch error:', recErr);
       }
     } catch (err) {
       console.error('Fetch events error:', err);
@@ -253,71 +358,6 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
         </p>
       </div>
 
-      {/* AI / Rule Recommendations Highlight Banner */}
-      {recommendations.length > 0 && !searchTerm && selectedCategory === 'all' && (
-        <div
-          className="recommendations-banner animate-fade-in"
-          style={{
-            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(6, 182, 212, 0.15))',
-            border: '1px solid rgba(99, 102, 241, 0.3)',
-            borderRadius: '16px',
-            padding: '20px 24px',
-            marginBottom: '32px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#818cf8', fontWeight: '700', marginBottom: '12px' }}>
-            <Sparkles size={20} color="#a78bfa" />
-            <span>
-              {recSource === 'openai' ? '≡ƒñû AI Recommended for You' : '≡ƒÄ» Tailored Hyperlocal Recommendations'}
-            </span>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
-            {recommendations.slice(0, 3).map((rec, index) => {
-              const recEvt = rec.event;
-              if (!recEvt) return null;
-              return (
-                <div
-                  key={recEvt._id || index}
-                  style={{
-                    background: 'rgba(30, 41, 59, 0.8)',
-                    borderRadius: '12px',
-                    padding: '14px 16px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justify: 'space-between',
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: '700', color: '#38bdf8', textTransform: 'uppercase' }}>
-                        {recEvt.category} ΓÇó {recEvt.city}
-                      </span>
-                      <span style={{ fontSize: '11px', fontWeight: '800', background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', padding: '2px 8px', borderRadius: '10px' }}>
-                        {rec.matchScore}% Match
-                      </span>
-                    </div>
-                    <h4 style={{ fontSize: '14px', fontWeight: '700', color: '#fff', marginBottom: '4px' }}>{recEvt.title}</h4>
-                    <p style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', marginBottom: '10px' }}>
-                      "{rec.reason}"
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => handleToggleRsvp(recEvt)}
-                    style={{ fontSize: '12px', padding: '6px 12px', width: '100%', justifyContent: 'center' }}
-                  >
-                    {isUserRsvped(recEvt) ? 'Γ£ô Registered' : 'Quick RSVP'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Controls Bar: Search + Category Filters + Advanced Multi-Criteria Panel */}
       <div className="events-controls">
         <div className="search-bar-row">
@@ -365,6 +405,112 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
             )}
           </button>
         </div>
+
+        {/* Natural-Language Prompt Suggestions */}
+        <div
+          className="nl-prompt-chips-container"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '8px',
+            margin: '8px 0 14px 0',
+            fontSize: '12px',
+          }}
+        >
+          <span style={{ color: '#94a3b8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+            ✨ Natural query ideas:
+          </span>
+          {[
+            'Free job fairs in my city this month',
+            'Coding workshops near Patna this weekend',
+            'Folk music and dance festivals in Karnataka',
+          ].map((promptText) => (
+            <button
+              key={promptText}
+              type="button"
+              className="nl-prompt-pill"
+              onClick={() => {
+                setSearchTerm(promptText);
+                setPage(1);
+              }}
+              style={{
+                background: 'rgba(99, 102, 241, 0.12)',
+                color: '#c7d2fe',
+                border: '1px solid rgba(99, 102, 241, 0.28)',
+                padding: '3px 10px',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {promptText}
+            </button>
+          ))}
+        </div>
+
+        {/* AI Parsed Multi-Criteria Indicator Banner */}
+        {nlParsed && (
+          <div
+            className="nl-parsed-banner animate-fade-in"
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 14px',
+              margin: '0 0 16px 0',
+              background: 'rgba(30, 41, 59, 0.85)',
+              border: '1px solid #6366f1',
+              borderRadius: '12px',
+              boxShadow: '0 4px 16px rgba(99, 102, 241, 0.2)',
+            }}
+          >
+            <span style={{ fontWeight: 700, color: '#818cf8', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              🤖 Natural Language AI Filter:
+            </span>
+            {nlParsed.category && (
+              <span style={{ background: 'rgba(99, 102, 241, 0.25)', color: '#c7d2fe', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
+                Category: {nlParsed.category}
+              </span>
+            )}
+            {nlParsed.city && (
+              <span style={{ background: 'rgba(56, 189, 248, 0.2)', color: '#7dd3fc', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
+                City: {nlParsed.city}
+              </span>
+            )}
+            {nlParsed.isFree && (
+              <span style={{ background: 'rgba(16, 185, 129, 0.25)', color: '#6ee7b7', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
+                Price: Free
+              </span>
+            )}
+            {nlParsed.timeframe && (
+              <span style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#fde68a', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
+                When: {nlParsed.timeframe}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm('');
+                setNlParsed(null);
+                setPage(1);
+              }}
+              style={{
+                marginLeft: 'auto',
+                background: 'transparent',
+                border: 'none',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                fontSize: '11px',
+                textDecoration: 'underline',
+              }}
+            >
+              Clear AI Search
+            </button>
+          </div>
+        )}
 
         {/* Category Tabs */}
         <div className="category-filter-tabs" style={{ flexWrap: 'wrap' }} role="tablist" aria-label="Event category filters">
@@ -550,6 +696,28 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
                     className="card-image"
                   />
                   <span className="category-badge">{evt.category}</span>
+                  {evt.isVerified !== false && evt.verificationStatus !== 'rejected' && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '12px',
+                        right: '12px',
+                        background: 'rgba(16, 185, 129, 0.9)',
+                        color: '#ffffff',
+                        padding: '3px 8px',
+                        borderRadius: '20px',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        backdropFilter: 'blur(4px)',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                      }}
+                    >
+                      <ShieldCheck size={12} /> Verified
+                    </span>
+                  )}
                   {evt.tier && (
                     <span
                       style={{
@@ -565,42 +733,185 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
                         backdropFilter: 'blur(4px)',
                       }}
                     >
-                      {evt.tier} ΓÇó {evt.city}
+                      {evt.tier} • {evt.city}
                     </span>
                   )}
                 </div>
                 <div className="card-body">
-                  <h3 className="card-title">{evt.title}</h3>
-                  <span className={`rsvp-state-badge ${status === 'waitlist' ? 'waitlist' : status === 'confirmed' ? 'confirmed' : full ? 'full' : ''}`}>
-                    {rsvpStatusLabel(evt)}
-                  </span>
-                  <p className="card-description">{evt.description}</p>
+                  {(() => {
+                    const evtId = evt._id || evt.id;
+                    const display = getEventDisplay(evt);
+
+                    return (
+                      <>
+                        <h3 className="card-title">{display.title}</h3>
+                        <span className={`rsvp-state-badge ${status === 'waitlist' ? 'waitlist' : status === 'confirmed' ? 'confirmed' : full ? 'full' : ''}`}>
+                          {rsvpStatusLabel(evt)}
+                        </span>
+                        <p className="card-description">{display.description}</p>
+
+                        {/* AI Translation & Preserve-Original Toggle Bar */}
+                        <div
+                          className="translation-action-row"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            margin: '4px 0 10px 0',
+                            padding: '4px 8px',
+                            borderRadius: '8px',
+                            background: 'rgba(255, 255, 255, 0.03)',
+                            border: '1px solid rgba(255, 255, 255, 0.07)',
+                            fontSize: '11px',
+                          }}
+                        >
+                          {display.isTranslated ? (
+                            <>
+                              <span style={{ color: '#818cf8', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                                🌐 {t('events.aiTranslated', 'AI Translated')} ({display.langLabel})
+                              </span>
+                              <button
+                                type="button"
+                                className="toggle-original-btn"
+                                onClick={() => toggleShowOriginal(evtId)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#38bdf8',
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                  fontWeight: 600,
+                                  textDecoration: 'underline',
+                                }}
+                              >
+                                {t('events.showOriginal', 'Show Original (EN)')}
+                              </button>
+                            </>
+                          ) : display.isShowingOriginal && (currentLang === 'hi' || currentLang === 'kn') && (evt.description_hi || evt.description_kn || dynamicTranslations[`${evtId}_${currentLang}`]) ? (
+                            <>
+                              <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                📄 Original English Description
+                              </span>
+                              <button
+                                type="button"
+                                className="toggle-original-btn"
+                                onClick={() => toggleShowOriginal(evtId)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#818cf8',
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                  fontWeight: 600,
+                                  textDecoration: 'underline',
+                                }}
+                              >
+                                {t('events.showTranslated', 'Show Translated')} ({currentLang === 'hi' ? 'Hindi' : 'Kannada'})
+                              </button>
+                            </>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'space-between' }}>
+                              <span style={{ color: '#94a3b8' }}>
+                                {translatingIds[evtId] ? 'Translating...' : 'Translate description:'}
+                              </span>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleTranslateEvent(evt, 'hi')}
+                                  disabled={translatingIds[evtId]}
+                                  style={{
+                                    background: 'rgba(99, 102, 241, 0.15)',
+                                    border: '1px solid rgba(99, 102, 241, 0.3)',
+                                    color: '#c7d2fe',
+                                    borderRadius: '12px',
+                                    padding: '2px 8px',
+                                    fontSize: '11px',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  🇮🇳 हिंदी
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleTranslateEvent(evt, 'kn')}
+                                  disabled={translatingIds[evtId]}
+                                  style={{
+                                    background: 'rgba(245, 158, 11, 0.15)',
+                                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                                    color: '#fde68a',
+                                    borderRadius: '12px',
+                                    padding: '2px 8px',
+                                    fontSize: '11px',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  🟡 ಕನ್ನಡ
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  {Array.isArray(evt.matchReasons) && evt.matchReasons.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', margin: '6px 0 10px 0' }}>
+                      {evt.matchReasons.map((reason, rIdx) => (
+                        <span
+                          key={rIdx}
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            background: 'rgba(99, 102, 241, 0.15)',
+                            color: '#a5b4fc',
+                            border: '1px solid rgba(99, 102, 241, 0.3)',
+                          }}
+                        >
+                          ✨ {reason}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="card-meta">
                     <div className="meta-item">
-                      <span className="meta-label">≡ƒôà Date:</span>
+                      <span className="meta-label">Date:</span>
                       <span className="meta-value">
-                        {evt.date || (evt.startDate ? new Date(evt.startDate).toLocaleDateString() : 'Upcoming')} {evt.time ? `(${evt.time})` : ''}
+                        {evt.date || (evt.startDate ? new Date(evt.startDate).toLocaleDateString() : 'Upcoming')}{evt.time ? ` (${evt.time})` : ''}
                       </span>
                     </div>
                     <div className="meta-item">
-                      <span className="meta-label">≡ƒôì Location:</span>
+                      <span className="meta-label">Location:</span>
                       <span className="meta-value">
-                        {typeof evt.location === 'object' && evt.location !== null
-                          ? (evt.location.placeName || 'Online')
-                          : (evt.location || 'Online')} {evt.city ? `(${evt.city})` : ''}
+                        {(() => {
+                          const rawLoc = typeof evt.location === 'object' && evt.location !== null
+                            ? (evt.location.placeName || evt.city || 'Online')
+                            : (evt.location || evt.city || 'Online');
+                          return evt.city && !rawLoc.toLowerCase().includes(evt.city.toLowerCase())
+                            ? `${rawLoc} (${evt.city})`
+                            : rawLoc;
+                        })()}
                       </span>
                     </div>
                     <div className="meta-item">
-                      <span className="meta-label">≡ƒÄƒ∩╕Å</span>
-                      <span className="meta-value highlight-seats">{seatsRemaining} seats remaining</span>
+                      <span className="meta-label">Seats Remaining:</span>
+                      <span className="meta-value highlight-seats">{seatsRemaining}</span>
                     </div>
-                    {evt.organizerName && (
-                      <div className="meta-item">
-                        <span className="meta-label">≡ƒæñ Organizer:</span>
-                        <span className="meta-value">{evt.organizerName}</span>
-                      </div>
-                    )}
+                    <div className="meta-item">
+                      <span className="meta-label">Organizer:</span>
+                      <span className="meta-value">
+                        {evt.organizerName
+                          || (typeof evt.organizer === 'object' && evt.organizer !== null ? evt.organizer.name : null)
+                          || (typeof evt.organizer === 'string' && evt.organizer.trim() ? evt.organizer : null)
+                          || evt.organizerId
+                          || 'Community Organizer'}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="card-actions">
@@ -620,7 +931,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
                         : !isRsvped && full
                         ? 'Join Waitlist'
                         : isRsvped
-                        ? 'Γ£ô RSVPed (Cancel)'
+                        ? '✓ RSVPed (Cancel)'
                         : user
                         ? 'Register / RSVP'
                         : 'Register Now'}
@@ -645,6 +956,40 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
                       }}
                     >
                       View Details
+                    </button>
+
+                    {/* Feature 9: Report Event trigger button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setReportTargetEvent(evt);
+                      }}
+                      title="Report suspicious or inappropriate event"
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        color: '#94a3b8',
+                        cursor: 'pointer',
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = '#ef4444';
+                        e.currentTarget.style.borderColor = '#ef4444';
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = '#94a3b8';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      <Flag size={14} />
                     </button>
                   </div>
                 </div>
@@ -684,6 +1029,16 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0 }) {
         )}
       </div>
     )}
+
+    {/* Feature 9: Report Event Modal */}
+    <ReportEventModal
+      open={Boolean(reportTargetEvent)}
+      onClose={() => setReportTargetEvent(null)}
+      event={reportTargetEvent}
+      onReportSubmitted={() => {
+        // Report saved
+      }}
+    />
   </section>
   );
 }

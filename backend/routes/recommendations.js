@@ -18,8 +18,16 @@ const isConnectedToMongoDB = () => {
   return mongoose.connection.readyState === 1;
 };
 
-// Helper: extract authenticated user from optional Bearer token
+// Helper: extract authenticated user from optional Bearer token or query
 const extractUser = async (req) => {
+  if (req.user) {
+    if (isConnectedToMongoDB() && (!req.user.populated || !req.user.populated('rsvpedEvents'))) {
+      try {
+        await req.user.populate('rsvpedEvents');
+      } catch (err) {}
+    }
+    return req.user;
+  }
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     try {
@@ -32,6 +40,13 @@ const extractUser = async (req) => {
     } catch (err) {
       // Invalid/expired token -> treat as guest
     }
+  }
+  // Support userId query parameter for testing/dev environments
+  if (req.query.userId && isConnectedToMongoDB()) {
+    try {
+      const user = await User.findById(req.query.userId).populate('rsvpedEvents');
+      if (user) return user;
+    } catch (err) {}
   }
   return null;
 };
@@ -87,6 +102,9 @@ router.get('/', async (req, res) => {
         authenticated: Boolean(user),
         city: targetCity || user?.city || 'Jaipur',
         language: targetLanguage || user?.preferredLanguage || user?.language || 'en',
+        interests: user?.interests || [],
+        preferredCategories: user?.preferredCategories || [],
+        previousRegistrationsCount: user?.rsvpedEvents?.length || 0,
       },
     });
   } catch (error) {

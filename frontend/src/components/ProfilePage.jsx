@@ -3,9 +3,9 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
-import { User, Phone, Globe, Shield, Send, CheckCircle, AlertCircle, Edit3, Save, X, Clock, Ticket } from 'lucide-react';
+import { User, Phone, Globe, Shield, Send, CheckCircle, AlertCircle, Edit3, Save, X, Clock, Ticket, MapPin, Tag, Heart, Sparkles, Calendar, Award, HandHeart } from 'lucide-react';
 
-export default function ProfilePage({ onNavigateHome, onRsvpChanged }) {
+export default function ProfilePage({ onNavigateHome, onNavigateCalendar, onRsvpChanged }) {
   const { user, updateProfile, requestOrganizerRole, fetchProfile } = useAuth();
   const showToast = useToast();
   const { refreshNotifications } = useNotifications();
@@ -17,6 +17,12 @@ export default function ProfilePage({ onNavigateHome, onRsvpChanged }) {
     name: '',
     contact: '',
     language: 'en',
+    city: 'Jaipur',
+    interests: [],
+    preferredCategories: [],
+    skills: [],
+    isAvailableForVolunteering: true,
+    volunteerBio: '',
   });
 
   // Role Request state
@@ -27,6 +33,102 @@ export default function ProfilePage({ onNavigateHome, onRsvpChanged }) {
   const [statusMessage, setStatusMessage] = useState(null); // { type: 'success' | 'error', text: '' }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRequestSubmitting, setIsRequestSubmitting] = useState(false);
+  const [customInterestInput, setCustomInterestInput] = useState('');
+  const [customSkillInput, setCustomSkillInput] = useState('');
+
+  const availableSkills = [
+    'Web Development',
+    'Coding',
+    'Graphic Design',
+    'Photography',
+    'Teaching & Mentoring',
+    'First Aid',
+    'Event Coordination',
+    'Social Media',
+    'Crowd Management',
+    'Public Speaking',
+    'Environmental Science',
+  ];
+
+  const handleToggleSkill = (skill) => {
+    setFormData((prev) => {
+      const current = prev.skills || [];
+      const exists = current.includes(skill);
+      return {
+        ...prev,
+        skills: exists ? current.filter((s) => s !== skill) : [...current, skill],
+      };
+    });
+  };
+
+  const handleAddCustomSkill = (e) => {
+    e.preventDefault();
+    const trimmed = customSkillInput.trim();
+    if (trimmed && !(formData.skills || []).includes(trimmed)) {
+      setFormData((prev) => ({
+        ...prev,
+        skills: [...(prev.skills || []), trimmed],
+      }));
+      setCustomSkillInput('');
+    }
+  };
+
+  const availableCategories = [
+    'Career & Jobs',
+    'Skill Workshops',
+    'Health & Wellness',
+    'Cultural Festivals',
+    'Civic & Community',
+    'Technology',
+    'Environment',
+  ];
+
+  const availableInterests = [
+    'Coding',
+    'AI & Cloud',
+    'Yoga & Fitness',
+    'Music & Arts',
+    'Volunteering',
+    'Career Mentorship',
+    'Public Speaking',
+    'Design',
+  ];
+
+  const handleToggleCategory = (cat) => {
+    setFormData((prev) => {
+      const exists = prev.preferredCategories.includes(cat);
+      return {
+        ...prev,
+        preferredCategories: exists
+          ? prev.preferredCategories.filter((c) => c !== cat)
+          : [...prev.preferredCategories, cat],
+      };
+    });
+  };
+
+  const handleToggleInterest = (interest) => {
+    setFormData((prev) => {
+      const exists = prev.interests.includes(interest);
+      return {
+        ...prev,
+        interests: exists
+          ? prev.interests.filter((i) => i !== interest)
+          : [...prev.interests, interest],
+      };
+    });
+  };
+
+  const handleAddCustomInterest = (e) => {
+    e.preventDefault();
+    const trimmed = customInterestInput.trim();
+    if (trimmed && !formData.interests.includes(trimmed)) {
+      setFormData((prev) => ({
+        ...prev,
+        interests: [...prev.interests, trimmed],
+      }));
+      setCustomInterestInput('');
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -34,6 +136,12 @@ export default function ProfilePage({ onNavigateHome, onRsvpChanged }) {
         name: user.name || '',
         contact: user.contact || '',
         language: user.language || 'en',
+        city: user.city || 'Jaipur',
+        interests: Array.isArray(user.interests) ? user.interests : [],
+        preferredCategories: Array.isArray(user.preferredCategories) ? user.preferredCategories : [],
+        skills: Array.isArray(user.skills) ? user.skills : [],
+        isAvailableForVolunteering: user.isAvailableForVolunteering !== undefined ? user.isAvailableForVolunteering : true,
+        volunteerBio: user.volunteerBio || '',
       });
     }
   }, [user]);
@@ -85,13 +193,20 @@ export default function ProfilePage({ onNavigateHome, onRsvpChanged }) {
       name: formData.name.trim(),
       contact: formData.contact.trim(),
       language: formData.language,
+      city: formData.city.trim(),
+      interests: formData.interests,
+      preferredCategories: formData.preferredCategories,
+      skills: formData.skills,
+      isAvailableForVolunteering: formData.isAvailableForVolunteering,
+      volunteerBio: formData.volunteerBio,
     });
 
     setIsSubmitting(false);
 
     if (result.success) {
       setIsEditing(false);
-      setStatusMessage({ type: 'success', text: 'Profile updated successfully!' });
+      setStatusMessage({ type: 'success', text: 'Profile updated successfully! Personalized recommendations updated.' });
+      onRsvpChanged?.();
       setTimeout(() => setStatusMessage(null), 4000);
     } else {
       // Revert optimistic data if request failed
@@ -99,6 +214,12 @@ export default function ProfilePage({ onNavigateHome, onRsvpChanged }) {
         name: previousData.name || '',
         contact: previousData.contact || '',
         language: previousData.language || 'en',
+        city: previousData.city || 'Jaipur',
+        interests: Array.isArray(previousData.interests) ? previousData.interests : [],
+        preferredCategories: Array.isArray(previousData.preferredCategories) ? previousData.preferredCategories : [],
+        skills: Array.isArray(previousData.skills) ? previousData.skills : [],
+        isAvailableForVolunteering: previousData.isAvailableForVolunteering !== undefined ? previousData.isAvailableForVolunteering : true,
+        volunteerBio: previousData.volunteerBio || '',
       });
       setStatusMessage({ type: 'error', text: result.message });
     }
@@ -339,6 +460,267 @@ export default function ProfilePage({ onNavigateHome, onRsvpChanged }) {
                 </div>
               )}
             </div>
+
+            {/* City / Location (Recommendation Factor 1) */}
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <MapPin size={16} color="#6366f1" /> City / Location
+              </label>
+              {isEditing ? (
+                <input
+                  type="text"
+                  name="city"
+                  value={formData.city}
+                  onChange={handleInputChange}
+                  placeholder="e.g. Jaipur, Bengaluru, Mysuru, Patna..."
+                  className="form-control"
+                />
+              ) : (
+                <div className="form-control" style={{ background: 'var(--input-bg)', opacity: 0.9 }}>
+                  {user.city || 'Jaipur'}
+                </div>
+              )}
+            </div>
+
+            {/* Preferred Event Categories (Recommendation Factor 2) */}
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                <Tag size={16} color="#6366f1" /> Preferred Categories (Powers AI Recommendations)
+              </label>
+              {isEditing ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {availableCategories.map((cat) => {
+                    const isSelected = formData.preferredCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => handleToggleCategory(cat)}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: '20px',
+                          border: isSelected ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.15)',
+                          background: isSelected ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255,255,255,0.05)',
+                          color: isSelected ? '#a5b4fc' : '#94a3b8',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          fontWeight: isSelected ? '700' : '500',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {isSelected ? '✓ ' : '+ '} {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minHeight: '32px' }}>
+                  {(user.preferredCategories && user.preferredCategories.length > 0) ? (
+                    user.preferredCategories.map((cat) => (
+                      <span
+                        key={cat}
+                        style={{
+                          padding: '4px 12px',
+                          borderRadius: '16px',
+                          background: 'rgba(99, 102, 241, 0.2)',
+                          color: '#a5b4fc',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          border: '1px solid rgba(99, 102, 241, 0.4)',
+                        }}
+                      >
+                        {cat}
+                      </span>
+                    ))
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>None selected yet</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Personal Interests (Recommendation Factor 3) */}
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                <Heart size={16} color="#6366f1" /> Personal Interests & Topics
+              </label>
+              {isEditing ? (
+                <div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                    {availableInterests.map((interest) => {
+                      const isSelected = formData.interests.includes(interest);
+                      return (
+                        <button
+                          key={interest}
+                          type="button"
+                          onClick={() => handleToggleInterest(interest)}
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: '20px',
+                            border: isSelected ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.15)',
+                            background: isSelected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
+                            color: isSelected ? '#6ee7b7' : '#94a3b8',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: isSelected ? '700' : '500',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          {isSelected ? '✓ ' : '+ '} {interest}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      value={customInterestInput}
+                      onChange={(e) => setCustomInterestInput(e.target.value)}
+                      placeholder="Add custom interest (e.g. Robotics, Pottery)..."
+                      className="form-control"
+                      style={{ maxWidth: '320px' }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleAddCustomInterest(e);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={handleAddCustomInterest}
+                      style={{ padding: '8px 16px', fontSize: '13px' }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minHeight: '32px' }}>
+                  {(user.interests && user.interests.length > 0) ? (
+                    user.interests.map((interest) => (
+                      <span
+                        key={interest}
+                        style={{
+                          padding: '4px 12px',
+                          borderRadius: '16px',
+                          background: 'rgba(16, 185, 129, 0.18)',
+                          color: '#6ee7b7',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          border: '1px solid rgba(16, 185, 129, 0.35)',
+                        }}
+                      >
+                        {interest}
+                      </span>
+                    ))
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>None selected yet</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Feature 10: Skills & Community Volunteering */}
+            <div className="form-group" style={{ gridColumn: 'span 2', marginTop: '8px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', color: '#f8fafc', fontWeight: 600 }}>
+                <Award size={16} color="#38bdf8" /> My Skills & Talents (Volunteer & Workshop Matching)
+              </label>
+              {isEditing ? (
+                <div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                    {availableSkills.map((skill) => {
+                      const isSelected = (formData.skills || []).includes(skill);
+                      return (
+                        <button
+                          key={skill}
+                          type="button"
+                          onClick={() => handleToggleSkill(skill)}
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: '20px',
+                            border: isSelected ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.15)',
+                            background: isSelected ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255,255,255,0.05)',
+                            color: isSelected ? '#38bdf8' : '#94a3b8',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: isSelected ? '700' : '500',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          {isSelected ? '✓ ' : '+ '} {skill}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Custom Skill Input */}
+                  <div style={{ display: 'flex', gap: '8px', maxWidth: '420px', marginBottom: '16px' }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Add custom skill (e.g. Flutter, Translation)..."
+                      value={customSkillInput}
+                      onChange={(e) => setCustomSkillInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddCustomSkill(e);
+                      }}
+                      style={{ fontSize: '13px' }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={handleAddCustomSkill}
+                      style={{ padding: '8px 16px', fontSize: '13px' }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+
+                  {/* Volunteering Availability Checkbox */}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginTop: '10px' }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.isAvailableForVolunteering}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, isAvailableForVolunteering: e.target.checked }))}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: '14px', color: '#cbd5e1' }}>
+                      Open to volunteering opportunities in my local city and community
+                    </span>
+                  </label>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', minHeight: '32px', marginBottom: '8px' }}>
+                    {(user.skills && user.skills.length > 0) ? (
+                      user.skills.map((skill) => (
+                        <span
+                          key={skill}
+                          style={{
+                            padding: '4px 12px',
+                            borderRadius: '16px',
+                            background: 'rgba(56, 189, 248, 0.18)',
+                            color: '#38bdf8',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            border: '1px solid rgba(56, 189, 248, 0.35)',
+                          }}
+                        >
+                          {skill}
+                        </span>
+                      ))
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No skills added yet</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '13px', color: user.isAvailableForVolunteering !== false ? '#34d399' : '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: user.isAvailableForVolunteering !== false ? '#10b981' : '#64748b' }}></span>
+                    {user.isAvailableForVolunteering !== false ? 'Available for community volunteering' : 'Not currently available for volunteering'}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {isEditing && (
@@ -353,9 +735,33 @@ export default function ProfilePage({ onNavigateHome, onRsvpChanged }) {
 
       {/* My Registered Events (RSVPs) Section */}
       <div className="card" style={{ padding: '32px', borderRadius: '16px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-          <Ticket size={24} color="#6366f1" />
-          <h3 style={{ fontSize: '18px', fontWeight: '700' }}>My Registered Events ({registeredEvents.length})</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Ticket size={24} color="#6366f1" />
+            <h3 style={{ fontSize: '18px', fontWeight: '700' }}>My Registered Events ({registeredEvents.length})</h3>
+          </div>
+          {onNavigateCalendar && (
+            <button
+              type="button"
+              onClick={onNavigateCalendar}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                background: 'rgba(99, 102, 241, 0.15)',
+                color: '#818cf8',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <Calendar size={15} />
+              Open in Smart Calendar
+            </button>
+          )}
         </div>
 
         {registeredEvents.length === 0 ? (

@@ -11,6 +11,8 @@
     "seed": "node seed.js",
     "migrate:rsvps": "node scripts/migrateLegacyRsvps.js",
     "test": "node test-auth-flow.js",
+    "test:recommendations": "node test_ai_recommendations.js",
+    "test:voice": "node tests/test_voice_assistant.js",
     "test:api": "node tests/runApiTests.js",
     "test:auth-flow": "node test-auth-flow.js",
     "test:all": "node test-auth-flow.js && node test-profile-flow.js",
@@ -34,6 +36,7 @@
   },
   "devDependencies": {
     "jest": "^30.4.2",
+    "nodemon": "^3.1.14",
     "supertest": "^7.2.2"
   }
 }

@@ -5,7 +5,9 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 import { hasActiveRsvp, isEventFull, rsvpStatus, rsvpStatusLabel } from '../utils/rsvpState';
-import { CheckCircle, ShieldAlert } from 'lucide-react';
+import { CheckCircle, ShieldAlert, ShieldCheck, Flag } from 'lucide-react';
+import EventFeedbackSection from './EventFeedbackSection';
+import ReportEventModal from './ReportEventModal';
 
 export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfile, onRsvpChanged, onRequireLogin }) {
   const { t } = useTranslation();
@@ -13,6 +15,7 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
   const showToast = useToast();
   const { refreshNotifications } = useNotifications();
   const [eventState, setEventState] = useState(selectedEvent);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const isCreateMode = !selectedEvent;
   const isOrganizerOrAdmin = user && (user.role === 'organizer' || user.role === 'admin');
@@ -154,7 +157,7 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: isCreateMode ? '640px' : '520px' }}>
+      <div className="modal-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: isCreateMode ? '640px' : '580px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="modal-header">
           <div>
             <h2 className="modal-title">
@@ -166,9 +169,46 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
               </p>
             )}
             {selectedEvent && eventState && (
-              <span className={`rsvp-state-badge ${rsvpStatus(eventState) === 'waitlist' ? 'waitlist' : rsvpStatus(eventState) === 'confirmed' ? 'confirmed' : isEventFull(eventState) ? 'full' : ''}`}>
-                {rsvpStatusLabel(eventState)}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                <span className={`rsvp-state-badge ${rsvpStatus(eventState) === 'waitlist' ? 'waitlist' : rsvpStatus(eventState) === 'confirmed' ? 'confirmed' : isEventFull(eventState) ? 'full' : ''}`}>
+                  {rsvpStatusLabel(eventState)}
+                </span>
+                {eventState?.isVerified !== false && eventState?.verificationStatus !== 'rejected' ? (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      color: '#10b981',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                    }}
+                  >
+                    <ShieldCheck size={13} /> Verified Event
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      color: '#fbbf24',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                    }}
+                  >
+                    Pending Verification
+                  </span>
+                )}
+              </div>
             )}
           </div>
           <button type="button" className="close-modal-btn" onClick={onClose}>
@@ -397,7 +437,69 @@ export function EventRegistrationForm({ selectedEvent, onClose, onNavigateProfil
             </div>
           </form>
         )}
+
+        {/* Feature 8: Attendee Ratings & Reviews */}
+        {!isCreateMode && (selectedEvent || eventState) && (
+          <EventFeedbackSection
+            eventId={selectedEvent?._id || selectedEvent?.id || eventState?._id || eventState?.id}
+            onFeedbackSubmitted={() => {
+              refreshEvent();
+              onRsvpChanged?.();
+            }}
+          />
+        )}
+
+        {/* Feature 9: Report Inappropriate Event Button */}
+        {!isCreateMode && (selectedEvent || eventState) && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              marginTop: '16px',
+              paddingTop: '12px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setIsReportModalOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'transparent',
+                border: 'none',
+                color: '#94a3b8',
+                fontSize: '12px',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#ef4444';
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = '#94a3b8';
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <Flag size={13} /> Report Suspicious / Inappropriate Event
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Feature 9: Report Event Modal */}
+      <ReportEventModal
+        open={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        event={eventState || selectedEvent}
+        onReportSubmitted={() => {
+          refreshEvent();
+        }}
+      />
     </div>
   );
 }

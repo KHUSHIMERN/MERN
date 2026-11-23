@@ -3,6 +3,12 @@ const User = require('../models/User');
 const RoleRequest = require('../models/RoleRequest');
 const AuditLog = require('../models/AuditLog');
 const { auth, requireRole } = require('../middleware/auth');
+const {
+  getReports,
+  resolveReport,
+  verifyEvent,
+  getPendingEvents,
+} = require('../controllers/reportController');
 
 const router = express.Router();
 
@@ -167,5 +173,29 @@ router.get('/audit-logs', async (req, res) => {
     return res.status(500).json({ message: 'Server error fetching audit logs.' });
   }
 });
+
+// ============================================================================
+// Feature 9: Verified Events & Reporting Admin Endpoints
+// ============================================================================
+
+// @route   GET /api/admin/reports
+// @desc    View reported events requiring moderation
+// @access  Private (Admin only)
+router.get('/reports', getReports);
+
+// @route   PATCH /api/admin/reports/:id
+// @desc    Resolve or dismiss an event report
+// @access  Private (Admin only)
+router.patch('/reports/:id', resolveReport);
+
+// @route   PATCH /api/admin/events/:id/verify
+// @desc    Verify or reject an event in the admin approval queue
+// @access  Private (Admin only)
+router.patch('/events/:id/verify', verifyEvent);
+
+// @route   GET /api/admin/events/pending
+// @desc    Get all events pending admin verification
+// @access  Private (Admin only)
+router.get('/events/pending', getPendingEvents);
 
 module.exports = router;

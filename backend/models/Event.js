@@ -20,6 +20,10 @@ const eventSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    title_kn: {
+      type: String,
+      trim: true,
+    },
     description: {
       type: String,
       default: '',
@@ -28,6 +32,15 @@ const eventSchema = new mongoose.Schema(
     description_hi: {
       type: String,
       trim: true,
+    },
+    description_kn: {
+      type: String,
+      trim: true,
+    },
+    translations: {
+      type: Map,
+      of: String,
+      default: {},
     },
     category: {
       type: String,
@@ -181,6 +194,66 @@ const eventSchema = new mongoose.Schema(
       type: Number,
       default: 50,
     },
+    isFree: {
+      type: Boolean,
+      default: true,
+    },
+    price: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    isVerified: {
+      type: Boolean,
+      default: true,
+    },
+    verificationStatus: {
+      type: String,
+      enum: ['pending', 'verified', 'rejected'],
+      default: 'verified',
+    },
+    verifiedBy: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    verifiedAt: {
+      type: Date,
+      default: null,
+    },
+    reportsCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    isReported: {
+      type: Boolean,
+      default: false,
+    },
+    // Feature 10: Volunteer and Skill Matching
+    isVolunteerOpportunity: {
+      type: Boolean,
+      default: false,
+    },
+    requiredSkills: {
+      type: [String],
+      default: [],
+    },
+    volunteerRoles: [
+      {
+        roleName: { type: String, default: 'General Volunteer' },
+        spots: { type: Number, default: 5 },
+        description: { type: String, default: '' },
+      },
+    ],
+    volunteers: [
+      {
+        user: { type: mongoose.Schema.Types.Mixed },
+        name: { type: String, default: '' },
+        email: { type: String, default: '' },
+        skills: { type: [String], default: [] },
+        registeredAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   {
     timestamps: true,

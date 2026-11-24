@@ -29,11 +29,11 @@ router.get('/me', auth, async (req, res) => {
 });
 
 // @route   PUT /api/users/me
-// @desc    Update profile fields (name, contact, language, city, interests). Role field explicitly ignored to prevent escalation.
+// @desc    Update profile fields (name, contact, language, city, interests, preferredCategories). Role field explicitly ignored to prevent escalation.
 // @access  Private
 router.put('/me', auth, async (req, res) => {
   try {
-    const { name, contact, language, city, interests, preferredTimezone, role } = req.body;
+    const { name, contact, language, city, interests, preferredCategories, preferredTimezone, role, skills, isAvailableForVolunteering, volunteerBio } = req.body;
     const user = req.user;
 
     // Security check: Ignore role field if passed to prevent privilege escalation via PUT
@@ -65,6 +65,22 @@ router.put('/me', auth, async (req, res) => {
       user.interests = interests;
     }
 
+    if (preferredCategories && Array.isArray(preferredCategories)) {
+      user.preferredCategories = preferredCategories;
+    }
+
+    if (skills && Array.isArray(skills)) {
+      user.skills = skills;
+    }
+
+    if (isAvailableForVolunteering !== undefined) {
+      user.isAvailableForVolunteering = Boolean(isAvailableForVolunteering);
+    }
+
+    if (volunteerBio !== undefined) {
+      user.volunteerBio = volunteerBio.trim();
+    }
+
     if (preferredTimezone !== undefined) {
       if (preferredTimezone) {
         try {
@@ -76,7 +92,9 @@ router.put('/me', auth, async (req, res) => {
       user.preferredTimezone = preferredTimezone || null;
     }
 
-    await user.save();
+    if (typeof user.save === 'function') {
+      await user.save();
+    }
 
     return res.status(200).json({
       message: 'Profile updated successfully!',

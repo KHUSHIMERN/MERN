@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bell, ChevronDown, ClipboardCheck, LayoutDashboard, LogOut, Menu, Plus, Shield, User, X } from 'lucide-react';
+import { Bell, Calendar, ChevronDown, ClipboardCheck, LayoutDashboard, LogOut, MapPin, Menu, Mic, Plus, Shield, User, X, HandHeart } from 'lucide-react';
 import { LanguageSelector } from './LanguageSelector';
 import TimezoneSelectorModal from './TimezoneSelectorModal';
 import NotificationPanel from './NotificationPanel';
@@ -11,7 +11,7 @@ import { getTimezoneOffsetLabel } from '../utils/dateUtils';
 /**
  * Header — sticky global navigation bar.
  */
-export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNotificationEvent, user, logout, view, setView }) {
+export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNotificationEvent, onOpenVoiceAssistant, user, logout, view, setView }) {
   const { t } = useTranslation();
   const { activeTimezone } = useTimezone();
   const { unreadCount } = useNotifications();
@@ -71,6 +71,15 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNot
             <button type="button" className={`nav-link ${view === 'events' && activeTab === 'events' ? 'active' : ''}`} onClick={() => navigate('events', 'events')}>
               {t('header.nav.events', 'Events')}
             </button>
+            <button type="button" className={`nav-link ${view === 'events' && activeTab === 'calendar' ? 'active' : ''}`} onClick={() => navigate('events', 'calendar')}>
+              <Calendar size={17} /> {t('header.nav.calendar', 'Calendar')}
+            </button>
+            <button type="button" className={`nav-link ${view === 'events' && activeTab === 'map' ? 'active' : ''}`} onClick={() => navigate('events', 'map')}>
+              <MapPin size={17} /> {t('header.nav.map', 'Nearby Map')}
+            </button>
+            <button type="button" className={`nav-link ${view === 'events' && activeTab === 'volunteer' ? 'active' : ''}`} onClick={() => navigate('events', 'volunteer')}>
+              <HandHeart size={17} /> {t('header.nav.volunteer', 'Volunteering')}
+            </button>
             {canOrganize && (
               <button type="button" className={`nav-link ${view === 'events' && activeTab === 'checkin' ? 'active' : ''}`} onClick={() => navigate('events', 'checkin')}>
                 <ClipboardCheck size={17} /> {t('header.nav.checkin', 'Organizer Workspace')}
@@ -84,6 +93,15 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNot
           </nav>
 
           <div className="header-controls desktop-header-controls">
+            <button
+              type="button"
+              className="voice-ai-header-btn"
+              onClick={onOpenVoiceAssistant}
+              title="Open Voice AI Assistant"
+            >
+              <Mic size={15} /> <span>Voice AI</span>
+            </button>
+
             {canOrganize && (
               <button type="button" className="nav-link nav-link-highlight create-event-header-btn" onClick={onOpenRegisterModal}>
                 <Plus size={17} /> Create Event
@@ -137,6 +155,37 @@ export function Header({ activeTab, setActiveTab, onOpenRegisterModal, onOpenNot
         {mobileOpen && (
           <nav className="mobile-navigation-drawer" aria-label="Mobile navigation">
             <button type="button" onClick={() => navigate('events', 'events')}>Events</button>
+            <button
+              type="button"
+              onClick={() => navigate('events', 'calendar')}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <Calendar size={16} /> Calendar
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('events', 'map')}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <MapPin size={16} /> Nearby Map
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('events', 'volunteer')}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <HandHeart size={16} /> Volunteering & Skills
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onOpenVoiceAssistant?.();
+                setMobileOpen(false);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#818cf8', fontWeight: 700 }}
+            >
+              <Mic size={16} /> Voice AI Assistant
+            </button>
             {canOrganize && <button type="button" onClick={() => navigate('events', 'checkin')}>Organizer Workspace</button>}
             {canOrganize && <button type="button" onClick={() => navigate('events', 'organizer-dashboard')}>📊 My Dashboard</button>}
             {canOrganize && <button type="button" onClick={() => { onOpenRegisterModal?.(); setMobileOpen(false); }}>Create Event</button>}

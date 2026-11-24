@@ -1,12 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Calendar, Plus, Edit2, Trash2, Globe, EyeOff, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import {
+  Calendar,
+  Plus,
+  Edit2,
+  Trash2,
+  Globe,
+  EyeOff,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  BarChart3,
+  TrendingUp,
+  Users,
+  UserCheck,
+  UserX,
+  Clock,
+  Download,
+  ClipboardCheck,
+  ExternalLink,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import OrganizerEventForm from './OrganizerEventForm';
 
-export function OrganizerDashboard({ onNavigateHome }) {
+export function OrganizerDashboard({ onNavigateHome, onNavigateCheckIn }) {
   const { user } = useAuth();
   const [currentView, setCurrentView] = useState('list'); // 'list' | 'form'
+  const [activeSubTab, setActiveSubTab] = useState('events'); // 'events' | 'analytics'
   const [eventToEdit, setEventToEdit] = useState(null);
 
   const [events, setEvents] = useState([]);
@@ -14,6 +34,14 @@ export function OrganizerDashboard({ onNavigateHome }) {
   const [error, setError] = useState(null);
   const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error', message: '' }
   const [actionLoadingId, setActionLoadingId] = useState(null);
+
+  // Analytics State
+  const [metricsData, setMetricsData] = useState([]);
+  const [metricsSummary, setMetricsSummary] = useState(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState(null);
+  const [timeFilter, setTimeFilter] = useState('all'); // 'all' | 'past' | 'upcoming'
+  const [isExportingCSV, setIsExportingCSV] = useState(false);
 
   // Delete confirmation modal state
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, event: null });
@@ -54,6 +82,68 @@ export function OrganizerDashboard({ onNavigateHome }) {
       setError('Unable to load organizer events from server.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMetrics = async () => {
+    try {
+      setMetricsLoading(true);
+      setMetricsError(null);
+      const organizerParam = user?._id || user?.id || '';
+      const organizerId = organizerParam || 'all';
+      const params = {};
+      const now = new Date().toISOString();
+      if (timeFilter === 'upcoming') {
+        params.startDate = now;
+      } else if (timeFilter === 'past') {
+        params.endDate = now;
+      }
+      const res = await axios.get(`/api/events/organizer/${organizerId}/attendance-metrics`, { params });
+      if (res.data && res.data.success) {
+        setMetricsData(res.data.data || []);
+        setMetricsSummary(res.data.summary || null);
+      }
+    } catch (err) {
+      console.error('Error fetching organizer metrics:', err);
+      setMetricsError('Unable to load attendance analytics.');
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSubTab === 'analytics') {
+      fetchMetrics();
+    }
+  }, [activeSubTab, timeFilter, user?._id]);
+
+  const handleExportCSV = async (eventId = null) => {
+    try {
+      setIsExportingCSV(true);
+      const organizerParam = user?._id || user?.id || '';
+      const organizerId = organizerParam || 'all';
+      const endpoint = eventId
+        ? `/api/events/${eventId}/attendance/export`
+        : `/api/events/organizer/${organizerId}/attendance-metrics/export`;
+      const res = await axios.get(endpoint, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = eventId
+        ? `attendance-${eventId}.csv`
+        : `attendance-metrics-${organizerId}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setFeedback({ type: 'success', message: 'Attendance CSV report downloaded successfully.' });
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (err) {
+      console.error('CSV export error:', err);
+      setFeedback({ type: 'error', message: 'Failed to download attendance CSV report.' });
+    } finally {
+      setIsExportingCSV(false);
     }
   };
 
@@ -222,6 +312,57 @@ export function OrganizerDashboard({ onNavigateHome }) {
         </div>
       </div>
 
+      {/* Sub-tab Navigation: Events Manager vs Analytics */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+        paddingBottom: '14px',
+        marginBottom: '1.5rem',
+      }}>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('events')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 18px',
+            borderRadius: '10px',
+            fontSize: '0.875rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            border: activeSubTab === 'events' ? '1px solid #6366f1' : '1px solid rgba(255, 255, 255, 0.08)',
+            background: activeSubTab === 'events' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.03)',
+            color: activeSubTab === 'events' ? '#ffffff' : '#94a3b8',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Calendar size={16} /> Events Manager ({events.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('analytics')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 18px',
+            borderRadius: '10px',
+            fontSize: '0.875rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            border: activeSubTab === 'analytics' ? '1px solid #6366f1' : '1px solid rgba(255, 255, 255, 0.08)',
+            background: activeSubTab === 'analytics' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.03)',
+            color: activeSubTab === 'analytics' ? '#ffffff' : '#94a3b8',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <BarChart3 size={16} /> Analytics & Attendance
+        </button>
+      </div>
+
       {/* Dynamic Feedback Notification Toast */}
       {feedback && (
         <div style={{
@@ -241,8 +382,10 @@ export function OrganizerDashboard({ onNavigateHome }) {
         </div>
       )}
 
-      {/* Loading & Error States */}
-      {loading ? (
+      {/* Events Manager SubTab View */}
+      {activeSubTab === 'events' && (
+        <>
+          {loading ? (
         <div style={{
           padding: '60px',
           textAlign: 'center',
@@ -504,6 +647,403 @@ export function OrganizerDashboard({ onNavigateHome }) {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+        </>
+      )}
+
+      {/* Analytics & Attendance Dashboard SubTab View */}
+      {activeSubTab === 'analytics' && (
+        <div className="analytics-dashboard-container animate-fade-in">
+          {/* Controls & Filter Bar */}
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            background: 'rgba(30, 41, 59, 0.7)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '14px',
+            padding: '14px 20px',
+            marginBottom: '20px',
+          }}>
+            {/* Timeframe Filters */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.8125rem', color: '#94a3b8', fontWeight: 600 }}>Filter Timeframe:</span>
+              {[
+                { id: 'all', label: 'All Events' },
+                { id: 'upcoming', label: 'Upcoming' },
+                { id: 'past', label: 'Past Events' },
+              ].map((tf) => (
+                <button
+                  key={tf.id}
+                  type="button"
+                  onClick={() => setTimeFilter(tf.id)}
+                  style={{
+                    padding: '5px 14px',
+                    borderRadius: '8px',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: timeFilter === tf.id ? '1px solid #6366f1' : '1px solid rgba(255, 255, 255, 0.08)',
+                    background: timeFilter === tf.id ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.03)',
+                    color: timeFilter === tf.id ? '#ffffff' : '#94a3b8',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {tf.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Actions: Refresh & Export CSV */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={fetchMetrics}
+                disabled={metricsLoading}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '8px',
+                  color: '#cbd5e1',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <RefreshCw size={14} className={metricsLoading ? 'animate-spin' : ''} />
+                Refresh Metrics
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleExportCSV()}
+                disabled={isExportingCSV || metricsData.length === 0}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 16px',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#ffffff',
+                  fontSize: '0.8125rem',
+                  fontWeight: 700,
+                  cursor: isExportingCSV ? 'wait' : 'pointer',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+                }}
+              >
+                <Download size={15} />
+                {isExportingCSV ? 'Exporting...' : 'Export Attendance CSV'}
+              </button>
+            </div>
+          </div>
+
+          {/* Top KPI Metric Cards Grid */}
+          {metricsSummary && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+              gap: '14px',
+              marginBottom: '24px',
+            }}>
+              {/* Total Events */}
+              <div style={{
+                background: 'rgba(30, 41, 59, 0.7)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(99, 102, 241, 0.25)',
+                borderRadius: '12px',
+                padding: '16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#818cf8', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase' }}>Total Events</span>
+                  <Calendar size={18} />
+                </div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#f8fafc' }}>{metricsSummary.totalEvents}</div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>Active & Completed</div>
+              </div>
+
+              {/* Total Registrations */}
+              <div style={{
+                background: 'rgba(30, 41, 59, 0.7)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                borderRadius: '12px',
+                padding: '16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#34d399', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase' }}>Registrations</span>
+                  <Users size={18} />
+                </div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#f8fafc' }}>{metricsSummary.totalRegistrations}</div>
+                <div style={{ fontSize: '0.75rem', color: '#34d399', marginTop: '4px' }}>
+                  {metricsSummary.capacityUtilization} capacity filled
+                </div>
+              </div>
+
+              {/* Total Checked-In */}
+              <div style={{
+                background: 'rgba(30, 41, 59, 0.7)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                borderRadius: '12px',
+                padding: '16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#60a5fa', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase' }}>Checked-In</span>
+                  <UserCheck size={18} />
+                </div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#f8fafc' }}>{metricsSummary.totalCheckedIn}</div>
+                <div style={{ fontSize: '0.75rem', color: '#60a5fa', marginTop: '4px' }}>
+                  {metricsSummary.overallAttendanceRate} attendance rate
+                </div>
+              </div>
+
+              {/* Waitlist Backlog */}
+              <div style={{
+                background: 'rgba(30, 41, 59, 0.7)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                borderRadius: '12px',
+                padding: '16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#fbbf24', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase' }}>Waitlist</span>
+                  <Clock size={18} />
+                </div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#f8fafc' }}>{metricsSummary.totalWaitlist}</div>
+                <div style={{ fontSize: '0.75rem', color: '#fbbf24', marginTop: '4px' }}>Awaiting seats</div>
+              </div>
+
+              {/* No-Shows */}
+              <div style={{
+                background: 'rgba(30, 41, 59, 0.7)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: '12px',
+                padding: '16px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#f87171', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase' }}>No-Shows</span>
+                  <UserX size={18} />
+                </div>
+                <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#f8fafc' }}>{metricsSummary.totalNoShow}</div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>Past event absentees</div>
+              </div>
+            </div>
+          )}
+
+          {/* Metrics Table */}
+          {metricsLoading ? (
+            <div style={{ padding: '60px', textAlign: 'center', background: 'rgba(30, 41, 59, 0.7)', borderRadius: '16px' }}>
+              <RefreshCw size={28} className="animate-spin" style={{ color: '#6366f1', marginBottom: '12px' }} />
+              <p style={{ color: '#94a3b8' }}>Loading event analytics...</p>
+            </div>
+          ) : metricsError ? (
+            <div style={{ padding: '30px', textAlign: 'center', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', borderRadius: '12px' }}>
+              <AlertCircle size={28} style={{ marginBottom: '8px' }} />
+              <p>{metricsError}</p>
+            </div>
+          ) : metricsData.length === 0 ? (
+            <div style={{ padding: '50px 20px', textAlign: 'center', background: 'rgba(30, 41, 59, 0.7)', borderRadius: '14px', border: '1px dashed rgba(255, 255, 255, 0.15)' }}>
+              <BarChart3 size={40} color="#64748b" style={{ margin: '0 auto 12px' }} />
+              <h4 style={{ fontSize: '1.1rem', color: '#f8fafc', marginBottom: '6px' }}>No Attendance Metrics Yet</h4>
+              <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>As attendees RSVP and check into your events, attendance statistics and conversion rates will appear here.</p>
+            </div>
+          ) : (
+            <div style={{
+              background: 'rgba(30, 41, 59, 0.7)',
+              backdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)',
+            }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                      color: '#94a3b8',
+                      fontSize: '0.75rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}>
+                      <th style={{ padding: '16px 20px' }}>Event</th>
+                      <th style={{ padding: '16px 20px' }}>Date</th>
+                      <th style={{ padding: '16px 20px' }}>Capacity & Registered</th>
+                      <th style={{ padding: '16px 20px' }}>Checked-In (Rate)</th>
+                      <th style={{ padding: '16px 20px' }}>Waitlist</th>
+                      <th style={{ padding: '16px 20px' }}>No-Show</th>
+                      <th style={{ padding: '16px 20px', textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metricsData.map((m) => {
+                      const capacity = m.capacity || 100;
+                      const confirmed = m.confirmed || 0;
+                      const checkedIn = m.checkedIn || 0;
+                      const fillPct = Math.min(100, Math.round((confirmed / capacity) * 100));
+                      const rateVal = typeof m.attendanceRate === 'number'
+                        ? (m.attendanceRate * 100).toFixed(1)
+                        : m.attendanceRate === '0%'
+                        ? '0.0'
+                        : String(m.attendanceRate || '0.0');
+
+                      const formattedDate = m.date || m.startDate
+                        ? new Date(m.date || m.startDate).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })
+                        : 'TBD';
+
+                      return (
+                        <tr
+                          key={m.eventId || m.id || m._id}
+                          style={{
+                            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                            transition: 'background 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          {/* Title */}
+                          <td style={{ padding: '16px 20px' }}>
+                            <div style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.9375rem', marginBottom: '2px' }}>
+                              {m.title}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                              ID: {m.eventId || m.id || m._id}
+                            </div>
+                          </td>
+
+                          {/* Date */}
+                          <td style={{ padding: '16px 20px', color: '#cbd5e1', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
+                            {formattedDate}
+                          </td>
+
+                          {/* Capacity & Progress Bar */}
+                          <td style={{ padding: '16px 20px', minWidth: '160px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '6px' }}>
+                              <span style={{ color: '#f8fafc' }}>{confirmed} registered</span>
+                              <span style={{ color: '#94a3b8' }}>/ {capacity} cap</span>
+                            </div>
+                            <div style={{ width: '100%', height: '6px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div
+                                style={{
+                                  width: `${fillPct}%`,
+                                  height: '100%',
+                                  background: fillPct >= 90 ? '#ef4444' : fillPct >= 70 ? '#f59e0b' : '#10b981',
+                                  borderRadius: '3px',
+                                }}
+                              />
+                            </div>
+                          </td>
+
+                          {/* Checked-In (Attendance Rate) */}
+                          <td style={{ padding: '16px 20px' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.9375rem' }}>
+                                {checkedIn}
+                              </span>
+                              <span style={{
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '12px',
+                                background: Number(rateVal) >= 70 ? 'rgba(16, 185, 129, 0.15)' : Number(rateVal) >= 40 ? 'rgba(59, 130, 246, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                                color: Number(rateVal) >= 70 ? '#34d399' : Number(rateVal) >= 40 ? '#60a5fa' : '#facc15',
+                                border: `1px solid ${Number(rateVal) >= 70 ? 'rgba(16, 185, 129, 0.3)' : Number(rateVal) >= 40 ? 'rgba(59, 130, 246, 0.3)' : 'rgba(234, 179, 8, 0.3)'}`,
+                              }}>
+                                {rateVal}%
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Waitlist */}
+                          <td style={{ padding: '16px 20px' }}>
+                            <span style={{
+                              fontSize: '0.8125rem',
+                              fontWeight: 600,
+                              color: m.waitlist > 0 ? '#fbbf24' : '#94a3b8',
+                            }}>
+                              {m.waitlist}
+                            </span>
+                          </td>
+
+                          {/* No-Shows */}
+                          <td style={{ padding: '16px 20px' }}>
+                            <span style={{
+                              fontSize: '0.8125rem',
+                              fontWeight: 600,
+                              color: m.noShow > 0 ? '#f87171' : '#94a3b8',
+                            }}>
+                              {m.noShow}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td style={{ padding: '16px 20px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'inline-flex', gap: '8px', alignItems: 'center' }}>
+                              <button
+                                type="button"
+                                onClick={() => onNavigateCheckIn?.(m.eventId || m.id || m._id)}
+                                title="Open Attendee Check-In Desk"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '6px 12px',
+                                  background: 'rgba(99, 102, 241, 0.15)',
+                                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                                  borderRadius: '6px',
+                                  color: '#818cf8',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <ClipboardCheck size={13} /> Check-In Desk
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleExportCSV(m.eventId || m.id || m._id)}
+                                title="Download Event Attendance CSV"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: '6px 8px',
+                                  background: 'rgba(255, 255, 255, 0.06)',
+                                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                                  borderRadius: '6px',
+                                  color: '#cbd5e1',
+                                  fontSize: '0.75rem',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <Download size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -167,7 +167,7 @@ export default function EventDetail({ event, activeTimezone, userLocale, open, o
                 {t('organizerLabel')} & {t('capacity')}
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {event.organizer} • {event.attendeesCount} / {event.capacity} {t('registeredCount')}
+                {event.organizerName || (typeof event.organizer === 'object' && event.organizer ? event.organizer.name : event.organizer) || event.organizerId || 'Community Organizer'} • {event.attendeesCount} / {event.capacity} {t('registeredCount')}
               </Typography>
             </Box>
           </Box>

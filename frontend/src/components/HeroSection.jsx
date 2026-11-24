@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-export function HeroSection({ onExplore, onRegister }) {
+export function HeroSection({ onExplore, onRegister, onExploreMap }) {
   const { t } = useTranslation();
 
   return (
@@ -16,10 +16,22 @@ export function HeroSection({ onExplore, onRegister }) {
 
         <div className="hero-actions">
           <button type="button" className="btn-primary hero-btn" onClick={onExplore}>
-            🔍 {t('hero.exploreBtn', 'Explore Events')}
+            <span className="btn-icon" aria-hidden="true">🔍</span>
+            <span>{t('hero.exploreBtn', 'Explore Events')}</span>
           </button>
+          {onExploreMap && (
+            <button
+              type="button"
+              className="btn-secondary hero-btn"
+              onClick={onExploreMap}
+            >
+              <span className="btn-icon" aria-hidden="true">🗺️</span>
+              <span>Nearby Map</span>
+            </button>
+          )}
           <button type="button" className="btn-secondary hero-btn" onClick={onRegister}>
-            ✏️ {t('hero.createBtn', 'Register Event')}
+            <span className="btn-icon" aria-hidden="true">✏️</span>
+            <span>{t('hero.createBtn', 'Register Event')}</span>
           </button>
         </div>
 

@@ -37,13 +37,17 @@ app.use(express.urlencoded({ extended: true }));
 // owns /:id/rsvp before the broader event router handles /:id.
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/events', require('./routes/rsvpRoutes'));
+app.use('/api/events', require('./routes/feedbackRoutes'));
 app.use('/api/events', require('./routes/eventRoutes'));
+app.use('/api/feedback', require('./routes/feedbackRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/reminders', require('./routes/reminderRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
 app.use('/api/roles', require('./routes/roleRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/recommendations', require('./routes/recommendations'));
+app.use('/api/volunteer', require('./routes/volunteerRoutes'));
 app.use('/organizer', require('./routes/organizerRoutes'));
 app.use('/api/organizer', require('./routes/organizerRoutes'));
 app.use('/api/registrations', require('./routes/registrationRoutes'));

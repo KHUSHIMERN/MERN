@@ -17,6 +17,10 @@ import AIRecommendationSection from './components/AIRecommendationSection';
 import OrganizerCheckIn from './components/OrganizerCheckIn';
 import OrganizerDashboard from './components/OrganizerDashboard';
 import EventRegistrationForm from './components/EventRegistrationForm';
+import SmartCalendar from './components/SmartCalendar';
+import NearbyEventsMap from './components/NearbyEventsMap';
+import VoiceAssistantModal from './components/VoiceAssistantModal';
+import VolunteerMatchingSection from './components/VolunteerMatchingSection';
 import FallbackTestDemo from './components/FallbackTestDemo';
 import Footer from './components/Footer';
 import Typeahead from './components/Typeahead';
@@ -80,6 +84,7 @@ function AppContent() {
   const [activeTab, setActiveTab] = useState('events'); // 'events' | 'checkin' | 'fallbackDemo'
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [selectedEventForModal, setSelectedEventForModal] = useState(null);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [eventsRefreshKey, setEventsRefreshKey] = useState(0);
 
   // Search & Typeahead Filter states
@@ -161,6 +166,7 @@ function AppContent() {
         setActiveTab={setActiveTab}
         onOpenRegisterModal={() => handleOpenRegisterModal()}
         onOpenNotificationEvent={handleNotificationEvent}
+        onOpenVoiceAssistant={() => setIsVoiceModalOpen(true)}
         user={user}
         logout={logout}
         view={view}
@@ -181,6 +187,10 @@ function AppContent() {
         {view === 'profile' && (
           <ProfilePage
             onNavigateHome={() => setView('events')}
+            onNavigateCalendar={() => {
+              setView('events');
+              setActiveTab('calendar');
+            }}
             onRsvpChanged={() => setEventsRefreshKey((key) => key + 1)}
           />
         )}
@@ -195,6 +205,7 @@ function AppContent() {
               <>
                 <HeroSection
                   onExplore={handleExploreClick}
+                  onExploreMap={() => setActiveTab('map')}
                   onRegister={() => handleOpenRegisterModal()}
                 />
 
@@ -206,6 +217,7 @@ function AppContent() {
                   onRSVP={(evt) => handleOpenRegisterModal(evt)}
                 />
 
+<<<<<<< HEAD
                 {/* Typeahead Search Bar */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', margin: '1.5rem 0 1rem 0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '320px', maxWidth: '700px' }}>
@@ -254,6 +266,13 @@ function AppContent() {
                     </div>
                   )}
                 </div>
+=======
+                {/* Feature 10: Volunteer and Skill Matching */}
+                <VolunteerMatchingSection
+                  onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+                  onRegisterSuccess={() => setEventsRefreshKey((key) => key + 1)}
+                />
+>>>>>>> DEV-AMRITA
 
                 <EventList
                   refreshKey={eventsRefreshKey}
@@ -264,13 +283,35 @@ function AppContent() {
               </>
             )}
 
+            {activeTab === 'volunteer' && (
+              <VolunteerMatchingSection
+                onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+                onRegisterSuccess={() => setEventsRefreshKey((key) => key + 1)}
+              />
+            )}
+
             {activeTab === 'checkin' && (
               <OrganizerCheckIn />
+            )}
+
+            {activeTab === 'calendar' && (
+              <SmartCalendar
+                onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+                onRsvpChanged={() => setEventsRefreshKey((key) => key + 1)}
+              />
+            )}
+
+            {activeTab === 'map' && (
+              <NearbyEventsMap
+                onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+                onRsvpChanged={() => setEventsRefreshKey((key) => key + 1)}
+              />
             )}
 
             {activeTab === 'organizer-dashboard' && (
               <OrganizerDashboard
                 onNavigateHome={() => setActiveTab('events')}
+                onNavigateCheckIn={() => setActiveTab('checkin')}
               />
             )}
 
@@ -292,6 +333,43 @@ function AppContent() {
           }}
         />
       )}
+
+      {/* Voice AI Assistant Modal */}
+      <VoiceAssistantModal
+        open={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
+        onRsvpSuccess={() => setEventsRefreshKey((key) => key + 1)}
+      />
+
+      {/* Floating Voice Assistant Trigger (Accessible anywhere) */}
+      <button
+        type="button"
+        className="floating-voice-ai-btn"
+        onClick={() => setIsVoiceModalOpen(true)}
+        aria-label="Open Voice AI Assistant"
+        title="Voice AI Assistant"
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 1050,
+          width: '54px',
+          height: '54px',
+          borderRadius: '50%',
+          backgroundColor: '#6366f1',
+          color: '#ffffff',
+          border: 'none',
+          boxShadow: '0 8px 24px rgba(99, 102, 241, 0.45)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+        }}
+      >
+        <span style={{ fontSize: '24px' }}>🎙️</span>
+      </button>
 
       {/* Footer */}
       <Footer setActiveTab={setActiveTab} />

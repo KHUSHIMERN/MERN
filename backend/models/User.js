@@ -48,6 +48,24 @@ const userSchema = new mongoose.Schema(
       type: [String],
       default: ['Career & Jobs', 'Health & Wellness', 'Skill Workshops'],
     },
+    preferredCategories: {
+      type: [String],
+      default: ['Skill Workshops', 'Career & Jobs'],
+    },
+    // Feature 10: Volunteer and Skill Matching
+    skills: {
+      type: [String],
+      default: [],
+    },
+    isAvailableForVolunteering: {
+      type: Boolean,
+      default: true,
+    },
+    volunteerBio: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     // IANA timezone preference (DEV-KHUSHI)
     preferredTimezone: {
       type: String,

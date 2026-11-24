@@ -46,12 +46,14 @@ function deepEqual(a, b, msg) {
   }
 }
 
+let testPort = 5000;
+
 // ─── HTTP helpers (no external deps) ─────────────────────────────────────────
 function httpReq(method, path, body = null) {
   return new Promise((resolve, reject) => {
     const opts = {
       hostname: 'localhost',
-      port: 5000,
+      port: testPort,
       path,
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -480,6 +482,83 @@ async function runLanguageAwarenessTest() {
   ok(enEventForEn !== undefined, 'English event present for English user');
 }
 
+// ─── Section 13: Preferred Categories Matching ────────────────────────────────
+async function runPreferredCategoriesTest() {
+  console.log('\n🏷️   Section 13: Preferred Categories matching');
+  const { getPersonalizedRecommendations, resetMetrics } = service;
+
+  resetMetrics();
+
+  const events = [
+    { _id: 'cat1', title: 'Tech Innovation Summit', category: 'Technology', city: 'Jaipur', language: 'en', tags: ['ai', 'tech'] },
+    { _id: 'cat2', title: 'Clay Pottery Workshop', category: 'Arts & Crafts', city: 'Jaipur', language: 'en', tags: ['pottery'] },
+    { _id: 'cat3', title: 'Community Gardening', category: 'Environment', city: 'Jaipur', language: 'en', tags: ['garden'] },
+  ];
+
+  const userWithCategoryPref = {
+    _id: 'user-cat-pref',
+    city: 'Jaipur',
+    preferredLanguage: 'en',
+    interests: [],
+    preferredCategories: ['Technology'],
+  };
+
+  const result = await getPersonalizedRecommendations({
+    user: userWithCategoryPref,
+    events,
+    limit: 3,
+  });
+
+  ok(result.recommendations.length >= 1, 'Recommendations returned for preferred categories');
+  const top = result.recommendations[0];
+  ok(top.event._id === 'cat1', `Technology event ranked #1 (got: ${top.event.title})`);
+  ok(top.reason.includes('Matches preferred category'), `Reason mentions preferred category (got: "${top.reason}")`);
+}
+
+// ─── Section 14: Previous Registrations Matching ──────────────────────────────
+async function runPreviousRegistrationsTest() {
+  console.log('\n🎟️   Section 14: Previous Registrations matching');
+  const { getPersonalizedRecommendations, resetMetrics } = service;
+
+  resetMetrics();
+
+  const events = [
+    { _id: 'reg1', title: 'Advanced Docker & Kubernetes', category: 'Technology', tags: ['devops', 'cloud'], city: 'Jaipur', language: 'en' },
+    { _id: 'reg2', title: 'Morning Marathon 5K', category: 'Sports', tags: ['fitness', 'run'], city: 'Jaipur', language: 'en' },
+  ];
+
+  // User previously registered for a cloud/devops event
+  const userWithRegHistory = {
+    _id: 'user-reg-history',
+    city: 'Jaipur',
+    preferredLanguage: 'en',
+    interests: [],
+    preferredCategories: [],
+    rsvpedEvents: [
+      {
+        _id: 'past1',
+        title: 'Intro to Cloud Computing',
+        category: 'Technology',
+        tags: ['cloud', 'devops'],
+      },
+    ],
+  };
+
+  const result = await getPersonalizedRecommendations({
+    user: userWithRegHistory,
+    events,
+    limit: 2,
+  });
+
+  ok(result.recommendations.length >= 1, 'Recommendations returned based on previous registrations');
+  const top = result.recommendations[0];
+  ok(top.event._id === 'reg1', `Similar event to past registration ranked #1 (got: ${top.event.title})`);
+  ok(
+    top.reason.includes('Intro to Cloud Computing') || top.reason.includes('previous registration'),
+    `Reason cites past registration (got: "${top.reason}")`
+  );
+}
+
 // ─── Main Runner ──────────────────────────────────────────────────────────────
 async function main() {
   console.log('═══════════════════════════════════════════════════════════════');
@@ -497,12 +576,25 @@ async function main() {
   runRateLimitTests();
   await runPopularityLocalityScoringTest();
   await runLanguageAwarenessTest();
+  await runPreferredCategoriesTest();
+  await runPreviousRegistrationsTest();
 
-  // HTTP integration tests (requires server on port 5000)
-  await runHttpGetTest();
-  await runInteractionEndpointTest();
-  await runMetricsEndpointTest();
-  await runMetricsResetTest();
+  // HTTP integration tests (starts ephemeral server so tests are self-contained)
+  const app = require('./app');
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, () => resolve(s));
+  });
+  testPort = server.address().port;
+  console.log(`\n🚀 Ephemeral test server listening on port ${testPort}`);
+
+  try {
+    await runHttpGetTest();
+    await runInteractionEndpointTest();
+    await runMetricsEndpointTest();
+    await runMetricsResetTest();
+  } finally {
+    server.close();
+  }
 
   // ─── Summary ───────────────────────────────────────────────────────────────
   console.log('\n═══════════════════════════════════════════════════════════════');

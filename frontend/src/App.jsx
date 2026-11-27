@@ -217,7 +217,6 @@ function AppContent() {
                   onRSVP={(evt) => handleOpenRegisterModal(evt)}
                 />
 
-<<<<<<< HEAD
                 {/* Typeahead Search Bar */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', margin: '1.5rem 0 1rem 0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '320px', maxWidth: '700px' }}>
@@ -266,13 +265,6 @@ function AppContent() {
                     </div>
                   )}
                 </div>
-=======
-                {/* Feature 10: Volunteer and Skill Matching */}
-                <VolunteerMatchingSection
-                  onSelectEvent={(evt) => handleOpenRegisterModal(evt)}
-                  onRegisterSuccess={() => setEventsRefreshKey((key) => key + 1)}
-                />
->>>>>>> DEV-AMRITA
 
                 <EventList
                   refreshKey={eventsRefreshKey}

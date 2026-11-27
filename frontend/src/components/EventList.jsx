@@ -365,9 +365,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0, searc
           {t('events.sectionSubtitle', 'Find events tailored to your interests and connect with like-minded people in your city.')}
         </p>
       </div>
-
-<<<<<<< HEAD
-      {/* AI / Rule Recommendations Highlight Banner */}
+   {/* AI / Rule Recommendations Highlight Banner */}
       {recommendations.length > 0 && !searchTerm && selectedCategory === 'all' && (
         <div
           className="recommendations-banner animate-fade-in"
@@ -432,8 +430,6 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0, searc
         </div>
       )}
 
-=======
->>>>>>> DEV-AMRITA
       {/* Controls Bar: Search + Category Filters + Advanced Multi-Criteria Panel */}
       <div className="events-controls">
         <div className="search-bar-row">
@@ -966,11 +962,7 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0, searc
                       </span>
                     </div>
                     <div className="meta-item">
-<<<<<<< HEAD
                       <span className="meta-label">📍 Location:</span>
-=======
-                      <span className="meta-label">Location:</span>
->>>>>>> DEV-AMRITA
                       <span className="meta-value">
                         {(() => {
                           const rawLoc = typeof evt.location === 'object' && evt.location !== null
@@ -983,7 +975,6 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0, searc
                       </span>
                     </div>
                     <div className="meta-item">
-<<<<<<< HEAD
                       <span className="meta-label">🎟️</span>
                       <span className="meta-value highlight-seats">{seatsRemaining} seats remaining</span>
                     </div>
@@ -993,7 +984,6 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0, searc
                         <span className="meta-value">{evt.organizerName}</span>
                       </div>
                     )}
-=======
                       <span className="meta-label">Seats Remaining:</span>
                       <span className="meta-value highlight-seats">{seatsRemaining}</span>
                     </div>
@@ -1007,7 +997,6 @@ export function EventList({ onSelectEvent, onRequireLogin, refreshKey = 0, searc
                           || 'Community Organizer'}
                       </span>
                     </div>
->>>>>>> DEV-AMRITA
                   </div>
 
                   <div className="card-actions">
